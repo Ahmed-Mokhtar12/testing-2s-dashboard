@@ -1,7 +1,8 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus } from 'lucide-react';
+import { Plus, LayoutDashboard, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
@@ -115,15 +116,33 @@ const Index = () => {
       <div className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-gray-900">Chat Assistant</h1>
-          <Button
-            onClick={startNewChat}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            New Chat
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={startNewChat}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <Plus size={16} />
+              New Chat
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <LayoutDashboard size={16} />
+              Dashboard
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <LogIn size={16} />
+              Log In
+            </Button>
+          </div>
         </div>
       </div>
 
