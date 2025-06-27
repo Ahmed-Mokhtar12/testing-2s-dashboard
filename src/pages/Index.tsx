@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: string;
@@ -16,6 +16,7 @@ const Index = () => {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,21 +36,66 @@ const Index = () => {
       timestamp: new Date(),
     };
 
+    const userMessageContent = inputValue;
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      console.log('Sending message to n8n webhook:', userMessageContent);
+      
+      const response = await fetch('https://n8n-2seasons-u38985.vm.elestio.app/webhook-test/6fb1abc6-c46f-47f9-b2da-79ccbb1d0d13', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessageContent,
+          timestamp: new Date().toISOString(),
+          messageId: userMessage.id
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Received response from n8n:', data);
+
+      // Extract the AI response from the webhook response
+      // Adjust this based on your n8n webhook response structure
+      const aiResponseContent = data.response || data.message || data.text || 'I received your message but could not generate a response.';
+      
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: "I'm a demo AI assistant. This is where I would respond to your message: \"" + inputValue + "\"",
+        content: aiResponseContent,
         isUser: false,
         timestamp: new Date(),
       };
+
       setMessages(prev => [...prev, aiMessage]);
+      
+    } catch (error) {
+      console.error('Error calling n8n webhook:', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: 'Sorry, I encountered an error while processing your message. Please try again.',
+        isUser: false,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to the AI service. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1000);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
