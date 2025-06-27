@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +45,7 @@ const Index = () => {
     try {
       console.log('Sending message to n8n webhook:', userMessageContent);
       
-      const response = await fetch('https://n8n-2seasons-u38985.vm.elestio.app/webhook-test/6fb1abc6-c46f-47f9-b2da-79ccbb1d0d13', {
+      const response = await fetch('https://n8n-2seasons-u38985.vm.elestio.app/webhook-test/369c597c-2dca-4de5-93c8-c912f4fcc19e', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
