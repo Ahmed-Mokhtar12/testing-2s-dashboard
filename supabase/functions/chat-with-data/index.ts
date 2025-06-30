@@ -34,10 +34,10 @@ serve(async (req) => {
     ]);
 
     // Build context from the data
-    let context = "Based on the available hotel data:\n\n";
+    let context = "You are a helpful assistant for Two Seasons Hotel. Use the following hotel data to answer questions:\n\n";
     
     if (hotelReviews.data && hotelReviews.data.length > 0) {
-      context += "Hotel Reviews:\n";
+      context += "HOTEL REVIEWS:\n";
       hotelReviews.data.forEach(review => {
         if (review['Reviews Summary']) {
           context += `- ${review['Reviews Summary']}\n`;
@@ -47,7 +47,7 @@ serve(async (req) => {
     }
 
     if (infoSummary.data && infoSummary.data.length > 0) {
-      context += "Information Summary:\n";
+      context += "INFORMATION SUMMARIES:\n";
       infoSummary.data.forEach(info => {
         if (info['Email Summary']) {
           context += `- ${info['Email Summary']}\n`;
@@ -57,7 +57,7 @@ serve(async (req) => {
     }
 
     if (conductedTraining.data && conductedTraining.data.length > 0) {
-      context += "Training Information:\n";
+      context += "STAFF TRAINING INFORMATION:\n";
       conductedTraining.data.forEach(training => {
         if (training['Summary of the training']) {
           context += `- ${training['Summary of the training']}\n`;
@@ -67,8 +67,8 @@ serve(async (req) => {
     }
 
     if (longTermMemory.data && longTermMemory.data.length > 0) {
-      context += "Previous Interactions:\n";
-      longTermMemory.data.forEach(memory => {
+      context += "PREVIOUS CONVERSATIONS:\n";
+      longTermMemory.data.slice(-5).forEach(memory => {
         if (memory.message) {
           context += `- ${memory.message}\n`;
         }
@@ -76,30 +76,38 @@ serve(async (req) => {
       context += "\n";
     }
 
-    // Create a comprehensive response based on the data
-    let response;
+    context += "Please provide helpful, accurate responses based on this hotel data. If you don't have specific information, acknowledge that and offer to help in other ways.";
+
+    // Call OpenAI API with the context and user message
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     
-    if (message.toLowerCase().includes('review') || message.toLowerCase().includes('feedback')) {
-      const reviews = hotelReviews.data?.map(r => r['Reviews Summary']).filter(Boolean) || [];
-      if (reviews.length > 0) {
-        response = `Based on our hotel reviews, here's what guests are saying:\n\n${reviews.join('\n\n')}`;
-      }
-    } else if (message.toLowerCase().includes('training') || message.toLowerCase().includes('staff')) {
-      const trainings = conductedTraining.data?.map(t => t['Summary of the training']).filter(Boolean) || [];
-      if (trainings.length > 0) {
-        response = `Here's information about our training programs:\n\n${trainings.join('\n\n')}`;
-      }
-    } else if (message.toLowerCase().includes('email') || message.toLowerCase().includes('summary')) {
-      const summaries = infoSummary.data?.map(s => s['Email Summary']).filter(Boolean) || [];
-      if (summaries.length > 0) {
-        response = `Here are the latest updates and summaries:\n\n${summaries.join('\n\n')}`;
-      }
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
     }
 
-    if (!response) {
-      // General response using available context
-      response = `I'm here to help you with information about Two Seasons Hotel. I have access to our reviews, training records, and various hotel information. ${context ? 'Based on our current data, I can provide information about guest reviews, staff training, and general hotel operations.' : 'How can I assist you today?'}`;
+    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: context },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      }),
+    });
+
+    if (!openAIResponse.ok) {
+      throw new Error(`OpenAI API error: ${openAIResponse.statusText}`);
     }
+
+    const openAIData = await openAIResponse.json();
+    const response = openAIData.choices[0].message.content;
 
     // Store the interaction in Long Term Memory
     await supabase.from('LongTermMemory').insert({
@@ -108,7 +116,7 @@ serve(async (req) => {
       message: `User: ${message}\nAI: ${response}`
     });
 
-    console.log('Generated response:', response);
+    console.log('Generated OpenAI response:', response);
 
     return new Response(JSON.stringify({ 
       response,
@@ -121,7 +129,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in chat-with-data function:', error);
     return new Response(JSON.stringify({ 
-      error: 'I apologize, but I encountered an issue accessing the hotel data. Please try again.',
+      error: 'I apologize, but I encountered an issue processing your request. Please try again.',
       messageId: Date.now().toString()
     }), {
       status: 500,
