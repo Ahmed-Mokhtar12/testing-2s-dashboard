@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,8 +40,12 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="text-center max-w-3xl mb-8">
-        <div className="w-20 h-20 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-          <span className="text-white font-bold text-2xl">TS</span>
+        <div className="w-20 h-20 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg overflow-hidden">
+          <img 
+            src="/lovable-uploads/efb4a3d7-0b70-4076-9ece-70094893dbc7.png" 
+            alt="Hotel Logo" 
+            className="w-12 h-12 object-contain"
+          />
         </div>
         <h1 className="text-4xl font-light text-gray-900 mb-4">
           Welcome to Two Seasons Hotel AI Consultant
