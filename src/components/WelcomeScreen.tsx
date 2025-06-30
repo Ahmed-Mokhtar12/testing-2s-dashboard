@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Mic, Upload } from 'lucide-react';
@@ -10,6 +10,7 @@ interface WelcomeScreenProps {
   onInputChange: (value: string) => void;
   onSendMessage: () => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
+  onFileUpload?: (file: File) => void;
 }
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
@@ -17,8 +18,26 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   isTyping,
   onInputChange,
   onSendMessage,
-  onKeyPress
+  onKeyPress,
+  onFileUpload
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+    }
+    // Reset the input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 bg-gray-50">
       <div className="text-center max-w-2xl mb-8">
@@ -50,7 +69,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
                   <Mic size={16} />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-gray-400 hover:text-gray-600"
+                  onClick={triggerFileUpload}
+                  disabled={isTyping}
+                >
                   <Upload size={16} />
                 </Button>
               </div>
@@ -65,6 +90,15 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+        style={{ display: 'none' }}
+      />
     </div>
   );
 };

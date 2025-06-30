@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Mic, Upload } from 'lucide-react';
@@ -10,6 +10,7 @@ interface InputBarProps {
   onInputChange: (value: string) => void;
   onSendMessage: () => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
+  onFileUpload?: (file: File) => void;
 }
 
 const InputBar: React.FC<InputBarProps> = ({
@@ -17,8 +18,26 @@ const InputBar: React.FC<InputBarProps> = ({
   isTyping,
   onInputChange,
   onSendMessage,
-  onKeyPress
+  onKeyPress,
+  onFileUpload
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+    }
+    // Reset the input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="border-t bg-white">
       <div className="px-4 py-4">
@@ -37,7 +56,13 @@ const InputBar: React.FC<InputBarProps> = ({
                 <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
                   <Mic size={16} />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-gray-400 hover:text-gray-600"
+                  onClick={triggerFileUpload}
+                  disabled={isTyping}
+                >
                   <Upload size={16} />
                 </Button>
               </div>
@@ -52,6 +77,15 @@ const InputBar: React.FC<InputBarProps> = ({
           </Button>
         </div>
       </div>
+      
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+        style={{ display: 'none' }}
+      />
     </div>
   );
 };

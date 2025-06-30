@@ -12,6 +12,8 @@ interface Message {
   content: string;
   isUser: boolean;
   timestamp: Date;
+  fileName?: string;
+  fileType?: string;
 }
 
 interface ChatSession {
@@ -39,6 +41,61 @@ const Index = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handleFileUpload = async (file: File) => {
+    console.log('File uploaded:', file.name, file.type, file.size);
+    
+    // Create a user message indicating file upload
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: `I've uploaded a file: ${file.name}`,
+      isUser: true,
+      timestamp: new Date(),
+      fileName: file.name,
+      fileType: file.type,
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsTyping(true);
+
+    try {
+      // For now, we'll just acknowledge the file upload
+      // In the future, you could process the file content here
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `I can see you've uploaded "${file.name}". While I can't process the file content yet, I'm here to help you with any questions about your hotel experience. What would you like to know?`,
+        isUser: false,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+      
+      toast({
+        title: "File Uploaded",
+        description: `Successfully received ${file.name}`,
+      });
+
+    } catch (error) {
+      console.error('Error handling file upload:', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "I encountered an issue with your file upload. Please try again or ask me a question instead.",
+        isUser: false,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      
+      toast({
+        title: "Upload Error",
+        description: "There was an issue with your file upload.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -153,6 +210,7 @@ const Index = () => {
             onInputChange={setInputValue}
             onSendMessage={handleSendMessage}
             onKeyPress={handleKeyPress}
+            onFileUpload={handleFileUpload}
           />
         ) : (
           /* Chat Messages */
@@ -185,6 +243,7 @@ const Index = () => {
               onInputChange={setInputValue}
               onSendMessage={handleSendMessage}
               onKeyPress={handleKeyPress}
+              onFileUpload={handleFileUpload}
             />
           </div>
         )}
