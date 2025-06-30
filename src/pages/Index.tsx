@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -6,6 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import ChatMessage from '@/components/ChatMessage';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import InputBar from '@/components/InputBar';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -56,28 +56,23 @@ const Index = () => {
     setIsTyping(true);
 
     try {
-      console.log('Sending message to n8n webhook:', userMessageContent);
+      console.log('Sending message to Supabase edge function:', userMessageContent);
       
-      const response = await fetch('https://n8n-2seasons-u38985.vm.elestio.app/webhook-test/369c597c-2dca-4de5-93c8-c912f4fcc19e', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Call the new Supabase edge function
+      const { data, error } = await supabase.functions.invoke('chat-with-data', {
+        body: {
           message: userMessageContent,
-          timestamp: new Date().toISOString(),
           messageId: userMessage.id
-        }),
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
-      console.log('Received response from n8n:', data);
+      console.log('Received response from edge function:', data);
 
-      const aiResponseContent = data.response || data.message || data.text || "I'm unable to answer based on the current data.";
+      const aiResponseContent = data.response || "I'm unable to answer based on the current data.";
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -89,7 +84,7 @@ const Index = () => {
       setMessages(prev => [...prev, aiMessage]);
       
     } catch (error) {
-      console.error('Error calling n8n webhook:', error);
+      console.error('Error calling edge function:', error);
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -196,7 +191,7 @@ const Index = () => {
 
         {/* OpenAI Branding */}
         <div className="text-center py-2 text-xs text-gray-500 border-t">
-          Powered by OpenAI • Two Seasons GPT
+          Powered by Two Seasons Data • Hotel Assistant
         </div>
       </div>
     </div>
