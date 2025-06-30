@@ -119,27 +119,44 @@ export type Database = {
       }
       N8N_2S: {
         Row: {
+          chunk_index: number | null
           content: string | null
           created_at: string
+          document_id: string | null
           embedding: string | null
           id: number
+          is_recent_context: boolean | null
           metadata: Json | null
         }
         Insert: {
+          chunk_index?: number | null
           content?: string | null
           created_at?: string
+          document_id?: string | null
           embedding?: string | null
           id?: number
+          is_recent_context?: boolean | null
           metadata?: Json | null
         }
         Update: {
+          chunk_index?: number | null
           content?: string | null
           created_at?: string
+          document_id?: string | null
           embedding?: string | null
           id?: number
+          is_recent_context?: boolean | null
           metadata?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "N8N_2S_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_documents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       n8n_chat_histories: {
         Row: {
@@ -180,6 +197,60 @@ export type Database = {
         }
         Relationships: []
       }
+      uploaded_documents: {
+        Row: {
+          chunk_count: number | null
+          created_at: string
+          document_category: string | null
+          file_path: string
+          file_size: number
+          id: string
+          last_accessed: string | null
+          mime_type: string
+          original_filename: string
+          processed_at: string | null
+          processing_error: string | null
+          relevance_reason: string | null
+          relevance_score: number | null
+          session_id: string
+          upload_status: string
+        }
+        Insert: {
+          chunk_count?: number | null
+          created_at?: string
+          document_category?: string | null
+          file_path: string
+          file_size: number
+          id?: string
+          last_accessed?: string | null
+          mime_type: string
+          original_filename: string
+          processed_at?: string | null
+          processing_error?: string | null
+          relevance_reason?: string | null
+          relevance_score?: number | null
+          session_id: string
+          upload_status?: string
+        }
+        Update: {
+          chunk_count?: number | null
+          created_at?: string
+          document_category?: string | null
+          file_path?: string
+          file_size?: number
+          id?: string
+          last_accessed?: string | null
+          mime_type?: string
+          original_filename?: string
+          processed_at?: string | null
+          processing_error?: string | null
+          relevance_reason?: string | null
+          relevance_score?: number | null
+          session_id?: string
+          upload_status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -188,6 +259,16 @@ export type Database = {
       binary_quantize: {
         Args: { "": string } | { "": unknown }
         Returns: unknown
+      }
+      get_recent_document_context: {
+        Args: { limit_count?: number }
+        Returns: {
+          content: string
+          document_filename: string
+          document_category: string
+          chunk_index: number
+          relevance_score: number
+        }[]
       }
       halfvec_avg: {
         Args: { "": number[] }
@@ -240,6 +321,10 @@ export type Database = {
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: unknown
+      }
+      mark_recent_document_context: {
+        Args: { doc_id: string }
+        Returns: undefined
       }
       match_documents: {
         Args: { query_embedding: string; match_count?: number; filter?: Json }
