@@ -15,7 +15,7 @@ const TypingIndicator: React.FC = () => {
               <div className="w-2 h-2 bg-[#C8A351] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
               <div className="w-2 h-2 bg-[#C8A351] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
             </div>
-            <span className="text-sm text-gray-500 mr-2">المستشار يفكر...</span>
+            <span className="text-sm text-gray-500 ml-2">Consultant is thinking...</span>
           </div>
         </div>
       </div>

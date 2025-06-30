@@ -23,14 +23,14 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ sidebarOpen, onToggleSidebar })
           <span className="text-white font-bold text-xs">TS</span>
         </div>
         <div>
-          <h2 className="text-lg font-medium text-gray-900">مستشار فندق Two Seasons الذكي</h2>
-          <p className="text-xs text-gray-500">مساعدك الذكي المتخصص في إدارة الفنادق</p>
+          <h2 className="text-lg font-medium text-gray-900">Two Seasons Hotel AI Consultant</h2>
+          <p className="text-xs text-gray-500">Your intelligent assistant specialized in hotel management</p>
         </div>
       </div>
       <div className="ml-auto">
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span>متصل</span>
+          <span>Online</span>
         </div>
       </div>
     </div>
