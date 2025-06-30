@@ -16,75 +16,115 @@ serve(async (req) => {
   try {
     const { message, messageId } = await req.json();
     
-    // Initialize Supabase client
+    // Initialize Supabase client with service role key for full access
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // Use service role key instead of anon key
     );
 
     console.log('Received message:', message);
+    console.log('Message ID:', messageId);
 
-    // Query relevant data from Supabase tables
-    const [hotelReviews, chatHistory, infoSummary, conductedTraining, longTermMemory] = await Promise.all([
-      supabase.from('Hotel Reviews').select('*').limit(10),
-      supabase.from('Chat History').select('*').limit(20),
-      supabase.from('Info Summary').select('*').limit(10),
-      supabase.from('Conducted Training').select('*').limit(10),
-      supabase.from('LongTermMemory').select('*').limit(10)
+    // Query relevant data from Supabase tables with better error handling
+    console.log('Fetching hotel data...');
+    
+    const [hotelReviews, chatHistory, infoSummary, conductedTraining, longTermMemory] = await Promise.allSettled([
+      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(15),
+      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(25),
+      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(15),
+      supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(15),
+      supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20)
     ]);
 
-    // Build context from the data
-    let context = "You are a helpful assistant for Two Seasons Hotel. Use the following hotel data to answer questions:\n\n";
+    // Log data retrieval results
+    console.log('Hotel Reviews result:', hotelReviews.status, hotelReviews.status === 'fulfilled' ? `${hotelReviews.value.data?.length || 0} records` : hotelReviews.reason);
+    console.log('Chat History result:', chatHistory.status, chatHistory.status === 'fulfilled' ? `${chatHistory.value.data?.length || 0} records` : chatHistory.reason);
+    console.log('Info Summary result:', infoSummary.status, infoSummary.status === 'fulfilled' ? `${infoSummary.value.data?.length || 0} records` : infoSummary.reason);
+    console.log('Conducted Training result:', conductedTraining.status, conductedTraining.status === 'fulfilled' ? `${conductedTraining.value.data?.length || 0} records` : conductedTraining.reason);
+    console.log('Long Term Memory result:', longTermMemory.status, longTermMemory.status === 'fulfilled' ? `${longTermMemory.value.data?.length || 0} records` : longTermMemory.reason);
+
+    // Build enhanced context from the data
+    let context = `You are a knowledgeable and helpful assistant for Two Seasons Hotel. You have access to comprehensive hotel data including guest reviews, staff training records, email communications, and chat history. 
+
+Please provide accurate, helpful responses based on the following hotel information:
+
+`;
     
-    if (hotelReviews.data && hotelReviews.data.length > 0) {
-      context += "HOTEL REVIEWS:\n";
-      hotelReviews.data.forEach(review => {
+    // Add hotel reviews context
+    if (hotelReviews.status === 'fulfilled' && hotelReviews.value.data && hotelReviews.value.data.length > 0) {
+      context += "=== GUEST REVIEWS AND FEEDBACK ===\n";
+      hotelReviews.value.data.forEach((review, index) => {
         if (review['Reviews Summary']) {
-          context += `- ${review['Reviews Summary']}\n`;
+          context += `${index + 1}. ${review['Reviews Summary']}\n`;
         }
       });
       context += "\n";
     }
 
-    if (infoSummary.data && infoSummary.data.length > 0) {
-      context += "INFORMATION SUMMARIES:\n";
-      infoSummary.data.forEach(info => {
+    // Add email summaries context
+    if (infoSummary.status === 'fulfilled' && infoSummary.value.data && infoSummary.value.data.length > 0) {
+      context += "=== EMAIL COMMUNICATIONS AND INFORMATION ===\n";
+      infoSummary.value.data.forEach((info, index) => {
         if (info['Email Summary']) {
-          context += `- ${info['Email Summary']}\n`;
+          context += `${index + 1}. From: ${info['From'] || 'N/A'} | To: ${info['To'] || 'N/A'}\n   Summary: ${info['Email Summary']}\n`;
         }
       });
       context += "\n";
     }
 
-    if (conductedTraining.data && conductedTraining.data.length > 0) {
-      context += "STAFF TRAINING INFORMATION:\n";
-      conductedTraining.data.forEach(training => {
+    // Add staff training context
+    if (conductedTraining.status === 'fulfilled' && conductedTraining.value.data && conductedTraining.value.data.length > 0) {
+      context += "=== STAFF TRAINING AND PROCEDURES ===\n";
+      conductedTraining.value.data.forEach((training, index) => {
         if (training['Summary of the training']) {
-          context += `- ${training['Summary of the training']}\n`;
+          context += `${index + 1}. ${training['Summary of the training']}\n`;
         }
       });
       context += "\n";
     }
 
-    if (longTermMemory.data && longTermMemory.data.length > 0) {
-      context += "PREVIOUS CONVERSATIONS:\n";
-      longTermMemory.data.slice(-5).forEach(memory => {
+    // Add chat history context
+    if (chatHistory.status === 'fulfilled' && chatHistory.value.data && chatHistory.value.data.length > 0) {
+      context += "=== RECENT CHAT INTERACTIONS ===\n";
+      chatHistory.value.data.slice(0, 10).forEach((chat, index) => {
+        if (chat['Sender Message'] && chat['Ai Reply']) {
+          context += `${index + 1}. Guest: ${chat['Sender Message']}\n   Response: ${chat['Ai Reply']}\n`;
+        }
+      });
+      context += "\n";
+    }
+
+    // Add conversation memory context
+    if (longTermMemory.status === 'fulfilled' && longTermMemory.value.data && longTermMemory.value.data.length > 0) {
+      context += "=== CONVERSATION HISTORY ===\n";
+      longTermMemory.value.data.slice(-8).forEach((memory, index) => {
         if (memory.message) {
-          context += `- ${memory.message}\n`;
+          context += `${index + 1}. ${memory.message}\n`;
         }
       });
       context += "\n";
     }
 
-    context += "Please provide helpful, accurate responses based on this hotel data. If you don't have specific information, acknowledge that and offer to help in other ways.";
+    context += `=== INSTRUCTIONS ===
+- Provide helpful, accurate responses based on the hotel data above
+- If you don't have specific information about something, acknowledge that and offer to help find the information
+- Be professional, friendly, and hospitality-focused in your responses
+- Use the context provided to give informed answers about Two Seasons Hotel
+- If a guest has a complaint or issue, show empathy and offer practical solutions
+- For booking inquiries, direct guests to the appropriate channels while providing helpful information
 
-    // Call OpenAI API with the context and user message
+Current guest question: ${message}`;
+
+    console.log('Context length:', context.length, 'characters');
+
+    // Call OpenAI API with enhanced context
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
     }
 
+    console.log('Calling OpenAI API...');
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -98,39 +138,73 @@ serve(async (req) => {
           { role: 'user', content: message }
         ],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 800,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1
       }),
     });
 
     if (!openAIResponse.ok) {
+      const errorText = await openAIResponse.text();
+      console.error('OpenAI API error:', openAIResponse.status, errorText);
       throw new Error(`OpenAI API error: ${openAIResponse.statusText}`);
     }
 
     const openAIData = await openAIResponse.json();
     const response = openAIData.choices[0].message.content;
 
-    // Store the interaction in Long Term Memory
-    await supabase.from('LongTermMemory').insert({
-      sender: 'User',
-      recipient: 'AI Assistant',
-      message: `User: ${message}\nAI: ${response}`
-    });
+    console.log('Generated OpenAI response length:', response.length, 'characters');
 
-    console.log('Generated OpenAI response:', response);
+    // Store the interaction in Long Term Memory with better error handling
+    try {
+      const memoryResult = await supabase.from('LongTermMemory').insert({
+        sender: 'User',
+        recipient: 'AI Assistant',
+        message: `User: ${message}\nAI: ${response}`,
+        created_at: new Date().toISOString()
+      });
+
+      if (memoryResult.error) {
+        console.error('Error storing conversation in memory:', memoryResult.error);
+      } else {
+        console.log('Successfully stored conversation in long-term memory');
+      }
+    } catch (memoryError) {
+      console.error('Failed to store conversation:', memoryError);
+      // Don't throw error here - we still want to return the response
+    }
 
     return new Response(JSON.stringify({ 
       response,
       messageId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      dataStats: {
+        hotelReviews: hotelReviews.status === 'fulfilled' ? hotelReviews.value.data?.length || 0 : 0,
+        chatHistory: chatHistory.status === 'fulfilled' ? chatHistory.value.data?.length || 0 : 0,
+        infoSummary: infoSummary.status === 'fulfilled' ? infoSummary.value.data?.length || 0 : 0,
+        conductedTraining: conductedTraining.status === 'fulfilled' ? conductedTraining.value.data?.length || 0 : 0,
+        longTermMemory: longTermMemory.status === 'fulfilled' ? longTermMemory.value.data?.length || 0 : 0
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('Error in chat-with-data function:', error);
+    
+    // Provide more specific error messages
+    let errorMessage = 'I apologize, but I encountered an issue processing your request. Please try again.';
+    
+    if (error.message.includes('OpenAI')) {
+      errorMessage = 'I\'m having trouble connecting to the AI service. Please try again in a moment.';
+    } else if (error.message.includes('Supabase') || error.message.includes('database')) {
+      errorMessage = 'I\'m having trouble accessing the hotel information. Please try again.';
+    }
+    
     return new Response(JSON.stringify({ 
-      error: 'I apologize, but I encountered an issue processing your request. Please try again.',
-      messageId: Date.now().toString()
+      error: errorMessage,
+      messageId: Date.now().toString(),
+      timestamp: new Date().toISOString()
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
