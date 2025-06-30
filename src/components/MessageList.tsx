@@ -2,15 +2,7 @@
 import React, { useRef, useEffect } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import TypingIndicator from '@/components/TypingIndicator';
-
-interface Message {
-  id: string;
-  content: string;
-  isUser: boolean;
-  timestamp: Date;
-  fileName?: string;
-  fileType?: string;
-}
+import { Message } from '@/types/chat';
 
 interface MessageListProps {
   messages: Message[];

@@ -2,15 +2,7 @@
 import React from 'react';
 import MessageList from '@/components/MessageList';
 import InputBar from '@/components/InputBar';
-
-interface Message {
-  id: string;
-  content: string;
-  isUser: boolean;
-  timestamp: Date;
-  fileName?: string;
-  fileType?: string;
-}
+import { Message } from '@/types/chat';
 
 interface ChatContainerProps {
   messages: Message[];
