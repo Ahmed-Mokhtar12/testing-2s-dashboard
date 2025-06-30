@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, LayoutDashboard, LogIn, Settings } from 'lucide-react';
@@ -30,8 +29,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Header */}
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-[#C8A351] rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">TS</span>
+          <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden">
+            <img 
+              src="/lovable-uploads/38d2caf1-df62-49c4-a397-a2e574d4575e.png" 
+              alt="Hotel Logo" 
+              className="w-6 h-6 object-contain"
+            />
           </div>
           <h1 className="text-lg font-semibold">Two Seasons GPT</h1>
         </div>
