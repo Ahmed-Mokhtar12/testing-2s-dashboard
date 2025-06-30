@@ -2,6 +2,7 @@
 import React, { useRef, useEffect } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import TypingIndicator from '@/components/TypingIndicator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Message } from '@/types/chat';
 
 interface MessageListProps {
@@ -21,16 +22,18 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isTyping }) => {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 bg-gray-50 h-0">
-      <div className="max-w-4xl mx-auto space-y-6 min-h-full">
-        {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
-        ))}
-        
-        {isTyping && <TypingIndicator />}
-        
-        <div ref={messagesEndRef} />
-      </div>
+    <div className="flex-1 bg-gray-50">
+      <ScrollArea className="h-full px-4 py-6">
+        <div className="max-w-4xl mx-auto space-y-6 min-h-full">
+          {messages.map((message) => (
+            <ChatMessage key={message.id} message={message} />
+          ))}
+          
+          {isTyping && <TypingIndicator />}
+          
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
     </div>
   );
 };
