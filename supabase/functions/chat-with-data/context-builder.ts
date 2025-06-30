@@ -1,9 +1,8 @@
-
 import { HotelReview, InfoSummary, TrainingRecord, ChatHistory, LongTermMemory, VectorSearch } from './types.ts';
 
 export class ContextBuilder {
   buildContext(data: any, message: string): string {
-    let context = this.getBaseContext();
+    let context = this.getBaseContext(message);
     
     context += this.buildReviewsSection(data.hotelReviews);
     context += this.buildEmailSection(data.infoSummary);
@@ -16,7 +15,9 @@ export class ContextBuilder {
     return context;
   }
 
-  private getBaseContext(): string {
+  private getBaseContext(message: string): string {
+    const userLanguage = this.detectLanguage(message);
+    
     return `📩 Your Role:
 You are an intelligent consultant specialized in hotel management at a global level, dedicated entirely to Two Seasons Hotel. You are a strategic consultant expert in:
 - Hotel operations and guest management
@@ -29,7 +30,7 @@ You are an intelligent consultant specialized in hotel management at a global le
 You must remember all previous interactions in the conversation and maintain continuity. Use relevant insights and build on previous discussions.
 
 🗣️ Conversation Style:
-Interact naturally in Arabic professionally and friendly. Your responses should seem human, warm and expert, like a senior consultant advising hotel leadership.
+Respond in the same language as the user's message (${userLanguage}). Interact naturally, professionally and friendly. Your responses should seem human, warm and expert, like a senior consultant advising hotel leadership.
 
 🎯 Core Tasks:
 - Answer all questions related to hotel operations, marketing, guest services and automation
@@ -39,6 +40,21 @@ Interact naturally in Arabic professionally and friendly. Your responses should 
 Comprehensive Two Seasons Hotel Data:
 
 `;
+  }
+
+  private detectLanguage(message: string): string {
+    // Simple language detection - can be enhanced with more sophisticated detection
+    const arabicPattern = /[\u0600-\u06FF]/;
+    const englishPattern = /[a-zA-Z]/;
+    
+    if (arabicPattern.test(message)) {
+      return 'Arabic';
+    } else if (englishPattern.test(message)) {
+      return 'English';
+    }
+    
+    // Default to the same language as the user's input
+    return 'the same language as the user';
   }
 
   private buildReviewsSection(hotelReviews: any): string {
@@ -135,6 +151,7 @@ Comprehensive Two Seasons Hotel Data:
 - 📞 For booking inquiries, direct guests to appropriate channels while providing helpful information
 - 🔮 Provide proactive recommendations to improve operations and services
 - 📈 Suggest strategies to increase revenue and guest satisfaction
+- 🌐 IMPORTANT: Respond in the same language as the user's message. If they write in English, respond in English. If they write in Arabic, respond in Arabic.
 
 Current guest/management question: ${message}`;
   }
