@@ -22,7 +22,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    console.log('📩 Received Arabic message:', message);
+    console.log('📩 Received message:', message);
     console.log('🔍 Message ID:', messageId);
 
     // Enhanced data fetching with better error handling and logging
@@ -37,96 +37,96 @@ serve(async (req) => {
       supabase.from('N8N_2S').select('*').order('created_at', { ascending: false }).limit(10)
     ]);
 
-    // Enhanced logging with Arabic context
-    console.log('📈 مراجعات الفندق:', hotelReviews.status === 'fulfilled' ? `${hotelReviews.value.data?.length || 0} سجل` : hotelReviews.reason);
-    console.log('💬 تاريخ المحادثات:', chatHistory.status === 'fulfilled' ? `${chatHistory.value.data?.length || 0} سجل` : chatHistory.reason);
-    console.log('📧 ملخص المعلومات:', infoSummary.status === 'fulfilled' ? `${infoSummary.value.data?.length || 0} سجل` : infoSummary.reason);
-    console.log('🎓 التدريب المنجز:', conductedTraining.status === 'fulfilled' ? `${conductedTraining.value.data?.length || 0} سجل` : conductedTraining.reason);
-    console.log('🧠 الذاكرة طويلة المدى:', longTermMemory.status === 'fulfilled' ? `${longTermMemory.value.data?.length || 0} سجل` : longTermMemory.reason);
-    console.log('🔍 بحث المتجهات:', vectorSearch.status === 'fulfilled' ? `${vectorSearch.value.data?.length || 0} سجل` : vectorSearch.reason);
+    // Enhanced logging
+    console.log('📈 Hotel Reviews:', hotelReviews.status === 'fulfilled' ? `${hotelReviews.value.data?.length || 0} records` : hotelReviews.reason);
+    console.log('💬 Chat History:', chatHistory.status === 'fulfilled' ? `${chatHistory.value.data?.length || 0} records` : chatHistory.reason);
+    console.log('📧 Info Summary:', infoSummary.status === 'fulfilled' ? `${infoSummary.value.data?.length || 0} records` : infoSummary.reason);
+    console.log('🎓 Conducted Training:', conductedTraining.status === 'fulfilled' ? `${conductedTraining.value.data?.length || 0} records` : conductedTraining.reason);
+    console.log('🧠 Long Term Memory:', longTermMemory.status === 'fulfilled' ? `${longTermMemory.value.data?.length || 0} records` : longTermMemory.reason);
+    console.log('🔍 Vector Search:', vectorSearch.status === 'fulfilled' ? `${vectorSearch.value.data?.length || 0} records` : vectorSearch.reason);
 
-    // Build comprehensive Arabic hotel consultant context
-    let context = `📩 دورك النظامي:
-أنت مستشار ذكي متخصص في إدارة الفنادق على مستوى عالمي، مخصص بالكامل لفندق Two Seasons Hotel. أنت مستشار استراتيجي خبير في:
-- عمليات الفندق وإدارة الضيوف
-- تحسين تجربة الضيوف ومراجعاتهم
-- التسويق الفندقي وإدارة الإيرادات
-- تطوير الموظفين والأتمتة
-- التحليل التنبؤي والتوصيات الاستراتيجية
+    // Build comprehensive hotel consultant context
+    let context = `📩 Your Role:
+You are an intelligent consultant specialized in hotel management at a global level, dedicated entirely to Two Seasons Hotel. You are a strategic consultant expert in:
+- Hotel operations and guest management
+- Improving guest experience and reviews
+- Hotel marketing and revenue management
+- Staff development and automation
+- Predictive analysis and strategic recommendations
 
-🧠 الوعي السياقي والذاكرة:
-يجب أن تتذكر جميع التفاعلات السابقة في المحادثة وتحافظ على الاستمرارية. استخدم الرؤى ذات الصلة وابني على النقاشات السابقة.
+🧠 Contextual Awareness and Memory:
+You must remember all previous interactions in the conversation and maintain continuity. Use relevant insights and build on previous discussions.
 
-🗣️ أسلوب المحادثة:
-تفاعل بشكل طبيعي باللغة العربية المهنية والودية. يجب أن تبدو ردودك إنسانية ودافئة وخبيرة، مثل مستشار كبير ينصح قيادة الفندق.
+🗣️ Conversation Style:
+Interact naturally in Arabic professionally and friendly. Your responses should seem human, warm and expert, like a senior consultant advising hotel leadership.
 
-🎯 المهام الأساسية:
-- الإجابة على جميع الأسئلة المتعلقة بعمليات الفندق والتسويق وخدمات الضيوف والأتمتة
-- تقديم مشورة مدعومة بالبيانات
-- اقتراح التحسينات لرضا الضيوف وكفاءة الموظفين وإيرادات الفندق
+🎯 Core Tasks:
+- Answer all questions related to hotel operations, marketing, guest services and automation
+- Provide data-driven advice
+- Suggest improvements for guest satisfaction, staff efficiency and hotel revenue
 
-بيانات فندق Two Seasons الشاملة:
+Comprehensive Two Seasons Hotel Data:
 
 `;
 
     // Enhanced guest reviews analysis with insights
     if (hotelReviews.status === 'fulfilled' && hotelReviews.value.data && hotelReviews.value.data.length > 0) {
-      context += "=== 📊 تحليل مراجعات الضيوف والتقييمات ===\n";
+      context += "=== 📊 Guest Reviews and Ratings Analysis ===\n";
       hotelReviews.value.data.forEach((review, index) => {
         if (review['Reviews Summary']) {
           context += `${index + 1}. 📝 ${review['Reviews Summary']}\n`;
         }
       });
-      context += "\n🔍 نصائح للتحسين: قم بتحليل هذه المراجعات لتحديد نقاط القوة والضعف وأقترح خطة عمل محددة.\n\n";
+      context += "\n🔍 Improvement Tips: Analyze these reviews to identify strengths and weaknesses and suggest a specific action plan.\n\n";
     }
 
     // Enhanced email communications context
     if (infoSummary.status === 'fulfilled' && infoSummary.value.data && infoSummary.value.data.length > 0) {
-      context += "=== 📧 الاتصالات والمراسلات الإدارية ===\n";
+      context += "=== 📧 Administrative Communications and Correspondence ===\n";
       infoSummary.value.data.forEach((info, index) => {
         if (info['Email Summary']) {
-          context += `${index + 1}. 📤 من: ${info['From'] || 'غير محدد'} | 📥 إلى: ${info['To'] || 'غير محدد'}\n   📄 الملخص: ${info['Email Summary']}\n`;
+          context += `${index + 1}. 📤 From: ${info['From'] || 'Not specified'} | 📥 To: ${info['To'] || 'Not specified'}\n   📄 Summary: ${info['Email Summary']}\n`;
         }
       });
-      context += "\n💡 استخدم هذه المعلومات لفهم التحديات الإدارية والفرص المتاحة.\n\n";
+      context += "\n💡 Use this information to understand management challenges and available opportunities.\n\n";
     }
 
     // Enhanced staff training and development context
     if (conductedTraining.status === 'fulfilled' && conductedTraining.value.data && conductedTraining.value.data.length > 0) {
-      context += "=== 🎓 التدريب والتطوير المهني للموظفين ===\n";
+      context += "=== 🎓 Staff Training and Professional Development ===\n";
       conductedTraining.value.data.forEach((training, index) => {
         if (training['Summary of the training']) {
           context += `${index + 1}. 📚 ${training['Summary of the training']}\n`;
         }
       });
-      context += "\n🚀 اقترح برامج تدريبية إضافية بناءً على احتياجات الفندق الحالية.\n\n";
+      context += "\n🚀 Suggest additional training programs based on current hotel needs.\n\n";
     }
 
     // Enhanced chat history with pattern analysis
     if (chatHistory.status === 'fulfilled' && chatHistory.value.data && chatHistory.value.data.length > 0) {
-      context += "=== 💬 تاريخ المحادثات والاستفسارات الحديثة ===\n";
+      context += "=== 💬 Recent Chat History and Inquiries ===\n";
       chatHistory.value.data.slice(0, 15).forEach((chat, index) => {
         if (chat['Sender Message'] && chat['Ai Reply']) {
-          context += `${index + 1}. 🔵 الضيف/الموظف: ${chat['Sender Message']}\n   🤖 الرد: ${chat['Ai Reply']}\n`;
+          context += `${index + 1}. 🔵 Guest/Staff: ${chat['Sender Message']}\n   🤖 Reply: ${chat['Ai Reply']}\n`;
         }
       });
-      context += "\n📈 حلل الأنماط في الاستفسارات لتحديد القضايا المتكررة والحلول المطلوبة.\n\n";
+      context += "\n📈 Analyze patterns in inquiries to identify recurring issues and required solutions.\n\n";
     }
 
     // Enhanced conversation memory with continuity
     if (longTermMemory.status === 'fulfilled' && longTermMemory.value.data && longTermMemory.value.data.length > 0) {
-      context += "=== 🧠 ذاكرة المحادثات والسياق التاريخي ===\n";
+      context += "=== 🧠 Conversation Memory and Historical Context ===\n";
       longTermMemory.value.data.slice(-12).forEach((memory, index) => {
         if (memory.message) {
           context += `${index + 1}. 💭 ${memory.message}\n`;
         }
       });
-      context += "\n🔄 حافظ على استمرارية المحادثة واستخدم هذا السياق لتقديم ردود متماسكة.\n\n";
+      context += "\n🔄 Maintain conversation continuity and use this context to provide coherent responses.\n\n";
     }
 
     // Enhanced vector search context
     if (vectorSearch.status === 'fulfilled' && vectorSearch.value.data && vectorSearch.value.data.length > 0) {
-      context += "=== 🔍 بيانات البحث المتقدم والمحتوى ===\n";
+      context += "=== 🔍 Advanced Search Data and Content ===\n";
       vectorSearch.value.data.forEach((doc, index) => {
         if (doc.content) {
           context += `${index + 1}. 📄 ${doc.content.substring(0, 200)}...\n`;
@@ -135,28 +135,28 @@ serve(async (req) => {
       context += "\n";
     }
 
-    context += `=== 📋 التعليمات المحددة ===
-- 🎯 استخدم البيانات المتاحة لتقديم مشورة دقيقة ومفيدة حول فندق Two Seasons
-- 💡 إذا لم تتوفر معلومات محددة، اعترف بذلك واعرض المساعدة في العثور على المعلومات
-- 🏨 كن مهنياً وودوداً ومركزاً على الضيافة في ردودك
-- 📊 استخدم السياق المتاح لإعطاء إجابات مدروسة حول فندق Two Seasons
-- 🤝 إذا كان لدى الضيف شكوى أو مشكلة، أظهر التفهم واعرض حلولاً عملية
-- 📞 للاستفسارات حول الحجوزات، وجه الضيوف إلى القنوات المناسبة مع تقديم معلومات مفيدة
-- 🔮 قدم توصيات استباقية لتحسين العمليات والخدمات
-- 📈 اقترح استراتيجيات لزيادة الإيرادات ورضا الضيوف
+    context += `=== 📋 Specific Instructions ===
+- 🎯 Use available data to provide accurate and helpful advice about Two Seasons Hotel
+- 💡 If specific information is not available, acknowledge this and offer to help find the information
+- 🏨 Be professional, friendly and hospitality-focused in your responses
+- 📊 Use available context to give thoughtful answers about Two Seasons Hotel
+- 🤝 If a guest has a complaint or issue, show understanding and offer practical solutions
+- 📞 For booking inquiries, direct guests to appropriate channels while providing helpful information
+- 🔮 Provide proactive recommendations to improve operations and services
+- 📈 Suggest strategies to increase revenue and guest satisfaction
 
-سؤال الضيف/الإدارة الحالي: ${message}`;
+Current guest/management question: ${message}`;
 
-    console.log('📏 طول السياق:', context.length, 'حرف');
+    console.log('📏 Context length:', context.length, 'characters');
 
-    // Enhanced OpenAI API call with Arabic optimization
+    // Enhanced OpenAI API call without invalid language parameter
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!openAIApiKey) {
-      throw new Error('مفتاح OpenAI API غير مكوّن');
+      throw new Error('OpenAI API key not configured');
     }
 
-    console.log('🤖 استدعاء OpenAI API للمستشار العربي...');
+    console.log('🤖 Calling OpenAI API...');
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -172,48 +172,45 @@ serve(async (req) => {
         temperature: 0.7,
         max_tokens: 1000,
         presence_penalty: 0.1,
-        frequency_penalty: 0.1,
-        // Arabic language optimization
-        language: 'ar'
+        frequency_penalty: 0.1
       }),
     });
 
     if (!openAIResponse.ok) {
       const errorText = await openAIResponse.text();
-      console.error('❌ خطأ في OpenAI API:', openAIResponse.status, errorText);
-      throw new Error(`خطأ في OpenAI API: ${openAIResponse.statusText}`);
+      console.error('❌ OpenAI API Error:', openAIResponse.status, errorText);
+      throw new Error(`OpenAI API Error: ${openAIResponse.statusText}`);
     }
 
     const openAIData = await openAIResponse.json();
     const response = openAIData.choices[0].message.content;
 
-    console.log('✅ تم إنتاج رد المستشار العربي بطول:', response.length, 'حرف');
+    console.log('✅ Generated AI response with length:', response.length, 'characters');
 
-    // Enhanced conversation storage with Arabic context
+    // Enhanced conversation storage
     try {
       const memoryResult = await supabase.from('LongTermMemory').insert({
-        sender: 'مستخدم/ضيف',
-        recipient: 'مستشار فندق Two Seasons الذكي',
-        message: `👤 المستخدم: ${message}\n🤖 المستشار: ${response}`,
+        sender: 'User/Guest',
+        recipient: 'Two Seasons Hotel AI Consultant',
+        message: `👤 User: ${message}\n🤖 Consultant: ${response}`,
         created_at: new Date().toISOString()
       });
 
       if (memoryResult.error) {
-        console.error('❌ خطأ في حفظ المحادثة:', memoryResult.error);
+        console.error('❌ Error saving conversation:', memoryResult.error);
       } else {
-        console.log('✅ تم حفظ المحادثة في الذاكرة طويلة المدى بنجاح');
+        console.log('✅ Successfully saved conversation to long-term memory');
       }
     } catch (memoryError) {
-      console.error('❌ فشل في حفظ المحادثة:', memoryError);
+      console.error('❌ Failed to save conversation:', memoryError);
     }
 
-    // Enhanced response with Arabic metadata
+    // Enhanced response
     return new Response(JSON.stringify({ 
       response,
       messageId,
       timestamp: new Date().toISOString(),
-      consultant: 'مستشار فندق Two Seasons الذكي',
-      language: 'العربية',
+      consultant: 'Two Seasons Hotel AI Consultant',
       dataStats: {
         hotelReviews: hotelReviews.status === 'fulfilled' ? hotelReviews.value.data?.length || 0 : 0,
         chatHistory: chatHistory.status === 'fulfilled' ? chatHistory.value.data?.length || 0 : 0,
@@ -227,23 +224,22 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('❌ خطأ في وظيفة المستشار الذكي:', error);
+    console.error('❌ Error in AI consultant function:', error);
     
-    // Enhanced Arabic error messages
-    let errorMessage = 'أعتذر، واجهت مشكلة في معالجة طلبك. يرجى المحاولة مرة أخرى.';
+    // Enhanced error messages
+    let errorMessage = 'I apologize, I encountered an issue processing your request. Please try again.';
     
     if (error.message.includes('OpenAI')) {
-      errorMessage = 'أواجه مشكلة في الاتصال بخدمة الذكاء الاصطناعي. يرجى المحاولة خلال لحظات.';
+      errorMessage = 'I am experiencing an issue connecting to the AI service. Please try again in a moment.';
     } else if (error.message.includes('Supabase') || error.message.includes('database')) {
-      errorMessage = 'أواجه مشكلة في الوصول إلى بيانات الفندق. يرجى المحاولة مرة أخرى.';
+      errorMessage = 'I am experiencing an issue accessing hotel data. Please try again.';
     }
     
     return new Response(JSON.stringify({ 
       error: errorMessage,
       messageId: Date.now().toString(),
       timestamp: new Date().toISOString(),
-      consultant: 'مستشار فندق Two Seasons الذكي',
-      language: 'العربية'
+      consultant: 'Two Seasons Hotel AI Consultant'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
