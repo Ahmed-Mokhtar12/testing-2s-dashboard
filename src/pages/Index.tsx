@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, LayoutDashboard, LogIn } from 'lucide-react';
+import { Plus, LayoutDashboard, LogIn, Send, Mic, Upload, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
@@ -12,10 +12,21 @@ interface Message {
   timestamp: Date;
 }
 
+interface ChatSession {
+  id: string;
+  title: string;
+  lastMessage: string;
+  timestamp: Date;
+  messages: Message[];
+}
+
 const Index = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -64,9 +75,7 @@ const Index = () => {
       const data = await response.json();
       console.log('Received response from n8n:', data);
 
-      // Extract the AI response from the webhook response
-      // Adjust this based on your n8n webhook response structure
-      const aiResponseContent = data.response || data.message || data.text || 'I received your message but could not generate a response.';
+      const aiResponseContent = data.response || data.message || data.text || "I'm unable to answer based on the current data.";
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -82,7 +91,7 @@ const Index = () => {
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: 'Sorry, I encountered an error while processing your message. Please try again.',
+        content: "I'm unable to answer based on the current data. Please try again.",
         isUser: false,
         timestamp: new Date(),
       };
@@ -108,39 +117,65 @@ const Index = () => {
 
   const startNewChat = () => {
     setMessages([]);
+    setActiveSessionId(null);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <div className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">Chat Assistant</h1>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={startNewChat}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              <Plus size={16} />
-              New Chat
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2"
-            >
+    <div className="h-screen bg-white flex">
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 bg-[#1E1E1E] text-white flex flex-col overflow-hidden`}>
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-gray-700">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 bg-[#C8A351] rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">TS</span>
+            </div>
+            <h1 className="text-lg font-semibold">Two Seasons GPT</h1>
+          </div>
+          <Button
+            onClick={startNewChat}
+            className="w-full bg-transparent border border-gray-600 hover:bg-gray-700 text-white flex items-center gap-2"
+          >
+            <Plus size={16} />
+            New Chat
+          </Button>
+        </div>
+
+        {/* Chat History */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-2">
+            {chatSessions.map((session) => (
+              <div
+                key={session.id}
+                className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                  activeSessionId === session.id 
+                    ? 'bg-gray-700' 
+                    : 'hover:bg-gray-800'
+                }`}
+                onClick={() => setActiveSessionId(session.id)}
+              >
+                <div className="text-sm font-medium truncate">{session.title}</div>
+                <div className="text-xs text-gray-400 truncate">{session.lastMessage}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="p-4 border-t border-gray-700">
+          <div className="flex items-center gap-2 mb-2">
+            <Button variant="ghost" size="sm" className="text-white hover:bg-gray-700">
               <LayoutDashboard size={16} />
               Dashboard
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2"
-            >
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="text-white hover:bg-gray-700">
               <LogIn size={16} />
               Log In
+            </Button>
+            <Button variant="ghost" size="sm" className="text-white hover:bg-gray-700">
+              <Settings size={16} />
             </Button>
           </div>
         </div>
@@ -148,15 +183,31 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
+        {/* Top Bar */}
+        <div className="h-12 border-b border-gray-200 flex items-center px-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="mr-2"
+          >
+            ☰
+          </Button>
+          <h2 className="text-lg font-medium text-gray-900">Two Seasons Assistant</h2>
+        </div>
+
         {messages.length === 0 ? (
-          /* Welcome Screen with Centered Input */
-          <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+          /* Welcome Screen */
+          <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 bg-gray-50">
             <div className="text-center max-w-2xl mb-8">
-              <h2 className="text-4xl font-light text-gray-900 mb-4">
-                Ready when you are.
+              <div className="w-16 h-16 bg-[#C8A351] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-white font-bold text-xl">TS</span>
+              </div>
+              <h2 className="text-3xl font-light text-gray-900 mb-4">
+                Welcome to Two Seasons GPT
               </h2>
               <p className="text-lg text-gray-600 mb-8">
-                Start a conversation with your AI assistant
+                Your intelligent assistant for hotel services, reservations, and inquiries
               </p>
             </div>
             
@@ -164,23 +215,31 @@ const Index = () => {
             <div className="w-full max-w-3xl">
               <div className="flex items-end space-x-3">
                 <div className="flex-1 relative">
-                  <div className="relative rounded-2xl border border-gray-300 bg-white shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+                  <div className="relative rounded-2xl border border-gray-300 bg-white shadow-sm focus-within:border-[#C8A351] focus-within:ring-1 focus-within:ring-[#C8A351]">
                     <Input
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder="Ask anything"
+                      placeholder="Ask something..."
                       className="border-0 rounded-2xl resize-none bg-transparent px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[50px]"
                       disabled={isTyping}
                     />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                      <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                        <Mic size={16} />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                        <Upload size={16} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <Button
                   onClick={handleSendMessage}
                   disabled={!inputValue.trim() || isTyping}
-                  className="rounded-2xl px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                  className="rounded-2xl px-6 py-3 bg-[#C8A351] hover:bg-[#B8934A] text-white font-medium transition-colors"
                 >
-                  Send
+                  <Send size={16} />
                 </Button>
               </div>
             </div>
@@ -188,7 +247,7 @@ const Index = () => {
         ) : (
           /* Chat Messages */
           <div className="flex-1 flex flex-col">
-            <div className="flex-1 overflow-y-auto px-4 py-6">
+            <div className="flex-1 overflow-y-auto px-4 py-6 bg-gray-50">
               <div className="max-w-4xl mx-auto space-y-6">
                 {messages.map((message) => (
                   <div
@@ -198,11 +257,14 @@ const Index = () => {
                     <div
                       className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                         message.isUser
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-[#C8A351] text-white'
                           : 'bg-white border border-gray-200 text-gray-900'
                       } shadow-sm`}
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
+                      <div className={`text-xs mt-2 ${message.isUser ? 'text-white/70' : 'text-gray-500'}`}>
+                        {message.timestamp.toLocaleTimeString()}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -211,9 +273,9 @@ const Index = () => {
                   <div className="flex justify-start">
                     <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
                       <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-[#C8A351] rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-[#C8A351] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-[#C8A351] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
                     </div>
                   </div>
@@ -224,33 +286,46 @@ const Index = () => {
             </div>
 
             {/* Fixed Bottom Input Area */}
-            <div className="border-t bg-white/80 backdrop-blur-sm">
+            <div className="border-t bg-white">
               <div className="px-4 py-4">
                 <div className="flex items-end space-x-3 max-w-3xl mx-auto">
                   <div className="flex-1 relative">
-                    <div className="relative rounded-2xl border border-gray-300 bg-white shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+                    <div className="relative rounded-2xl border border-gray-300 bg-white shadow-sm focus-within:border-[#C8A351] focus-within:ring-1 focus-within:ring-[#C8A351]">
                       <Input
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder="Ask anything"
-                        className="border-0 rounded-2xl resize-none bg-transparent px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[50px]"
+                        placeholder="Ask something..."
+                        className="border-0 rounded-2xl resize-none bg-transparent px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[50px] pr-20"
                         disabled={isTyping}
                       />
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                          <Mic size={16} />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                          <Upload size={16} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <Button
                     onClick={handleSendMessage}
                     disabled={!inputValue.trim() || isTyping}
-                    className="rounded-2xl px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                    className="rounded-2xl px-6 py-3 bg-[#C8A351] hover:bg-[#B8934A] text-white font-medium transition-colors"
                   >
-                    Send
+                    <Send size={16} />
                   </Button>
                 </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* OpenAI Branding */}
+        <div className="text-center py-2 text-xs text-gray-500 border-t">
+          Powered by OpenAI • Two Seasons GPT
+        </div>
       </div>
     </div>
   );
