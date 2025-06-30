@@ -24,16 +24,20 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   onFileUpload
 }) => {
   return (
-    <div className="flex-1 flex flex-col">
-      <MessageList messages={messages} isTyping={isTyping} />
-      <InputBar
-        inputValue={inputValue}
-        isTyping={isTyping}
-        onInputChange={onInputChange}
-        onSendMessage={onSendMessage}
-        onKeyPress={onKeyPress}
-        onFileUpload={onFileUpload}
-      />
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 min-h-0">
+        <MessageList messages={messages} isTyping={isTyping} />
+      </div>
+      <div className="flex-shrink-0">
+        <InputBar
+          inputValue={inputValue}
+          isTyping={isTyping}
+          onInputChange={onInputChange}
+          onSendMessage={onSendMessage}
+          onKeyPress={onKeyPress}
+          onFileUpload={onFileUpload}
+        />
+      </div>
     </div>
   );
 };

@@ -45,7 +45,7 @@ const Index = () => {
   };
 
   return (
-    <div className="h-screen bg-white flex">
+    <div className="h-screen bg-white flex overflow-hidden">
       <Sidebar
         sidebarOpen={sidebarOpen}
         chatSessions={chatSessions}
@@ -54,32 +54,34 @@ const Index = () => {
         onSessionSelect={handleSessionSelect}
       />
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col h-screen">
         <ChatHeader
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         />
 
-        {messages.length === 0 ? (
-          <WelcomeScreen
-            inputValue={inputValue}
-            isTyping={isTyping}
-            onInputChange={setInputValue}
-            onSendMessage={handleSendMessage}
-            onKeyPress={handleKeyPress}
-            onFileUpload={handleFileUpload}
-          />
-        ) : (
-          <ChatContainer
-            messages={messages}
-            inputValue={inputValue}
-            isTyping={isTyping}
-            onInputChange={setInputValue}
-            onSendMessage={handleSendMessage}
-            onKeyPress={handleKeyPress}
-            onFileUpload={handleFileUpload}
-          />
-        )}
+        <div className="flex-1 flex flex-col min-h-0">
+          {messages.length === 0 ? (
+            <WelcomeScreen
+              inputValue={inputValue}
+              isTyping={isTyping}
+              onInputChange={setInputValue}
+              onSendMessage={handleSendMessage}
+              onKeyPress={handleKeyPress}
+              onFileUpload={handleFileUpload}
+            />
+          ) : (
+            <ChatContainer
+              messages={messages}
+              inputValue={inputValue}
+              isTyping={isTyping}
+              onInputChange={setInputValue}
+              onSendMessage={handleSendMessage}
+              onKeyPress={handleKeyPress}
+              onFileUpload={handleFileUpload}
+            />
+          )}
+        </div>
 
         <ChatFooter />
       </div>
