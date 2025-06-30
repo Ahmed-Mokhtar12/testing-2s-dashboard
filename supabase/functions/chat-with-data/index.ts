@@ -34,8 +34,8 @@ serve(async (req) => {
     // Build enhanced context with document prioritization
     const context = contextBuilder.buildContextWithDocuments(data, message);
 
-    // Generate AI response with enhanced context
-    const aiResponse = await openAIService.generateResponse(context, message);
+    // Generate AI response with enhanced context and uncertainty management
+    const aiResponse = await openAIService.generateResponse(context, message, data);
 
     // Save conversation to memory
     await dataService.saveConversation(message, aiResponse);
@@ -45,7 +45,7 @@ serve(async (req) => {
       response: aiResponse,
       messageId,
       timestamp: new Date().toISOString(),
-      consultant: 'Two Seasons Hotel AI Consultant (Enhanced)',
+      consultant: 'Two Seasons Hotel AI Consultant (Enhanced with Uncertainty Management)',
       dataStats: dataService.createEnhancedDataStats(data),
       documentStats: {
         recentDocuments: data.recentDocuments?.status === 'fulfilled' ? data.recentDocuments.value.data?.length || 0 : 0,
@@ -53,7 +53,7 @@ serve(async (req) => {
       }
     };
 
-    console.log('✅ Enhanced response generated with document context');
+    console.log('✅ Enhanced response generated with uncertainty management and document context');
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

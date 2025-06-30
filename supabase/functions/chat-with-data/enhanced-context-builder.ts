@@ -3,6 +3,25 @@ export class EnhancedContextBuilder {
   buildContextWithDocuments(data: any, userMessage: string): string {
     const contextSections: string[] = [];
 
+    // Add enhanced system instructions for uncertainty management
+    contextSections.push(`📩 Your Role:
+You are an intelligent AI consultant specialized in hotel management, dedicated entirely to Two Seasons Hotel. You now have REAL-TIME INTERNET ACCESS and enhanced uncertainty management capabilities.
+
+🎯 CORE PRINCIPLES:
+- Accuracy over speed: Always prioritize providing correct information
+- Transparency: Be clear about your confidence level and data sources
+- User satisfaction: Ask clarifying questions when needed to provide better answers
+- Professional consultation: Act like a senior hotel management consultant
+
+🧠 ENHANCED RESPONSE PROTOCOL:
+- If uncertain about any aspect, explicitly state your uncertainty level
+- When lacking complete information, provide what you know and ask for more details
+- For ambiguous questions, ask specific clarifying questions
+- Always indicate your confidence level: HIGH, MEDIUM, or LOW
+- Be transparent about data limitations and sources
+
+`);
+
     // Priority 1: Recent Document Context (highest priority)
     if (data.documentContext?.status === 'fulfilled' && data.documentContext.value.data?.length > 0) {
       contextSections.push('📄 RECENT DOCUMENT CONTEXT (Priority Information):');
@@ -93,7 +112,7 @@ export class EnhancedContextBuilder {
 
     const context = contextSections.join('\n');
     
-    console.log('🏗️ Built enhanced context with document priority, length:', context.length);
+    console.log('🏗️ Built enhanced context with uncertainty management, length:', context.length);
     return context;
   }
 

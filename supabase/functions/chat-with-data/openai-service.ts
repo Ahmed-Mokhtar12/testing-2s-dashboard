@@ -1,9 +1,11 @@
 
 import { SearchService } from './search-service.ts';
+import { UncertaintyManager } from './uncertainty-manager.ts';
 
 export class OpenAIService {
   private apiKey: string;
   private searchService: SearchService;
+  private uncertaintyManager: UncertaintyManager;
 
   constructor() {
     const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -12,11 +14,40 @@ export class OpenAIService {
     }
     this.apiKey = apiKey;
     this.searchService = new SearchService();
+    this.uncertaintyManager = new UncertaintyManager();
   }
 
-  async generateResponse(context: string, message: string): Promise<string> {
-    console.log('🤖 Calling OpenAI API with function calling...');
+  async generateResponse(context: string, message: string, availableData?: any): Promise<string> {
+    console.log('🤖 Calling OpenAI API with enhanced uncertainty management...');
     console.log('📏 Context length:', context.length, 'characters');
+
+    // Analyze question clarity and context relevance
+    const clarityAnalysis = this.uncertaintyManager.analyzeQuestionClarity(message);
+    console.log('🔍 Question clarity analysis:', clarityAnalysis);
+
+    let contextAssessment = { confidenceLevel: 'MEDIUM' as 'HIGH' | 'MEDIUM' | 'LOW' };
+    if (availableData) {
+      contextAssessment = this.uncertaintyManager.assessContextRelevance(availableData, message);
+      console.log('📊 Context relevance assessment:', contextAssessment);
+    }
+
+    // Check if we should ask for clarification instead of answering
+    const clarificationPrompt = this.uncertaintyManager.generateClarificationPrompt(
+      clarityAnalysis, 
+      contextAssessment, 
+      message
+    );
+
+    if (clarificationPrompt) {
+      console.log('❓ Requesting clarification instead of direct answer');
+      return clarificationPrompt;
+    }
+
+    // Enhance system prompt with uncertainty management instructions
+    const enhancedContext = this.uncertaintyManager.enhanceSystemPromptWithUncertainty(
+      context, 
+      contextAssessment.confidenceLevel
+    );
 
     const functions = this.searchService.getAvailableFunctions();
 
@@ -29,7 +60,7 @@ export class OpenAIService {
       body: JSON.stringify({
         model: 'gpt-4.1-2025-04-14',
         messages: [
-          { role: 'system', content: context },
+          { role: 'system', content: enhancedContext },
           { role: 'user', content: message }
         ],
         functions: functions,
@@ -72,7 +103,7 @@ export class OpenAIService {
           body: JSON.stringify({
             model: 'gpt-4.1-2025-04-14',
             messages: [
-              { role: 'system', content: context },
+              { role: 'system', content: enhancedContext },
               { role: 'user', content: message },
               { role: 'assistant', content: null, function_call: choice.message.function_call },
               { role: 'function', name: functionName, content: functionResult }
@@ -109,7 +140,7 @@ export class OpenAIService {
           body: JSON.stringify({
             model: 'gpt-4.1-2025-04-14',
             messages: [
-              { role: 'system', content: context },
+              { role: 'system', content: enhancedContext },
               { role: 'user', content: message },
               { role: 'system', content: `The search function failed with error: ${functionError.message}. Please respond based on your existing knowledge and acknowledge that you couldn't access current information.` }
             ],
@@ -125,7 +156,7 @@ export class OpenAIService {
 
     // No function call needed, return the direct response
     const aiResponse = choice.message.content;
-    console.log('✅ Generated AI response without function call, length:', aiResponse.length, 'characters');
+    console.log('✅ Generated AI response with uncertainty management, length:', aiResponse.length, 'characters');
     return aiResponse;
   }
 }
