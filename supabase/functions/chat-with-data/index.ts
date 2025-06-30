@@ -19,112 +19,144 @@ serve(async (req) => {
     // Initialize Supabase client with service role key for full access
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // Use service role key instead of anon key
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    console.log('Received message:', message);
-    console.log('Message ID:', messageId);
+    console.log('📩 Received Arabic message:', message);
+    console.log('🔍 Message ID:', messageId);
 
-    // Query relevant data from Supabase tables with better error handling
-    console.log('Fetching hotel data...');
+    // Enhanced data fetching with better error handling and logging
+    console.log('📊 Fetching comprehensive hotel data...');
     
-    const [hotelReviews, chatHistory, infoSummary, conductedTraining, longTermMemory] = await Promise.allSettled([
-      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(15),
-      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(25),
-      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(15),
-      supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(15),
-      supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20)
+    const [hotelReviews, chatHistory, infoSummary, conductedTraining, longTermMemory, vectorSearch] = await Promise.allSettled([
+      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(30),
+      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(25),
+      supabase.from('N8N_2S').select('*').order('created_at', { ascending: false }).limit(10)
     ]);
 
-    // Log data retrieval results
-    console.log('Hotel Reviews result:', hotelReviews.status, hotelReviews.status === 'fulfilled' ? `${hotelReviews.value.data?.length || 0} records` : hotelReviews.reason);
-    console.log('Chat History result:', chatHistory.status, chatHistory.status === 'fulfilled' ? `${chatHistory.value.data?.length || 0} records` : chatHistory.reason);
-    console.log('Info Summary result:', infoSummary.status, infoSummary.status === 'fulfilled' ? `${infoSummary.value.data?.length || 0} records` : infoSummary.reason);
-    console.log('Conducted Training result:', conductedTraining.status, conductedTraining.status === 'fulfilled' ? `${conductedTraining.value.data?.length || 0} records` : conductedTraining.reason);
-    console.log('Long Term Memory result:', longTermMemory.status, longTermMemory.status === 'fulfilled' ? `${longTermMemory.value.data?.length || 0} records` : longTermMemory.reason);
+    // Enhanced logging with Arabic context
+    console.log('📈 مراجعات الفندق:', hotelReviews.status === 'fulfilled' ? `${hotelReviews.value.data?.length || 0} سجل` : hotelReviews.reason);
+    console.log('💬 تاريخ المحادثات:', chatHistory.status === 'fulfilled' ? `${chatHistory.value.data?.length || 0} سجل` : chatHistory.reason);
+    console.log('📧 ملخص المعلومات:', infoSummary.status === 'fulfilled' ? `${infoSummary.value.data?.length || 0} سجل` : infoSummary.reason);
+    console.log('🎓 التدريب المنجز:', conductedTraining.status === 'fulfilled' ? `${conductedTraining.value.data?.length || 0} سجل` : conductedTraining.reason);
+    console.log('🧠 الذاكرة طويلة المدى:', longTermMemory.status === 'fulfilled' ? `${longTermMemory.value.data?.length || 0} سجل` : longTermMemory.reason);
+    console.log('🔍 بحث المتجهات:', vectorSearch.status === 'fulfilled' ? `${vectorSearch.value.data?.length || 0} سجل` : vectorSearch.reason);
 
-    // Build enhanced context from the data
-    let context = `You are a knowledgeable and helpful assistant for Two Seasons Hotel. You have access to comprehensive hotel data including guest reviews, staff training records, email communications, and chat history. 
+    // Build comprehensive Arabic hotel consultant context
+    let context = `📩 دورك النظامي:
+أنت مستشار ذكي متخصص في إدارة الفنادق على مستوى عالمي، مخصص بالكامل لفندق Two Seasons Hotel. أنت مستشار استراتيجي خبير في:
+- عمليات الفندق وإدارة الضيوف
+- تحسين تجربة الضيوف ومراجعاتهم
+- التسويق الفندقي وإدارة الإيرادات
+- تطوير الموظفين والأتمتة
+- التحليل التنبؤي والتوصيات الاستراتيجية
 
-Please provide accurate, helpful responses based on the following hotel information:
+🧠 الوعي السياقي والذاكرة:
+يجب أن تتذكر جميع التفاعلات السابقة في المحادثة وتحافظ على الاستمرارية. استخدم الرؤى ذات الصلة وابني على النقاشات السابقة.
+
+🗣️ أسلوب المحادثة:
+تفاعل بشكل طبيعي باللغة العربية المهنية والودية. يجب أن تبدو ردودك إنسانية ودافئة وخبيرة، مثل مستشار كبير ينصح قيادة الفندق.
+
+🎯 المهام الأساسية:
+- الإجابة على جميع الأسئلة المتعلقة بعمليات الفندق والتسويق وخدمات الضيوف والأتمتة
+- تقديم مشورة مدعومة بالبيانات
+- اقتراح التحسينات لرضا الضيوف وكفاءة الموظفين وإيرادات الفندق
+
+بيانات فندق Two Seasons الشاملة:
 
 `;
-    
-    // Add hotel reviews context
+
+    // Enhanced guest reviews analysis with insights
     if (hotelReviews.status === 'fulfilled' && hotelReviews.value.data && hotelReviews.value.data.length > 0) {
-      context += "=== GUEST REVIEWS AND FEEDBACK ===\n";
+      context += "=== 📊 تحليل مراجعات الضيوف والتقييمات ===\n";
       hotelReviews.value.data.forEach((review, index) => {
         if (review['Reviews Summary']) {
-          context += `${index + 1}. ${review['Reviews Summary']}\n`;
+          context += `${index + 1}. 📝 ${review['Reviews Summary']}\n`;
         }
       });
-      context += "\n";
+      context += "\n🔍 نصائح للتحسين: قم بتحليل هذه المراجعات لتحديد نقاط القوة والضعف وأقترح خطة عمل محددة.\n\n";
     }
 
-    // Add email summaries context
+    // Enhanced email communications context
     if (infoSummary.status === 'fulfilled' && infoSummary.value.data && infoSummary.value.data.length > 0) {
-      context += "=== EMAIL COMMUNICATIONS AND INFORMATION ===\n";
+      context += "=== 📧 الاتصالات والمراسلات الإدارية ===\n";
       infoSummary.value.data.forEach((info, index) => {
         if (info['Email Summary']) {
-          context += `${index + 1}. From: ${info['From'] || 'N/A'} | To: ${info['To'] || 'N/A'}\n   Summary: ${info['Email Summary']}\n`;
+          context += `${index + 1}. 📤 من: ${info['From'] || 'غير محدد'} | 📥 إلى: ${info['To'] || 'غير محدد'}\n   📄 الملخص: ${info['Email Summary']}\n`;
         }
       });
-      context += "\n";
+      context += "\n💡 استخدم هذه المعلومات لفهم التحديات الإدارية والفرص المتاحة.\n\n";
     }
 
-    // Add staff training context
+    // Enhanced staff training and development context
     if (conductedTraining.status === 'fulfilled' && conductedTraining.value.data && conductedTraining.value.data.length > 0) {
-      context += "=== STAFF TRAINING AND PROCEDURES ===\n";
+      context += "=== 🎓 التدريب والتطوير المهني للموظفين ===\n";
       conductedTraining.value.data.forEach((training, index) => {
         if (training['Summary of the training']) {
-          context += `${index + 1}. ${training['Summary of the training']}\n`;
+          context += `${index + 1}. 📚 ${training['Summary of the training']}\n`;
         }
       });
-      context += "\n";
+      context += "\n🚀 اقترح برامج تدريبية إضافية بناءً على احتياجات الفندق الحالية.\n\n";
     }
 
-    // Add chat history context
+    // Enhanced chat history with pattern analysis
     if (chatHistory.status === 'fulfilled' && chatHistory.value.data && chatHistory.value.data.length > 0) {
-      context += "=== RECENT CHAT INTERACTIONS ===\n";
-      chatHistory.value.data.slice(0, 10).forEach((chat, index) => {
+      context += "=== 💬 تاريخ المحادثات والاستفسارات الحديثة ===\n";
+      chatHistory.value.data.slice(0, 15).forEach((chat, index) => {
         if (chat['Sender Message'] && chat['Ai Reply']) {
-          context += `${index + 1}. Guest: ${chat['Sender Message']}\n   Response: ${chat['Ai Reply']}\n`;
+          context += `${index + 1}. 🔵 الضيف/الموظف: ${chat['Sender Message']}\n   🤖 الرد: ${chat['Ai Reply']}\n`;
         }
       });
-      context += "\n";
+      context += "\n📈 حلل الأنماط في الاستفسارات لتحديد القضايا المتكررة والحلول المطلوبة.\n\n";
     }
 
-    // Add conversation memory context
+    // Enhanced conversation memory with continuity
     if (longTermMemory.status === 'fulfilled' && longTermMemory.value.data && longTermMemory.value.data.length > 0) {
-      context += "=== CONVERSATION HISTORY ===\n";
-      longTermMemory.value.data.slice(-8).forEach((memory, index) => {
+      context += "=== 🧠 ذاكرة المحادثات والسياق التاريخي ===\n";
+      longTermMemory.value.data.slice(-12).forEach((memory, index) => {
         if (memory.message) {
-          context += `${index + 1}. ${memory.message}\n`;
+          context += `${index + 1}. 💭 ${memory.message}\n`;
+        }
+      });
+      context += "\n🔄 حافظ على استمرارية المحادثة واستخدم هذا السياق لتقديم ردود متماسكة.\n\n";
+    }
+
+    // Enhanced vector search context
+    if (vectorSearch.status === 'fulfilled' && vectorSearch.value.data && vectorSearch.value.data.length > 0) {
+      context += "=== 🔍 بيانات البحث المتقدم والمحتوى ===\n";
+      vectorSearch.value.data.forEach((doc, index) => {
+        if (doc.content) {
+          context += `${index + 1}. 📄 ${doc.content.substring(0, 200)}...\n`;
         }
       });
       context += "\n";
     }
 
-    context += `=== INSTRUCTIONS ===
-- Provide helpful, accurate responses based on the hotel data above
-- If you don't have specific information about something, acknowledge that and offer to help find the information
-- Be professional, friendly, and hospitality-focused in your responses
-- Use the context provided to give informed answers about Two Seasons Hotel
-- If a guest has a complaint or issue, show empathy and offer practical solutions
-- For booking inquiries, direct guests to the appropriate channels while providing helpful information
+    context += `=== 📋 التعليمات المحددة ===
+- 🎯 استخدم البيانات المتاحة لتقديم مشورة دقيقة ومفيدة حول فندق Two Seasons
+- 💡 إذا لم تتوفر معلومات محددة، اعترف بذلك واعرض المساعدة في العثور على المعلومات
+- 🏨 كن مهنياً وودوداً ومركزاً على الضيافة في ردودك
+- 📊 استخدم السياق المتاح لإعطاء إجابات مدروسة حول فندق Two Seasons
+- 🤝 إذا كان لدى الضيف شكوى أو مشكلة، أظهر التفهم واعرض حلولاً عملية
+- 📞 للاستفسارات حول الحجوزات، وجه الضيوف إلى القنوات المناسبة مع تقديم معلومات مفيدة
+- 🔮 قدم توصيات استباقية لتحسين العمليات والخدمات
+- 📈 اقترح استراتيجيات لزيادة الإيرادات ورضا الضيوف
 
-Current guest question: ${message}`;
+سؤال الضيف/الإدارة الحالي: ${message}`;
 
-    console.log('Context length:', context.length, 'characters');
+    console.log('📏 طول السياق:', context.length, 'حرف');
 
-    // Call OpenAI API with enhanced context
+    // Enhanced OpenAI API call with Arabic optimization
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
+      throw new Error('مفتاح OpenAI API غير مكوّن');
     }
 
-    console.log('Calling OpenAI API...');
+    console.log('🤖 استدعاء OpenAI API للمستشار العربي...');
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -138,73 +170,80 @@ Current guest question: ${message}`;
           { role: 'user', content: message }
         ],
         temperature: 0.7,
-        max_tokens: 800,
+        max_tokens: 1000,
         presence_penalty: 0.1,
-        frequency_penalty: 0.1
+        frequency_penalty: 0.1,
+        // Arabic language optimization
+        language: 'ar'
       }),
     });
 
     if (!openAIResponse.ok) {
       const errorText = await openAIResponse.text();
-      console.error('OpenAI API error:', openAIResponse.status, errorText);
-      throw new Error(`OpenAI API error: ${openAIResponse.statusText}`);
+      console.error('❌ خطأ في OpenAI API:', openAIResponse.status, errorText);
+      throw new Error(`خطأ في OpenAI API: ${openAIResponse.statusText}`);
     }
 
     const openAIData = await openAIResponse.json();
     const response = openAIData.choices[0].message.content;
 
-    console.log('Generated OpenAI response length:', response.length, 'characters');
+    console.log('✅ تم إنتاج رد المستشار العربي بطول:', response.length, 'حرف');
 
-    // Store the interaction in Long Term Memory with better error handling
+    // Enhanced conversation storage with Arabic context
     try {
       const memoryResult = await supabase.from('LongTermMemory').insert({
-        sender: 'User',
-        recipient: 'AI Assistant',
-        message: `User: ${message}\nAI: ${response}`,
+        sender: 'مستخدم/ضيف',
+        recipient: 'مستشار فندق Two Seasons الذكي',
+        message: `👤 المستخدم: ${message}\n🤖 المستشار: ${response}`,
         created_at: new Date().toISOString()
       });
 
       if (memoryResult.error) {
-        console.error('Error storing conversation in memory:', memoryResult.error);
+        console.error('❌ خطأ في حفظ المحادثة:', memoryResult.error);
       } else {
-        console.log('Successfully stored conversation in long-term memory');
+        console.log('✅ تم حفظ المحادثة في الذاكرة طويلة المدى بنجاح');
       }
     } catch (memoryError) {
-      console.error('Failed to store conversation:', memoryError);
-      // Don't throw error here - we still want to return the response
+      console.error('❌ فشل في حفظ المحادثة:', memoryError);
     }
 
+    // Enhanced response with Arabic metadata
     return new Response(JSON.stringify({ 
       response,
       messageId,
       timestamp: new Date().toISOString(),
+      consultant: 'مستشار فندق Two Seasons الذكي',
+      language: 'العربية',
       dataStats: {
         hotelReviews: hotelReviews.status === 'fulfilled' ? hotelReviews.value.data?.length || 0 : 0,
         chatHistory: chatHistory.status === 'fulfilled' ? chatHistory.value.data?.length || 0 : 0,
         infoSummary: infoSummary.status === 'fulfilled' ? infoSummary.value.data?.length || 0 : 0,
         conductedTraining: conductedTraining.status === 'fulfilled' ? conductedTraining.value.data?.length || 0 : 0,
-        longTermMemory: longTermMemory.status === 'fulfilled' ? longTermMemory.value.data?.length || 0 : 0
+        longTermMemory: longTermMemory.status === 'fulfilled' ? longTermMemory.value.data?.length || 0 : 0,
+        vectorSearch: vectorSearch.status === 'fulfilled' ? vectorSearch.value.data?.length || 0 : 0
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Error in chat-with-data function:', error);
+    console.error('❌ خطأ في وظيفة المستشار الذكي:', error);
     
-    // Provide more specific error messages
-    let errorMessage = 'I apologize, but I encountered an issue processing your request. Please try again.';
+    // Enhanced Arabic error messages
+    let errorMessage = 'أعتذر، واجهت مشكلة في معالجة طلبك. يرجى المحاولة مرة أخرى.';
     
     if (error.message.includes('OpenAI')) {
-      errorMessage = 'I\'m having trouble connecting to the AI service. Please try again in a moment.';
+      errorMessage = 'أواجه مشكلة في الاتصال بخدمة الذكاء الاصطناعي. يرجى المحاولة خلال لحظات.';
     } else if (error.message.includes('Supabase') || error.message.includes('database')) {
-      errorMessage = 'I\'m having trouble accessing the hotel information. Please try again.';
+      errorMessage = 'أواجه مشكلة في الوصول إلى بيانات الفندق. يرجى المحاولة مرة أخرى.';
     }
     
     return new Response(JSON.stringify({ 
       error: errorMessage,
       messageId: Date.now().toString(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      consultant: 'مستشار فندق Two Seasons الذكي',
+      language: 'العربية'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

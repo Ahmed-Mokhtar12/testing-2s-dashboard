@@ -13,19 +13,52 @@ interface ChatMessageProps {
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
+  // Enhanced formatting for Arabic text
+  const formatContent = (content: string) => {
+    // Add better line breaks and spacing for Arabic text
+    return content
+      .split('\n')
+      .map((line, index) => (
+        <span key={index}>
+          {line}
+          {index < content.split('\n').length - 1 && <br />}
+        </span>
+      ));
+  };
+
   return (
-    <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-          message.isUser
-            ? 'bg-[#C8A351] text-white'
-            : 'bg-white border border-gray-200 text-gray-900'
-        } shadow-sm`}
-      >
-        <p className="whitespace-pre-wrap">{message.content}</p>
-        <div className={`text-xs mt-2 ${message.isUser ? 'text-white/70' : 'text-gray-500'}`}>
-          {message.timestamp.toLocaleTimeString()}
+    <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6`}>
+      <div className="flex items-start gap-3 max-w-[85%]">
+        {!message.isUser && (
+          <div className="w-8 h-8 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+            <span className="text-white font-bold text-xs">TS</span>
+          </div>
+        )}
+        
+        <div
+          className={`rounded-2xl px-4 py-3 shadow-sm ${
+            message.isUser
+              ? 'bg-gradient-to-r from-[#C8A351] to-[#B8934A] text-white ml-3'
+              : 'bg-white border border-gray-200 text-gray-900'
+          }`}
+        >
+          <div className={`whitespace-pre-wrap leading-relaxed ${message.isUser ? 'text-right' : 'text-right'}`} dir="rtl">
+            {formatContent(message.content)}
+          </div>
+          <div className={`text-xs mt-3 ${message.isUser ? 'text-white/70' : 'text-gray-500'} text-left`} dir="ltr">
+            {message.timestamp.toLocaleTimeString('ar-SA', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: true 
+            })}
+          </div>
         </div>
+
+        {message.isUser && (
+          <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+            <span className="text-white font-bold text-xs">أنت</span>
+          </div>
+        )}
       </div>
     </div>
   );
