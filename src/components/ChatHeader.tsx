@@ -1,18 +1,14 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
-
 interface ChatHeaderProps {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
 }
-
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   sidebarOpen,
   onToggleSidebar
 }) => {
-  return (
-    <div className="h-14 border-b border-gray-200 flex items-center px-4 bg-white shadow-sm flex-shrink-0">
+  return <div className="h-14 border-b border-gray-200 flex items-center px-4 bg-white shadow-sm flex-shrink-0">
       <Button variant="ghost" size="sm" onClick={onToggleSidebar} className="mr-3 hover:bg-gray-100">
         ☰
       </Button>
@@ -21,7 +17,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <span className="text-white font-bold text-xs">TS</span>
         </div>
         <div>
-          <h2 className="text-lg font-medium text-gray-900">Two Seasons Hotel AI Assistance</h2>
+          <h2 className="text-lg font-medium text-gray-900">Two Seasons Hotel AI Manager</h2>
           <p className="text-xs text-gray-500">Your intelligent assistant specialized in hotel management</p>
         </div>
       </div>
@@ -31,8 +27,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <span>Online</span>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default ChatHeader;

@@ -38,7 +38,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <img src="/lovable-uploads/30a459cd-3686-44d4-bdcc-cb6b4c388321.png" alt="Hotel Logo" className="w-12 h-12 object-contain" />
         </div>
         
-        <h1 className="text-4xl font-light text-gray-900 mb-4">Welcome to Two Seasons Hotel AI Assistance</h1>
+        <h1 className="text-4xl font-light text-gray-900 mb-4">Welcome to Two Seasons Hotel AI Manager</h1>
         <p className="text-xl text-gray-600 mb-6 leading-relaxed">
       </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-sm">
