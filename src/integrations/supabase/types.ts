@@ -53,19 +53,49 @@ export type Database = {
       }
       "Hotel Reviews": {
         Row: {
+          Author: string | null
           created_at: string
+          Date: string | null
+          Hotel: string | null
           id: number
+          Language: string | null
+          Response: string | null
           "Reviews Summary": string | null
+          Score: number | null
+          Source: string | null
+          Text: string | null
+          Title: string | null
+          URL: string | null
         }
         Insert: {
+          Author?: string | null
           created_at?: string
+          Date?: string | null
+          Hotel?: string | null
           id?: number
+          Language?: string | null
+          Response?: string | null
           "Reviews Summary"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
         }
         Update: {
+          Author?: string | null
           created_at?: string
+          Date?: string | null
+          Hotel?: string | null
           id?: number
+          Language?: string | null
+          Response?: string | null
           "Reviews Summary"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
         }
         Relationships: []
       }
