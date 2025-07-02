@@ -125,6 +125,10 @@ export class EnhancedDataService {
           .sort()
           .slice(0, 10);
         console.log('📅 Sample review dates:', reviewDates);
+        
+        // Add comprehensive monthly analysis for better AI context
+        const monthlyBreakdown = this.analyzeReviewsByMonth(allReviews.data);
+        console.log('📊 Monthly review breakdown:', monthlyBreakdown);
       }
       
       // Return all reviews without any filtering
@@ -311,5 +315,33 @@ export class EnhancedDataService {
 
     console.log('📊 Created enhanced data stats:', stats);
     return stats;
+  }
+
+  private analyzeReviewsByMonth(reviews: any[]): Record<string, number> {
+    console.log('📅 Analyzing reviews by month...');
+    const monthlyBreakdown: Record<string, number> = {};
+    
+    reviews.forEach(review => {
+      if (review.Date) {
+        try {
+          const reviewDate = new Date(review.Date);
+          const monthKey = `${reviewDate.getFullYear()}-${String(reviewDate.getMonth() + 1).padStart(2, '0')}`;
+          monthlyBreakdown[monthKey] = (monthlyBreakdown[monthKey] || 0) + 1;
+        } catch (error) {
+          console.error('❌ Error parsing date:', review.Date, error);
+        }
+      }
+    });
+    
+    // Sort by month for better readability
+    const sortedBreakdown: Record<string, number> = {};
+    Object.keys(monthlyBreakdown)
+      .sort()
+      .forEach(key => {
+        sortedBreakdown[key] = monthlyBreakdown[key];
+      });
+    
+    console.log('📊 Monthly breakdown result:', sortedBreakdown);
+    return sortedBreakdown;
   }
 }

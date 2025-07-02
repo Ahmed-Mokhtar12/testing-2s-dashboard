@@ -78,6 +78,7 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
       const reviewsWithScores = allReviews.filter((review: any) => review.Score);
       const reviewsBySource = this.analyzeReviewsBySource(allReviews);
       const reviewsByDate = this.analyzeReviewsByDate(allReviews);
+      const monthlyBreakdown = this.analyzeReviewsByMonth(allReviews);
       
       contextSections.push(`📊 REVIEWS WITH CONTENT: ${reviewsWithContent.length}`);
       contextSections.push(`📊 REVIEWS WITH SCORES: ${reviewsWithScores.length}`);
@@ -87,6 +88,16 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
         contextSections.push('📍 REVIEWS BY SOURCE:');
         Object.entries(reviewsBySource).forEach(([source, count]) => {
           contextSections.push(`   • ${source}: ${count} reviews`);
+        });
+      }
+      
+      // Add comprehensive monthly breakdown
+      if (Object.keys(monthlyBreakdown).length > 0) {
+        contextSections.push('📅 REVIEWS BY MONTH (EXACT BREAKDOWN):');
+        Object.entries(monthlyBreakdown).forEach(([monthKey, count]) => {
+          const [year, month] = monthKey.split('-');
+          const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
+          contextSections.push(`   • ${monthName} ${year}: ${count} reviews`);
         });
       }
       
@@ -324,5 +335,33 @@ Respond professionally as a senior hotel management consultant using the actual 
     }
 
     return sources;
+  }
+
+  private analyzeReviewsByMonth(reviews: any[]): Record<string, number> {
+    console.log('📅 Context Builder - Analyzing reviews by month...');
+    const monthlyBreakdown: Record<string, number> = {};
+    
+    reviews.forEach(review => {
+      if (review.Date) {
+        try {
+          const reviewDate = new Date(review.Date);
+          const monthKey = `${reviewDate.getFullYear()}-${String(reviewDate.getMonth() + 1).padStart(2, '0')}`;
+          monthlyBreakdown[monthKey] = (monthlyBreakdown[monthKey] || 0) + 1;
+        } catch (error) {
+          console.error('❌ Context Builder - Error parsing date:', review.Date, error);
+        }
+      }
+    });
+    
+    // Sort by month for better readability
+    const sortedBreakdown: Record<string, number> = {};
+    Object.keys(monthlyBreakdown)
+      .sort()
+      .forEach(key => {
+        sortedBreakdown[key] = monthlyBreakdown[key];
+      });
+    
+    console.log('📊 Context Builder - Monthly breakdown result:', sortedBreakdown);
+    return sortedBreakdown;
   }
 }
