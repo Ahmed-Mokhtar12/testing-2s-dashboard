@@ -34,8 +34,8 @@ serve(async (req) => {
     const queryAnalysis = QueryAnalyzer.analyzeQuery(message);
     console.log('🧠 Query Analysis:', queryAnalysis);
 
-    // Fetch data from all sources including document context
-    const data = await dataService.fetchAllDataWithDocumentContext();
+    // Fetch optimized data based on query analysis (instead of all data)
+    const data = await dataService.fetchOptimizedDataWithContext(queryAnalysis);
 
     // Build optimized context based on query analysis
     const context = smartContextBuilder.buildOptimizedContext(data, queryAnalysis, message);

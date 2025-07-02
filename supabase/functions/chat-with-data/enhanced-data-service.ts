@@ -2,6 +2,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { DataStats } from './types.ts';
 import { DataAnalysisUtils } from './data-analysis-utils.ts';
 import { DataStatsLogger } from './data-stats-logger.ts';
+import { QuerySpecificDataService, DataFetchPlan } from './query-specific-data-service.ts';
+import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
+import { QueryAnalysis } from './query-analyzer.ts';
 
 export class EnhancedDataService {
   private supabase;
@@ -13,8 +16,61 @@ export class EnhancedDataService {
     );
   }
 
+  async fetchOptimizedDataWithContext(queryAnalysis: QueryAnalysis) {
+    console.log('🎯 Fetching optimized data based on query analysis...');
+    
+    const fetchPlan = QuerySpecificDataService.createFetchPlan(queryAnalysis);
+    const promises: Promise<any>[] = [];
+    const promiseMap: Record<string, number> = {};
+    let index = 0;
+
+    // Only fetch required data sources based on query analysis
+    if (fetchPlan.shouldFetchReviews) {
+      promises.push(this.fetchHotelReviewsWithRetry());
+      promiseMap['hotelReviews'] = index++;
+    }
+    if (fetchPlan.shouldFetchChat) {
+      promises.push(this.fetchChatHistoryWithRetry());
+      promiseMap['chatHistory'] = index++;
+    }
+    if (fetchPlan.shouldFetchEmails) {
+      promises.push(this.fetchInfoSummaryWithRetry());
+      promiseMap['infoSummary'] = index++;
+    }
+    if (fetchPlan.shouldFetchTraining) {
+      promises.push(this.fetchConductedTrainingWithRetry());
+      promiseMap['conductedTraining'] = index++;
+    }
+    if (fetchPlan.shouldFetchMemory) {
+      promises.push(this.fetchLongTermMemoryWithRetry());
+      promiseMap['longTermMemory'] = index++;
+    }
+    if (fetchPlan.shouldFetchVector) {
+      promises.push(this.fetchVectorSearchWithRetry());
+      promiseMap['vectorSearch'] = index++;
+    }
+    if (fetchPlan.shouldFetchDocuments) {
+      promises.push(this.getRecentDocumentsWithRetry());
+      promiseMap['recentDocuments'] = index++;
+      promises.push(this.getRecentDocumentContextWithRetry());
+      promiseMap['documentContext'] = index++;
+    }
+
+    const results = await Promise.allSettled(promises);
+    
+    // Map results back to named properties
+    const data: any = {};
+    Object.entries(promiseMap).forEach(([key, idx]) => {
+      data[key] = results[idx];
+    });
+
+    console.log('✅ Optimized data fetch completed. Fetched sources:', Object.keys(data));
+    return data;
+  }
+
+  // Legacy method for backward compatibility
   async fetchAllDataWithDocumentContext() {
-    console.log('📊 Fetching comprehensive hotel data with document context...');
+    console.log('📊 Fetching comprehensive hotel data with document context (legacy)...');
     
     const [
       hotelReviews, 
@@ -26,14 +82,14 @@ export class EnhancedDataService {
       recentDocuments,
       documentContext
     ] = await Promise.allSettled([
-      this.fetchHotelReviews(),
-      this.fetchChatHistory(),
-      this.fetchInfoSummary(),
-      this.fetchConductedTraining(),
-      this.fetchLongTermMemory(),
-      this.fetchVectorSearch(),
-      this.getRecentDocuments(),
-      this.getRecentDocumentContext()
+      this.fetchHotelReviewsWithRetry(),
+      this.fetchChatHistoryWithRetry(),
+      this.fetchInfoSummaryWithRetry(),
+      this.fetchConductedTrainingWithRetry(),
+      this.fetchLongTermMemoryWithRetry(),
+      this.fetchVectorSearchWithRetry(),
+      this.getRecentDocumentsWithRetry(),
+      this.getRecentDocumentContextWithRetry()
     ]);
 
     DataStatsLogger.logEnhancedDataStats({
@@ -145,6 +201,63 @@ export class EnhancedDataService {
     }
   }
 
+  // Enhanced methods with retry logic
+  private async fetchHotelReviewsWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.fetchHotelReviews(),
+      'fetch-hotel-reviews'
+    );
+  }
+
+  private async fetchChatHistoryWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.fetchChatHistory(),
+      'fetch-chat-history'
+    );
+  }
+
+  private async fetchInfoSummaryWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.fetchInfoSummary(),
+      'fetch-info-summary'
+    );
+  }
+
+  private async fetchConductedTrainingWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.fetchConductedTraining(),
+      'fetch-conducted-training'
+    );
+  }
+
+  private async fetchLongTermMemoryWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.fetchLongTermMemory(),
+      'fetch-long-term-memory'
+    );
+  }
+
+  private async fetchVectorSearchWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.fetchVectorSearch(),
+      'fetch-vector-search'
+    );
+  }
+
+  private async getRecentDocumentsWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.getRecentDocuments(),
+      'fetch-recent-documents'
+    );
+  }
+
+  private async getRecentDocumentContextWithRetry() {
+    return EnhancedErrorHandler.withRetry(
+      () => this.getRecentDocumentContext(),
+      'fetch-document-context'
+    );
+  }
+
   private async fetchChatHistory() {
     try {
       const result = await this.supabase
@@ -157,7 +270,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching Chat History:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 
@@ -173,7 +286,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching Info Summary:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 
@@ -189,7 +302,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching Conducted Training:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 
@@ -205,7 +318,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching LongTermMemory:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 
@@ -221,7 +334,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching N8N_2S:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 
@@ -240,7 +353,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching recent documents:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 
@@ -251,7 +364,7 @@ export class EnhancedDataService {
       return result;
     } catch (error) {
       console.error('❌ Error fetching document context:', error);
-      return { status: 'rejected', reason: error.message };
+      throw error;
     }
   }
 

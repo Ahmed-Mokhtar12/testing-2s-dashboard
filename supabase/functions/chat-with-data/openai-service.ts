@@ -1,6 +1,7 @@
 
 import { SearchService } from './search-service.ts';
 import { UncertaintyManager } from './uncertainty-manager.ts';
+import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
 
 export class OpenAIService {
   private apiKey: string;
@@ -57,32 +58,44 @@ Current guest/management question: ${message}`;
     const functions = this.searchService.getAvailableFunctions();
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4.1-2025-04-14',
-          messages: [
-            { role: 'system', content: enhancedContext },
-            { role: 'user', content: message }
-          ],
-          functions: functions,
-          function_call: "auto",
-          temperature: 0.7,
-          max_tokens: 1200,
-          presence_penalty: 0.1,
-          frequency_penalty: 0.1
-        }),
-      });
+      const response = await EnhancedErrorHandler.withRetry(async () => {
+        const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4.1-2025-04-14',
+            messages: [
+              { role: 'system', content: enhancedContext },
+              { role: 'user', content: message }
+            ],
+            functions: functions,
+            function_call: "auto",
+            temperature: 0.7,
+            max_tokens: 1200,
+            presence_penalty: 0.1,
+            frequency_penalty: 0.1
+          }),
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ OpenAI API Error:', response.status, errorText);
-        throw new Error(`OpenAI API Error: ${response.statusText}`);
-      }
+        if (!apiResponse.ok) {
+          const errorText = await apiResponse.text();
+          console.error('❌ OpenAI API Error:', apiResponse.status, errorText);
+          
+          // Create specific error for retry logic
+          const error = new Error(`OpenAI API Error: ${apiResponse.status} - ${apiResponse.statusText}`);
+          if (apiResponse.status === 429) {
+            error.message = 'OpenAI API rate limit exceeded';
+          } else if (apiResponse.status >= 500) {
+            error.message = 'OpenAI API server error';
+          }
+          throw error;
+        }
+        
+        return apiResponse;
+      }, 'openai-api-call', { maxRetries: 2, baseDelay: 2000 });
 
       const data = await response.json();
       const choice = data.choices[0];
@@ -168,8 +181,13 @@ Current guest/management question: ${message}`;
       return aiResponse;
       
     } catch (error) {
-      console.error('❌ OpenAI Service Error:', error);
-      throw error;
+      EnhancedErrorHandler.logError(error, 'OpenAI Service', { 
+        contextLength: enhancedContext.length,
+        messageLength: message.length 
+      });
+      
+      // Return user-friendly error message
+      throw new Error(EnhancedErrorHandler.createUserFriendlyMessage(error, 'AI response generation'));
     }
   }
 }

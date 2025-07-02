@@ -16,9 +16,9 @@ export const createAIMessage = (content: string): Message => ({
   timestamp: new Date(),
 });
 
-export const createErrorMessage = (): Message => ({
+export const createErrorMessage = (customMessage?: string): Message => ({
   id: (Date.now() + 1).toString(),
-  content: "I'm unable to answer based on the current data. Please try again.",
+  content: customMessage || "I'm unable to answer based on the current data. Please try again.",
   isUser: false,
   timestamp: new Date(),
 });

@@ -1,5 +1,6 @@
 import { QueryAnalysis } from './query-analyzer.ts';
 import { ReviewAnalysisUtils } from './review-analysis-utils.ts';
+import { ContextLengthManager } from './context-length-manager.ts';
 
 export class SmartContextBuilder {
   buildOptimizedContext(data: any, queryAnalysis: QueryAnalysis, userMessage: string): string {
@@ -34,11 +35,15 @@ export class SmartContextBuilder {
     // Add query-specific instructions
     contextSections.push(this.buildQueryInstructions(queryAnalysis, userMessage));
     
-    const context = contextSections.join('\n');
-    console.log('📏 Smart Context - Final length:', context.length, 'characters');
+    const rawContext = contextSections.join('\n');
+    console.log('📏 Smart Context - Raw length:', rawContext.length, 'characters');
     console.log('🎯 Smart Context - Query type:', queryAnalysis.type);
     
-    return context;
+    // Apply context length management
+    const optimizedContext = ContextLengthManager.optimizeContext(rawContext);
+    console.log('✅ Smart Context - Final optimized length:', optimizedContext.length, 'characters');
+    
+    return optimizedContext;
   }
   
   private buildBriefRoleSection(): string {
