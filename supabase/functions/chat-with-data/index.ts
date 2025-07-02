@@ -7,24 +7,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface QueryAnalysis {
-  isMonthQuery: boolean;
+interface SmartQueryAnalysis {
+  type: 'specific_month' | 'date_range' | 'recent_period' | 'analytics' | 'general';
+  startDate?: string;
+  endDate?: string;
   month?: string;
   year?: string;
-  monthNumber?: string;
+  days?: number;
+  description?: string;
 }
 
-function analyzeQuery(message: string): QueryAnalysis {
+function analyzeQueryIntelligently(message: string): SmartQueryAnalysis {
   const lowerMessage = message.toLowerCase();
   
-  // Check for month patterns
+  // Specific month patterns (June 2025, May 2024, etc.)
   const monthPattern = /(january|february|march|april|may|june|july|august|september|october|november|december)\s*,?\s*(\d{4})/i;
-  const match = lowerMessage.match(monthPattern);
+  const monthMatch = lowerMessage.match(monthPattern);
   
-  if (match) {
-    const monthName = match[1].toLowerCase();
-    const year = match[2];
-    
+  if (monthMatch) {
+    const monthName = monthMatch[1].toLowerCase();
+    const year = monthMatch[2];
     const monthNumbers: Record<string, string> = {
       january: '01', february: '02', march: '03', april: '04',
       may: '05', june: '06', july: '07', august: '08',
@@ -32,95 +34,237 @@ function analyzeQuery(message: string): QueryAnalysis {
     };
     
     return {
-      isMonthQuery: true,
+      type: 'specific_month',
       month: monthName,
       year,
-      monthNumber: monthNumbers[monthName]
+      startDate: `${year}-${monthNumbers[monthName]}-01`,
+      endDate: `${year}-${monthNumbers[monthName]}-31`,
+      description: `${monthName} ${year}`
     };
   }
   
-  return { isMonthQuery: false };
+  // Recent period patterns (past X days, last X weeks, etc.)
+  const pastDaysPattern = /(?:past|last)\s*(\d+)\s*days?/i;
+  const pastWeeksPattern = /(?:past|last)\s*(\d+)\s*weeks?/i;
+  const pastMonthsPattern = /(?:past|last)\s*(\d+)\s*months?/i;
+  
+  const daysMatch = lowerMessage.match(pastDaysPattern);
+  const weeksMatch = lowerMessage.match(pastWeeksPattern);
+  const monthsMatch = lowerMessage.match(pastMonthsPattern);
+  
+  if (daysMatch) {
+    const days = parseInt(daysMatch[1]);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    return {
+      type: 'recent_period',
+      days,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0],
+      description: `past ${days} days`
+    };
+  }
+  
+  if (weeksMatch) {
+    const weeks = parseInt(weeksMatch[1]);
+    const days = weeks * 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    return {
+      type: 'recent_period',
+      days,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0],
+      description: `past ${weeks} weeks`
+    };
+  }
+  
+  if (monthsMatch) {
+    const months = parseInt(monthsMatch[1]);
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+    return {
+      type: 'recent_period',
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0],
+      description: `past ${months} months`
+    };
+  }
+  
+  // Recent/current patterns
+  if (lowerMessage.includes('recent') || lowerMessage.includes('lately') || lowerMessage.includes('this month')) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    return {
+      type: 'recent_period',
+      days: 30,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0],
+      description: 'recent period (30 days)'
+    };
+  }
+  
+  if (lowerMessage.includes('this year')) {
+    const year = new Date().getFullYear();
+    return {
+      type: 'date_range',
+      startDate: `${year}-01-01`,
+      endDate: `${year}-12-31`,
+      description: `this year (${year})`
+    };
+  }
+  
+  if (lowerMessage.includes('last year')) {
+    const year = new Date().getFullYear() - 1;
+    return {
+      type: 'date_range',
+      startDate: `${year}-01-01`,
+      endDate: `${year}-12-31`,
+      description: `last year (${year})`
+    };
+  }
+  
+  // Analytics patterns
+  if (lowerMessage.includes('breakdown') || lowerMessage.includes('analysis') || 
+      lowerMessage.includes('average') || lowerMessage.includes('source') ||
+      lowerMessage.includes('rating') || lowerMessage.includes('score')) {
+    return {
+      type: 'analytics',
+      description: 'analytics query'
+    };
+  }
+  
+  return { type: 'general', description: 'general query' };
 }
 
-async function queryMonthReviews(supabase: any, year: string, monthNumber: string) {
-  const startDate = `${year}-${monthNumber}-01`;
-  const nextMonth = monthNumber === '12' ? '01' : String(parseInt(monthNumber) + 1).padStart(2, '0');
-  const nextYear = monthNumber === '12' ? String(parseInt(year) + 1) : year;
-  const endDate = `${nextYear}-${nextMonth}-01`;
+async function queryReviewsByDateRange(supabase: any, startDate: string, endDate: string) {
+  console.log(`📊 Querying reviews from ${startDate} to ${endDate}`);
   
   const { data: reviews, error } = await supabase
     .from('Hotel Reviews')
     .select('*')
     .gte('Date', startDate)
-    .lt('Date', endDate);
+    .lte('Date', endDate)
+    .order('Date', { ascending: false });
     
   return { reviews, error };
 }
 
-async function buildContextForAI(supabase: any) {
-  console.log('🏗️ Building context for AI...');
+async function getAnalyticsData(supabase: any) {
+  console.log('📈 Fetching analytics data...');
   
-  try {
-    // Fetch recent reviews for context
-    const { data: recentReviews } = await supabase
-      .from('Hotel Reviews')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
-      
-    // Fetch recent chat history
-    const { data: chatHistory } = await supabase
-      .from('Chat History')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10);
-      
-    // Build a focused context
-    let context = `🏨 You are Two Seasons Hotel's AI consultant with direct database access.
-
-📊 HOTEL REVIEWS DATABASE ACCESS:
-- Total reviews available: ${recentReviews?.length || 0} recent reviews loaded
-- You have full access to all hotel operational data
-- Provide specific, data-driven responses
-
-📋 RECENT CHAT INTERACTIONS:
-`;
-
-    if (chatHistory && chatHistory.length > 0) {
-      chatHistory.slice(0, 3).forEach((chat: any) => {
-        if (chat['Sender Message'] && chat['Ai Reply']) {
-          context += `- Guest: ${chat['Sender Message'].substring(0, 100)}...\n`;
-          context += `- Hotel: ${chat['Ai Reply'].substring(0, 100)}...\n`;
-        }
-      });
-    }
-
-    context += `
-⭐ RECENT REVIEW INSIGHTS:
-`;
+  // Get all reviews for comprehensive analytics
+  const { data: allReviews, error } = await supabase
+    .from('Hotel Reviews')
+    .select('*')
+    .order('Date', { ascending: false });
     
-    if (recentReviews && recentReviews.length > 0) {
-      const avgScore = recentReviews
-        .filter((r: any) => r.Score)
-        .reduce((sum: number, r: any) => sum + r.Score, 0) / recentReviews.filter((r: any) => r.Score).length;
-        
-      context += `- Average recent score: ${avgScore.toFixed(1)}/5
-- Recent review sources: ${[...new Set(recentReviews.map((r: any) => r.Source))].join(', ')}
-- Latest review: ${recentReviews[0]?.Date || 'N/A'}
-
-🎯 INSTRUCTIONS:
-- Use actual hotel data from the database
-- Provide specific counts and accurate information
-- Reference real guest interactions when relevant
-- Act as a senior hotel management consultant
-`;
-    }
-    
-    return context;
-  } catch (error) {
-    console.error('❌ Error building context:', error);
-    return 'You are Two Seasons Hotel AI consultant. Provide helpful hotel management insights.';
+  if (error || !allReviews) {
+    return { allReviews: [], error };
   }
+  
+  // Calculate analytics
+  const analytics = {
+    totalReviews: allReviews.length,
+    averageScore: 0,
+    sourceBreakdown: {} as Record<string, number>,
+    monthlyBreakdown: {} as Record<string, number>,
+    recentTrend: 0
+  };
+  
+  // Calculate average score
+  const reviewsWithScores = allReviews.filter(r => r.Score);
+  if (reviewsWithScores.length > 0) {
+    analytics.averageScore = reviewsWithScores.reduce((sum, r) => sum + r.Score, 0) / reviewsWithScores.length;
+  }
+  
+  // Source breakdown
+  allReviews.forEach(review => {
+    const source = review.Source || 'Unknown';
+    analytics.sourceBreakdown[source] = (analytics.sourceBreakdown[source] || 0) + 1;
+  });
+  
+  // Monthly breakdown (last 6 months)
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  allReviews.forEach(review => {
+    if (review.Date && new Date(review.Date) >= sixMonthsAgo) {
+      const monthKey = review.Date.substring(0, 7); // YYYY-MM
+      analytics.monthlyBreakdown[monthKey] = (analytics.monthlyBreakdown[monthKey] || 0) + 1;
+    }
+  });
+  
+  return { analytics, allReviews, error: null };
+}
+
+async function buildIntelligentContext(supabase: any, queryAnalysis: SmartQueryAnalysis, specificData?: any) {
+  console.log('🧠 Building intelligent context...');
+  
+  let context = `🏨 You are Two Seasons Hotel's senior AI consultant with complete database access.
+
+📊 QUERY ANALYSIS: ${queryAnalysis.description}
+📅 QUERY TYPE: ${queryAnalysis.type}
+
+`;
+
+  if (specificData?.reviews) {
+    const reviews = specificData.reviews;
+    const reviewsWithScores = reviews.filter((r: any) => r.Score);
+    const avgScore = reviewsWithScores.length > 0 ? 
+      reviewsWithScores.reduce((sum: number, r: any) => sum + r.Score, 0) / reviewsWithScores.length : 0;
+    
+    const sourceBreakdown = reviews.reduce((acc: any, review: any) => {
+      const source = review.Source || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {});
+
+    context += `🎯 SPECIFIC DATA FOR YOUR QUERY:
+- Total reviews in period: ${reviews.length}
+- Average score: ${avgScore.toFixed(1)}/5
+- Date range: ${queryAnalysis.startDate} to ${queryAnalysis.endDate}
+- Sources: ${Object.entries(sourceBreakdown).map(([source, count]) => `${source} (${count})`).join(', ')}
+
+📋 SAMPLE REVIEWS FROM THIS PERIOD:
+`;
+    
+    reviews.slice(0, 5).forEach((review: any, index: number) => {
+      context += `${index + 1}. ${review.Date} - ${review.Source} - Score: ${review.Score || 'N/A'}
+   ${review.Title ? `Title: ${review.Title}` : ''}
+   ${review['Reviews Summary'] ? `Summary: ${review['Reviews Summary'].substring(0, 150)}...` : ''}
+
+`;
+    });
+  }
+  
+  if (specificData?.analytics) {
+    const analytics = specificData.analytics;
+    context += `📈 COMPREHENSIVE HOTEL ANALYTICS:
+- Total reviews in database: ${analytics.totalReviews}
+- Overall average score: ${analytics.averageScore.toFixed(1)}/5
+- Review sources breakdown: ${Object.entries(analytics.sourceBreakdown).map(([source, count]) => `${source} (${count})`).join(', ')}
+
+📅 RECENT MONTHLY TRENDS:
+${Object.entries(analytics.monthlyBreakdown)
+  .sort(([a], [b]) => b.localeCompare(a))
+  .slice(0, 6)
+  .map(([month, count]) => `- ${month}: ${count} reviews`)
+  .join('\n')}
+
+`;
+  }
+
+  context += `🎯 INSTRUCTIONS:
+- Provide specific, data-driven insights based on the actual hotel data
+- Use exact numbers from the database - never estimate or approximate
+- Reference specific trends, patterns, and insights from the data
+- Provide actionable recommendations based on the findings
+- Be conversational but professional, as a senior hotel consultant
+
+`;
+
+  return context;
 }
 
 async function callOpenAI(context: string, message: string): Promise<string> {
@@ -128,6 +272,9 @@ async function callOpenAI(context: string, message: string): Promise<string> {
   if (!apiKey) {
     throw new Error('OpenAI API key not configured');
   }
+
+  console.log('🤖 Calling OpenAI with intelligent context...');
+  console.log(`📏 Context length: ${context.length} characters`);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -142,7 +289,7 @@ async function callOpenAI(context: string, message: string): Promise<string> {
         { role: 'user', content: message }
       ],
       temperature: 0.7,
-      max_tokens: 1200,
+      max_tokens: 1500,
     }),
   });
 
@@ -160,7 +307,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🚀 Fixed chat-with-data function starting...');
+    console.log('🚀 Intelligent chat-with-data function starting...');
     const { message, messageId } = await req.json();
     
     console.log('📩 Received message:', message);
@@ -171,39 +318,47 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Analyze the query
-    const queryAnalysis = analyzeQuery(message);
-    console.log('🧠 Query analysis:', queryAnalysis);
+    // Intelligent query analysis
+    const queryAnalysis = analyzeQueryIntelligently(message);
+    console.log('🧠 Intelligent query analysis:', queryAnalysis);
 
-    let aiResponse: string;
+    let specificData: any = null;
+    let context: string;
 
-    if (queryAnalysis.isMonthQuery && queryAnalysis.monthNumber && queryAnalysis.year) {
-      // Handle month-specific queries with direct database access
-      console.log(`🗓️ Handling ${queryAnalysis.month} ${queryAnalysis.year} query...`);
-      
-      const { reviews, error } = await queryMonthReviews(supabase, queryAnalysis.year, queryAnalysis.monthNumber);
-      
-      if (error) {
-        console.error('❌ Database error:', error);
-        throw new Error('Database query failed');
-      }
-      
-      const monthReviewCount = reviews?.length || 0;
-      console.log(`📊 Found ${monthReviewCount} reviews for ${queryAnalysis.month} ${queryAnalysis.year}`);
-      
-      // Build context and get AI response
-      const context = await buildContextForAI(supabase);
-      const enhancedMessage = `Based on the hotel database: There are exactly ${monthReviewCount} reviews for ${queryAnalysis.month} ${queryAnalysis.year}. ${message}`;
-      
-      aiResponse = await callOpenAI(context, enhancedMessage);
-      
-    } else {
-      // Handle general queries with full AI processing
-      console.log('💬 Handling general query with AI...');
-      
-      const context = await buildContextForAI(supabase);
-      aiResponse = await callOpenAI(context, message);
+    // Handle different query types with specific data gathering
+    switch (queryAnalysis.type) {
+      case 'specific_month':
+      case 'recent_period':
+      case 'date_range':
+        console.log(`📅 Processing ${queryAnalysis.type} query...`);
+        const { reviews, error } = await queryReviewsByDateRange(
+          supabase, 
+          queryAnalysis.startDate!, 
+          queryAnalysis.endDate!
+        );
+        
+        if (error) throw new Error('Database query failed: ' + error.message);
+        
+        specificData = { reviews };
+        context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
+        break;
+        
+      case 'analytics':
+        console.log('📈 Processing analytics query...');
+        const analyticsResult = await getAnalyticsData(supabase);
+        if (analyticsResult.error) throw new Error('Analytics query failed');
+        
+        specificData = { analytics: analyticsResult.analytics, allReviews: analyticsResult.allReviews };
+        context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
+        break;
+        
+      default:
+        console.log('💬 Processing general query...');
+        context = await buildIntelligentContext(supabase, queryAnalysis);
     }
+
+    // Generate intelligent AI response
+    const aiResponse = await callOpenAI(context, message);
 
     // Save conversation
     try {
@@ -221,25 +376,24 @@ serve(async (req) => {
       response: aiResponse,
       messageId,
       timestamp: new Date().toISOString(),
-      consultant: 'Two Seasons Hotel AI Consultant (Fixed)',
-      dataStats: queryAnalysis.isMonthQuery ? {
-        monthQuery: `${queryAnalysis.month} ${queryAnalysis.year}`,
-        reviewCount: 'processed'
-      } : {
-        generalQuery: true
+      consultant: 'Two Seasons Hotel AI Consultant (Intelligent)',
+      queryAnalysis: {
+        type: queryAnalysis.type,
+        description: queryAnalysis.description,
+        dataPoints: specificData?.reviews?.length || specificData?.analytics?.totalReviews || 'general'
       }
     };
 
-    console.log('✅ Response generated successfully');
+    console.log('✅ Intelligent response generated successfully');
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('🚨 Error in function:', error);
+    console.error('🚨 Error in intelligent function:', error);
     
     const errorResponse = {
-      response: `I encountered an issue: ${error.message}. Please try rephrasing your question.`,
+      response: `I encountered an issue processing your request: ${error.message}. Please try rephrasing your question.`,
       messageId: 'error-' + Date.now(),
       timestamp: new Date().toISOString(),
       consultant: 'Two Seasons Hotel AI Consultant (Error)',
