@@ -129,7 +129,20 @@ export class EnhancedDataService {
     
     // Add comprehensive monthly analysis for better AI context
     const monthlyBreakdown = DataAnalysisUtils.analyzeReviewsByMonth(reviews);
-    console.log('📊 Monthly review breakdown:', monthlyBreakdown);
+    console.log('📊 Monthly review breakdown (Enhanced Data Service):', monthlyBreakdown);
+    
+    // Specifically check for June 2025 data
+    const june2025Count = monthlyBreakdown['2025-06'] || 0;
+    console.log('🎯 JUNE 2025 REVIEW COUNT FROM BREAKDOWN:', june2025Count);
+    
+    // Log some sample June 2025 dates for verification
+    const june2025Reviews = reviews.filter(review => 
+      review.Date && review.Date.toString().startsWith('2025-06')
+    );
+    console.log('🗓️ June 2025 reviews found in dataset:', june2025Reviews.length);
+    if (june2025Reviews.length > 0) {
+      console.log('📅 Sample June 2025 dates:', june2025Reviews.slice(0, 5).map(r => r.Date));
+    }
   }
 
   private async fetchChatHistory() {
