@@ -28,6 +28,7 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
 - Reference actual reviews, training records, and guest interactions when relevant
 - Act as a senior hotel management consultant with access to all operational data
 - Be transparent about your confidence level and data sources
+- ALWAYS provide ACCURATE counts and data - do not estimate or approximate
 
 `);
 
@@ -62,20 +63,50 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
       contextSections.push('');
     }
 
-    // Priority 3: Hotel Reviews - IMPROVED HANDLING
+    // Priority 3: Hotel Reviews - COMPREHENSIVE ANALYSIS
     if (data.hotelReviews?.status === 'fulfilled' && data.hotelReviews.value.data?.length > 0) {
-      contextSections.push('⭐ HOTEL REVIEWS FROM DATABASE:');
-      contextSections.push(`📊 TOTAL REVIEWS AVAILABLE: ${data.hotelReviews.value.data.length}`);
+      const allReviews = data.hotelReviews.value.data;
       
-      // Get reviews with any content (not just Reviews Summary)
-      const reviewsWithContent = data.hotelReviews.value.data.filter((review: any) => 
+      contextSections.push('⭐ COMPLETE HOTEL REVIEWS DATABASE:');
+      contextSections.push(`📊 TOTAL REVIEWS IN DATABASE: ${allReviews.length}`);
+      
+      // Analyze all reviews comprehensively
+      const reviewsWithContent = allReviews.filter((review: any) => 
         review['Reviews Summary'] || review['Text'] || review['Title']
       );
       
-      contextSections.push(`📊 REVIEWS WITH CONTENT: ${reviewsWithContent.length}`);
+      const reviewsWithScores = allReviews.filter((review: any) => review.Score);
+      const reviewsBySource = this.analyzeReviewsBySource(allReviews);
+      const reviewsByDate = this.analyzeReviewsByDate(allReviews);
       
+      contextSections.push(`📊 REVIEWS WITH CONTENT: ${reviewsWithContent.length}`);
+      contextSections.push(`📊 REVIEWS WITH SCORES: ${reviewsWithScores.length}`);
+      
+      // Add source breakdown
+      if (Object.keys(reviewsBySource).length > 0) {
+        contextSections.push('📍 REVIEWS BY SOURCE:');
+        Object.entries(reviewsBySource).forEach(([source, count]) => {
+          contextSections.push(`   • ${source}: ${count} reviews`);
+        });
+      }
+      
+      // Add date analysis
+      if (reviewsByDate.recentReviews > 0) {
+        contextSections.push('📅 REVIEW TIMELINE ANALYSIS:');
+        contextSections.push(`   • Reviews in last 30 days: ${reviewsByDate.recentReviews}`);
+        contextSections.push(`   • Reviews in last 90 days: ${reviewsByDate.last90Days}`);
+        contextSections.push(`   • Total historical reviews: ${allReviews.length}`);
+      }
+      
+      // Calculate average score if available
+      if (reviewsWithScores.length > 0) {
+        const avgScore = reviewsWithScores.reduce((sum: number, review: any) => sum + review.Score, 0) / reviewsWithScores.length;
+        contextSections.push(`📊 AVERAGE REVIEW SCORE: ${avgScore.toFixed(1)}/5 (based on ${reviewsWithScores.length} scored reviews)`);
+      }
+      
+      // Show sample reviews
       if (reviewsWithContent.length > 0) {
-        contextSections.push('📋 SAMPLE REVIEWS:');
+        contextSections.push('📋 SAMPLE RECENT REVIEWS:');
         reviewsWithContent.slice(0, 8).forEach((review: any, index: number) => {
           contextSections.push(`${index + 1}. Review from ${review.Source || 'Unknown Source'}:`);
           
@@ -103,13 +134,6 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
           
           contextSections.push('');
         });
-        
-        // Calculate average score if available
-        const reviewsWithScores = reviewsWithContent.filter((review: any) => review.Score);
-        if (reviewsWithScores.length > 0) {
-          const avgScore = reviewsWithScores.reduce((sum: number, review: any) => sum + review.Score, 0) / reviewsWithScores.length;
-          contextSections.push(`📊 AVERAGE REVIEW SCORE: ${avgScore.toFixed(1)}/5 (based on ${reviewsWithScores.length} reviews)`);
-        }
       }
       contextSections.push('');
     }
@@ -168,18 +192,22 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
 - If asked about hotel performance, use actual review scores and feedback
 - When discussing operations, refer to actual training records and procedures
 - Use conversation history to maintain context and continuity
+- ALWAYS provide EXACT counts and numbers from the database - never estimate
+- When asked about review counts, use the TOTAL REVIEWS IN DATABASE number shown above
 
 🚫 DO NOT SAY:
 - "I don't have access to your database"
 - "I cannot access your internal systems"
 - "Based on my general knowledge"
 - "I don't have direct access to hotel data"
+- "Approximately" or "around" when you have exact numbers
 
 ✅ INSTEAD SAY:
 - "Based on your hotel's database..."
 - "Looking at your recent reviews..."
 - "According to your training records..."
 - "Your guest interactions show..."
+- "Your database shows exactly X reviews..."
 
 🌐 Current Question: ${userMessage}
 
@@ -191,6 +219,38 @@ Respond professionally as a senior hotel management consultant using the actual 
     console.log('📊 Context includes data from:', this.getDataSourcesList(data));
     
     return context;
+  }
+
+  private analyzeReviewsBySource(reviews: any[]): Record<string, number> {
+    const sourceCount: Record<string, number> = {};
+    reviews.forEach(review => {
+      const source = review.Source || 'Unknown';
+      sourceCount[source] = (sourceCount[source] || 0) + 1;
+    });
+    return sourceCount;
+  }
+
+  private analyzeReviewsByDate(reviews: any[]): { recentReviews: number; last90Days: number } {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+    
+    let recentReviews = 0;
+    let last90Days = 0;
+    
+    reviews.forEach(review => {
+      if (review.Date) {
+        const reviewDate = new Date(review.Date);
+        if (reviewDate >= thirtyDaysAgo) {
+          recentReviews++;
+        }
+        if (reviewDate >= ninetyDaysAgo) {
+          last90Days++;
+        }
+      }
+    });
+    
+    return { recentReviews, last90Days };
   }
 
   private buildDataStatistics(data: any): string {
@@ -214,7 +274,7 @@ Respond professionally as a senior hotel management consultant using the actual 
     });
 
     stats.push('');
-    stats.push('🎯 YOU HAVE FULL ACCESS TO ALL AVAILABLE DATA - USE IT TO ANSWER QUESTIONS!');
+    stats.push('🎯 YOU HAVE FULL ACCESS TO ALL AVAILABLE DATA - USE EXACT NUMBERS AND COUNTS!');
     stats.push('');
 
     return stats.join('\n');

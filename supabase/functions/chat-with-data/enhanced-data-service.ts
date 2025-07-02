@@ -69,7 +69,7 @@ export class EnhancedDataService {
       
       console.log('📊 Total Hotel Reviews count:', count);
       
-      // Fetch all reviews without filtering first
+      // Fetch all reviews without any filtering
       const allReviews = await this.supabase
         .from('Hotel Reviews')
         .select('*')
@@ -81,7 +81,7 @@ export class EnhancedDataService {
       if (allReviews.data && allReviews.data.length > 0) {
         console.log('📝 Sample review data:', JSON.stringify(allReviews.data[0], null, 2));
         
-        // Check which reviews have Reviews Summary
+        // Analyze review data for debugging
         const reviewsWithSummary = allReviews.data.filter(review => 
           review['Reviews Summary'] && review['Reviews Summary'].trim() !== ''
         );
@@ -92,9 +92,35 @@ export class EnhancedDataService {
           review['Reviews Summary'] || review['Text'] || review['Title']
         );
         console.log('📊 Reviews with any content count:', reviewsWithContent.length);
+        
+        // Check reviews by source
+        const sourceBreakdown = allReviews.data.reduce((acc: any, review: any) => {
+          const source = review.Source || 'Unknown';
+          acc[source] = (acc[source] || 0) + 1;
+          return acc;
+        }, {});
+        console.log('📊 Reviews by source:', sourceBreakdown);
+        
+        // Check date distribution
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+        const recentReviews = allReviews.data.filter(review => {
+          if (!review.Date) return false;
+          const reviewDate = new Date(review.Date);
+          return reviewDate >= thirtyDaysAgo;
+        });
+        console.log('📊 Reviews in last 30 days:', recentReviews.length);
+        
+        // Log specific dates for debugging
+        const reviewDates = allReviews.data
+          .filter(review => review.Date)
+          .map(review => review.Date)
+          .sort()
+          .slice(0, 10);
+        console.log('📅 Sample review dates:', reviewDates);
       }
       
-      // Return all reviews, let the context builder handle filtering
+      // Return all reviews without any filtering
       return allReviews;
       
     } catch (error) {
