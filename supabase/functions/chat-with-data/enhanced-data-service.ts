@@ -1,6 +1,7 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { DataStats } from './types.ts';
+import { DataAnalysisUtils } from './data-analysis-utils.ts';
+import { DataStatsLogger } from './data-stats-logger.ts';
 
 export class EnhancedDataService {
   private supabase;
@@ -35,7 +36,7 @@ export class EnhancedDataService {
       this.getRecentDocumentContext()
     ]);
 
-    this.logEnhancedDataStats({
+    DataStatsLogger.logEnhancedDataStats({
       hotelReviews,
       chatHistory,
       infoSummary,
@@ -81,54 +82,7 @@ export class EnhancedDataService {
       if (allReviews.data && allReviews.data.length > 0) {
         console.log('📝 Sample review data:', JSON.stringify(allReviews.data[0], null, 2));
         
-        // Analyze review data for debugging
-        const reviewsWithSummary = allReviews.data.filter(review => 
-          review['Reviews Summary'] && review['Reviews Summary'].trim() !== ''
-        );
-        console.log('📊 Reviews with Summary count:', reviewsWithSummary.length);
-        
-        // Check which reviews have any content
-        const reviewsWithContent = allReviews.data.filter(review => 
-          review['Reviews Summary'] || review['Text'] || review['Title']
-        );
-        console.log('📊 Reviews with any content count:', reviewsWithContent.length);
-        
-        // Check reviews by source
-        const sourceBreakdown = allReviews.data.reduce((acc: any, review: any) => {
-          const source = review.Source || 'Unknown';
-          acc[source] = (acc[source] || 0) + 1;
-          return acc;
-        }, {});
-        console.log('📊 Reviews by source:', sourceBreakdown);
-        
-        // Check date distribution with current context
-        const now = new Date('2025-01-02T00:00:00Z'); // Current date context
-        const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-        console.log('🗓️ Current date context:', now.toISOString());
-        console.log('🗓️ Filtering for reviews after:', thirtyDaysAgo.toISOString());
-        
-        const recentReviews = allReviews.data.filter(review => {
-          if (!review.Date) return false;
-          const reviewDate = new Date(review.Date);
-          const isRecent = reviewDate >= thirtyDaysAgo;
-          if (isRecent) {
-            console.log('✅ Found recent review:', review.Date, 'parsed as:', reviewDate.toISOString());
-          }
-          return isRecent;
-        });
-        console.log('📊 Reviews in last 30 days:', recentReviews.length);
-        
-        // Log specific dates for debugging
-        const reviewDates = allReviews.data
-          .filter(review => review.Date)
-          .map(review => review.Date)
-          .sort()
-          .slice(0, 10);
-        console.log('📅 Sample review dates:', reviewDates);
-        
-        // Add comprehensive monthly analysis for better AI context
-        const monthlyBreakdown = this.analyzeReviewsByMonth(allReviews.data);
-        console.log('📊 Monthly review breakdown:', monthlyBreakdown);
+        this.analyzeReviewData(allReviews.data);
       }
       
       // Return all reviews without any filtering
@@ -138,6 +92,44 @@ export class EnhancedDataService {
       console.error('❌ Error fetching Hotel Reviews:', error);
       return { status: 'rejected', reason: error.message };
     }
+  }
+
+  private analyzeReviewData(reviews: any[]) {
+    // Analyze review data for debugging
+    const reviewsWithSummary = reviews.filter(review => 
+      review['Reviews Summary'] && review['Reviews Summary'].trim() !== ''
+    );
+    console.log('📊 Reviews with Summary count:', reviewsWithSummary.length);
+    
+    // Check which reviews have any content
+    const reviewsWithContent = reviews.filter(review => 
+      review['Reviews Summary'] || review['Text'] || review['Title']
+    );
+    console.log('📊 Reviews with any content count:', reviewsWithContent.length);
+    
+    // Check reviews by source
+    const sourceBreakdown = reviews.reduce((acc: any, review: any) => {
+      const source = review.Source || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {});
+    console.log('📊 Reviews by source:', sourceBreakdown);
+    
+    // Analyze recent reviews
+    const recentAnalysis = DataAnalysisUtils.analyzeRecentReviews(reviews);
+    console.log('📊 Recent reviews analysis:', recentAnalysis);
+    
+    // Log specific dates for debugging
+    const reviewDates = reviews
+      .filter(review => review.Date)
+      .map(review => review.Date)
+      .sort()
+      .slice(0, 10);
+    console.log('📅 Sample review dates:', reviewDates);
+    
+    // Add comprehensive monthly analysis for better AI context
+    const monthlyBreakdown = DataAnalysisUtils.analyzeReviewsByMonth(reviews);
+    console.log('📊 Monthly review breakdown:', monthlyBreakdown);
   }
 
   private async fetchChatHistory() {
@@ -259,28 +251,6 @@ export class EnhancedDataService {
     }
   }
 
-  private logEnhancedDataStats(results: any) {
-    console.log('=== 📊 ENHANCED DATA STATISTICS ===');
-    console.log('📈 Hotel Reviews:', results.hotelReviews.status === 'fulfilled' ? `${results.hotelReviews.value.data?.length || 0} records` : `ERROR: ${results.hotelReviews.reason}`);
-    console.log('💬 Chat History:', results.chatHistory.status === 'fulfilled' ? `${results.chatHistory.value.data?.length || 0} records` : `ERROR: ${results.chatHistory.reason}`);
-    console.log('📧 Info Summary:', results.infoSummary.status === 'fulfilled' ? `${results.infoSummary.value.data?.length || 0} records` : `ERROR: ${results.infoSummary.reason}`);
-    console.log('🎓 Conducted Training:', results.conductedTraining.status === 'fulfilled' ? `${results.conductedTraining.value.data?.length || 0} records` : `ERROR: ${results.conductedTraining.reason}`);
-    console.log('🧠 Long Term Memory:', results.longTermMemory.status === 'fulfilled' ? `${results.longTermMemory.value.data?.length || 0} records` : `ERROR: ${results.longTermMemory.reason}`);
-    console.log('🔍 Vector Search:', results.vectorSearch.status === 'fulfilled' ? `${results.vectorSearch.value.data?.length || 0} records` : `ERROR: ${results.vectorSearch.reason}`);
-    console.log('📄 Recent Documents:', results.recentDocuments.status === 'fulfilled' ? `${results.recentDocuments.value.data?.length || 0} documents` : `ERROR: ${results.recentDocuments.reason}`);
-    console.log('🎯 Document Context:', results.documentContext.status === 'fulfilled' ? `${results.documentContext.value.data?.length || 0} chunks` : `ERROR: ${results.documentContext.reason}`);
-    
-    // Log detailed sample data for debugging
-    if (results.hotelReviews.status === 'fulfilled' && results.hotelReviews.value.data?.length > 0) {
-      const sampleReview = results.hotelReviews.value.data[0];
-      console.log('📝 Sample review keys:', Object.keys(sampleReview));
-      console.log('📝 Sample review summary:', sampleReview['Reviews Summary']?.substring(0, 100));
-      console.log('📝 Sample review text:', sampleReview['Text']?.substring(0, 100));
-      console.log('📝 Sample review title:', sampleReview['Title']);
-    }
-    console.log('=== END DATA STATISTICS ===');
-  }
-
   async saveConversation(userMessage: string, aiResponse: string) {
     try {
       console.log('💾 Saving conversation to long-term memory...');
@@ -302,55 +272,6 @@ export class EnhancedDataService {
   }
 
   createEnhancedDataStats(results: any): DataStats & { recentDocuments: number; documentContext: number } {
-    const stats = {
-      hotelReviews: results.hotelReviews.status === 'fulfilled' ? results.hotelReviews.value.data?.length || 0 : 0,
-      chatHistory: results.chatHistory.status === 'fulfilled' ? results.chatHistory.value.data?.length || 0 : 0,
-      infoSummary: results.infoSummary.status === 'fulfilled' ? results.infoSummary.value.data?.length || 0 : 0,
-      conductedTraining: results.conductedTraining.status === 'fulfilled' ? results.conductedTraining.value.data?.length || 0 : 0,
-      longTermMemory: results.longTermMemory.status === 'fulfilled' ? results.longTermMemory.value.data?.length || 0 : 0,
-      vectorSearch: results.vectorSearch.status === 'fulfilled' ? results.vectorSearch.value.data?.length || 0 : 0,
-      recentDocuments: results.recentDocuments.status === 'fulfilled' ? results.recentDocuments.value.data?.length || 0 : 0,
-      documentContext: results.documentContext.status === 'fulfilled' ? results.documentContext.value.data?.length || 0 : 0
-    };
-
-    console.log('📊 Created enhanced data stats:', stats);
-    return stats;
-  }
-
-  private analyzeReviewsByMonth(reviews: any[]): Record<string, number> {
-    console.log('📅 Analyzing reviews by month...');
-    const monthlyBreakdown: Record<string, number> = {};
-    
-    reviews.forEach(review => {
-      if (review.Date && typeof review.Date === 'string') {
-        try {
-          // Use string manipulation to avoid timezone issues
-          // Date format is expected to be "YYYY-MM-DD"
-          const dateParts = review.Date.split('-');
-          if (dateParts.length >= 2) {
-            const year = dateParts[0];
-            const month = dateParts[1];
-            const monthKey = `${year}-${month}`;
-            monthlyBreakdown[monthKey] = (monthlyBreakdown[monthKey] || 0) + 1;
-            console.log(`✅ Processed review date ${review.Date} -> ${monthKey}`);
-          } else {
-            console.log(`⚠️ Unexpected date format: ${review.Date}`);
-          }
-        } catch (error) {
-          console.error('❌ Error parsing date:', review.Date, error);
-        }
-      }
-    });
-    
-    // Sort by month for better readability
-    const sortedBreakdown: Record<string, number> = {};
-    Object.keys(monthlyBreakdown)
-      .sort()
-      .forEach(key => {
-        sortedBreakdown[key] = monthlyBreakdown[key];
-      });
-    
-    console.log('📊 Monthly breakdown result:', sortedBreakdown);
-    return sortedBreakdown;
+    return DataStatsLogger.createEnhancedDataStats(results);
   }
 }
