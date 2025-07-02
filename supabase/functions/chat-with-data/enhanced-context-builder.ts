@@ -65,10 +65,20 @@ export class EnhancedContextBuilder {
     // Add comprehensive monthly breakdown
     if (Object.keys(monthlyBreakdown).length > 0) {
       contextSections.push('📅 REVIEWS BY MONTH (EXACT BREAKDOWN):');
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      
+      console.log('🗓️ Context Builder - Monthly breakdown being added to context:', monthlyBreakdown);
+      
       Object.entries(monthlyBreakdown).forEach(([monthKey, count]) => {
         const [year, month] = monthKey.split('-');
-        const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
-        contextSections.push(`   • ${monthName} ${year}: ${count} reviews`);
+        const monthIndex = parseInt(month) - 1; // Convert to 0-based index
+        const monthName = monthNames[monthIndex] || `Month-${month}`;
+        const reviewText = `   • ${monthName} ${year}: ${count} reviews`;
+        contextSections.push(reviewText);
+        console.log(`📊 Context Builder - Added month entry: ${reviewText}`);
       });
     }
     
