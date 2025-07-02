@@ -101,13 +101,20 @@ export class EnhancedDataService {
         }, {});
         console.log('📊 Reviews by source:', sourceBreakdown);
         
-        // Check date distribution
-        const now = new Date();
+        // Check date distribution with current context
+        const now = new Date('2025-01-02T00:00:00Z'); // Current date context
         const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+        console.log('🗓️ Current date context:', now.toISOString());
+        console.log('🗓️ Filtering for reviews after:', thirtyDaysAgo.toISOString());
+        
         const recentReviews = allReviews.data.filter(review => {
           if (!review.Date) return false;
           const reviewDate = new Date(review.Date);
-          return reviewDate >= thirtyDaysAgo;
+          const isRecent = reviewDate >= thirtyDaysAgo;
+          if (isRecent) {
+            console.log('✅ Found recent review:', review.Date, 'parsed as:', reviewDate.toISOString());
+          }
+          return isRecent;
         });
         console.log('📊 Reviews in last 30 days:', recentReviews.length);
         

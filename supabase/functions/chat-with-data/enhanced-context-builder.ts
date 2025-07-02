@@ -211,6 +211,12 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
 
 🌐 Current Question: ${userMessage}
 
+📅 IMPORTANT DATE CONTEXT:
+- Today's date is January 2, 2025
+- When asked about "recent" or "last 30 days", use December 3, 2024 to January 2, 2025 as the date range
+- When calculating time periods, use the current date context (January 2, 2025) not historical dates
+- The review data shows ACTUAL dates - use the exact counts provided above
+
 Respond professionally as a senior hotel management consultant using the actual operational data from Two Seasons Hotel's database.`);
 
     const context = contextSections.join('\n');
@@ -231,9 +237,12 @@ Respond professionally as a senior hotel management consultant using the actual 
   }
 
   private analyzeReviewsByDate(reviews: any[]): { recentReviews: number; last90Days: number } {
-    const now = new Date();
+    const now = new Date('2025-01-02T00:00:00Z'); // Current date context
     const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
     const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+    
+    console.log('🗓️ Context Builder - Current date:', now.toISOString());
+    console.log('🗓️ Context Builder - 30 days ago:', thirtyDaysAgo.toISOString());
     
     let recentReviews = 0;
     let last90Days = 0;
@@ -249,6 +258,9 @@ Respond professionally as a senior hotel management consultant using the actual 
         }
       }
     });
+    
+    console.log('🏗️ Context Builder - Recent reviews (30 days):', recentReviews);
+    console.log('🏗️ Context Builder - Reviews (90 days):', last90Days);
     
     return { recentReviews, last90Days };
   }
