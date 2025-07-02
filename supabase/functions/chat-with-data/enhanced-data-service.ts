@@ -25,37 +25,12 @@ export class EnhancedDataService {
       recentDocuments,
       documentContext
     ] = await Promise.allSettled([
-      this.supabase.from('Hotel Reviews')
-        .select('*')
-        .not('Reviews Summary', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      this.supabase.from('Chat History')
-        .select('*')
-        .not('Sender Message', 'is', null)
-        .not('Ai Reply', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(30),
-      this.supabase.from('Info Summary')
-        .select('*')
-        .not('Email Summary', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      this.supabase.from('Conducted Training')
-        .select('*')
-        .not('Summary of the training', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      this.supabase.from('LongTermMemory')
-        .select('*')
-        .not('message', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(25),
-      this.supabase.from('N8N_2S')
-        .select('*')
-        .not('content', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(10),
+      this.fetchHotelReviews(),
+      this.fetchChatHistory(),
+      this.fetchInfoSummary(),
+      this.fetchConductedTraining(),
+      this.fetchLongTermMemory(),
+      this.fetchVectorSearch(),
       this.getRecentDocuments(),
       this.getRecentDocumentContext()
     ]);
@@ -81,6 +56,131 @@ export class EnhancedDataService {
       recentDocuments,
       documentContext
     };
+  }
+
+  private async fetchHotelReviews() {
+    try {
+      console.log('🔍 Fetching Hotel Reviews...');
+      
+      // First, let's check total count
+      const { count } = await this.supabase
+        .from('Hotel Reviews')
+        .select('*', { count: 'exact', head: true });
+      
+      console.log('📊 Total Hotel Reviews count:', count);
+      
+      // Fetch all reviews without filtering first
+      const allReviews = await this.supabase
+        .from('Hotel Reviews')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      console.log('📋 All Hotel Reviews raw result:', allReviews);
+      console.log('📋 Hotel Reviews data length:', allReviews.data?.length);
+      
+      if (allReviews.data && allReviews.data.length > 0) {
+        console.log('📝 Sample review data:', JSON.stringify(allReviews.data[0], null, 2));
+        
+        // Check which reviews have Reviews Summary
+        const reviewsWithSummary = allReviews.data.filter(review => 
+          review['Reviews Summary'] && review['Reviews Summary'].trim() !== ''
+        );
+        console.log('📊 Reviews with Summary count:', reviewsWithSummary.length);
+        
+        // Check which reviews have any content
+        const reviewsWithContent = allReviews.data.filter(review => 
+          review['Reviews Summary'] || review['Text'] || review['Title']
+        );
+        console.log('📊 Reviews with any content count:', reviewsWithContent.length);
+      }
+      
+      // Return all reviews, let the context builder handle filtering
+      return allReviews;
+      
+    } catch (error) {
+      console.error('❌ Error fetching Hotel Reviews:', error);
+      return { status: 'rejected', reason: error.message };
+    }
+  }
+
+  private async fetchChatHistory() {
+    try {
+      const result = await this.supabase
+        .from('Chat History')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      
+      console.log('💬 Chat History result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error fetching Chat History:', error);
+      return { status: 'rejected', reason: error.message };
+    }
+  }
+
+  private async fetchInfoSummary() {
+    try {
+      const result = await this.supabase
+        .from('Info Summary')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      console.log('📧 Info Summary result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error fetching Info Summary:', error);
+      return { status: 'rejected', reason: error.message };
+    }
+  }
+
+  private async fetchConductedTraining() {
+    try {
+      const result = await this.supabase
+        .from('Conducted Training')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      console.log('🎓 Conducted Training result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error fetching Conducted Training:', error);
+      return { status: 'rejected', reason: error.message };
+    }
+  }
+
+  private async fetchLongTermMemory() {
+    try {
+      const result = await this.supabase
+        .from('LongTermMemory')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(25);
+      
+      console.log('🧠 LongTermMemory result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error fetching LongTermMemory:', error);
+      return { status: 'rejected', reason: error.message };
+    }
+  }
+
+  private async fetchVectorSearch() {
+    try {
+      const result = await this.supabase
+        .from('N8N_2S')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      console.log('🔍 N8N_2S result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error fetching N8N_2S:', error);
+      return { status: 'rejected', reason: error.message };
+    }
   }
 
   async getRecentDocuments() {
@@ -133,9 +233,13 @@ export class EnhancedDataService {
     console.log('📄 Recent Documents:', results.recentDocuments.status === 'fulfilled' ? `${results.recentDocuments.value.data?.length || 0} documents` : `ERROR: ${results.recentDocuments.reason}`);
     console.log('🎯 Document Context:', results.documentContext.status === 'fulfilled' ? `${results.documentContext.value.data?.length || 0} chunks` : `ERROR: ${results.documentContext.reason}`);
     
-    // Log sample data to verify content
+    // Log detailed sample data for debugging
     if (results.hotelReviews.status === 'fulfilled' && results.hotelReviews.value.data?.length > 0) {
-      console.log('📝 Sample review:', results.hotelReviews.value.data[0]['Reviews Summary']?.substring(0, 100));
+      const sampleReview = results.hotelReviews.value.data[0];
+      console.log('📝 Sample review keys:', Object.keys(sampleReview));
+      console.log('📝 Sample review summary:', sampleReview['Reviews Summary']?.substring(0, 100));
+      console.log('📝 Sample review text:', sampleReview['Text']?.substring(0, 100));
+      console.log('📝 Sample review title:', sampleReview['Title']);
     }
     console.log('=== END DATA STATISTICS ===');
   }

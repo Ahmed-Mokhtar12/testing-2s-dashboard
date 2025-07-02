@@ -62,16 +62,55 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
       contextSections.push('');
     }
 
-    // Priority 3: Hotel Reviews with actual data samples
+    // Priority 3: Hotel Reviews - IMPROVED HANDLING
     if (data.hotelReviews?.status === 'fulfilled' && data.hotelReviews.value.data?.length > 0) {
       contextSections.push('⭐ HOTEL REVIEWS FROM DATABASE:');
-      data.hotelReviews.value.data.slice(0, 5).forEach((review: any) => {
-        if (review['Reviews Summary']) {
-          contextSections.push(`• Score: ${review.Score || 'N/A'} | ${review['Reviews Summary'].substring(0, 200)}${review['Reviews Summary'].length > 200 ? '...' : ''}`);
-          if (review.Author) contextSections.push(`  Author: ${review.Author}`);
-          if (review.Date) contextSections.push(`  Date: ${review.Date}`);
+      contextSections.push(`📊 TOTAL REVIEWS AVAILABLE: ${data.hotelReviews.value.data.length}`);
+      
+      // Get reviews with any content (not just Reviews Summary)
+      const reviewsWithContent = data.hotelReviews.value.data.filter((review: any) => 
+        review['Reviews Summary'] || review['Text'] || review['Title']
+      );
+      
+      contextSections.push(`📊 REVIEWS WITH CONTENT: ${reviewsWithContent.length}`);
+      
+      if (reviewsWithContent.length > 0) {
+        contextSections.push('📋 SAMPLE REVIEWS:');
+        reviewsWithContent.slice(0, 8).forEach((review: any, index: number) => {
+          contextSections.push(`${index + 1}. Review from ${review.Source || 'Unknown Source'}:`);
+          
+          if (review.Score) {
+            contextSections.push(`   ⭐ Score: ${review.Score}/5`);
+          }
+          
+          if (review.Title) {
+            contextSections.push(`   📝 Title: ${review.Title}`);
+          }
+          
+          if (review['Reviews Summary']) {
+            contextSections.push(`   📄 Summary: ${review['Reviews Summary'].substring(0, 200)}${review['Reviews Summary'].length > 200 ? '...' : ''}`);
+          } else if (review['Text']) {
+            contextSections.push(`   📄 Review: ${review['Text'].substring(0, 200)}${review['Text'].length > 200 ? '...' : ''}`);
+          }
+          
+          if (review.Author) {
+            contextSections.push(`   👤 Author: ${review.Author}`);
+          }
+          
+          if (review.Date) {
+            contextSections.push(`   📅 Date: ${review.Date}`);
+          }
+          
+          contextSections.push('');
+        });
+        
+        // Calculate average score if available
+        const reviewsWithScores = reviewsWithContent.filter((review: any) => review.Score);
+        if (reviewsWithScores.length > 0) {
+          const avgScore = reviewsWithScores.reduce((sum: number, review: any) => sum + review.Score, 0) / reviewsWithScores.length;
+          contextSections.push(`📊 AVERAGE REVIEW SCORE: ${avgScore.toFixed(1)}/5 (based on ${reviewsWithScores.length} reviews)`);
         }
-      });
+      }
       contextSections.push('');
     }
 
