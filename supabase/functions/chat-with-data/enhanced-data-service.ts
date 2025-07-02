@@ -322,11 +322,20 @@ export class EnhancedDataService {
     const monthlyBreakdown: Record<string, number> = {};
     
     reviews.forEach(review => {
-      if (review.Date) {
+      if (review.Date && typeof review.Date === 'string') {
         try {
-          const reviewDate = new Date(review.Date);
-          const monthKey = `${reviewDate.getFullYear()}-${String(reviewDate.getMonth() + 1).padStart(2, '0')}`;
-          monthlyBreakdown[monthKey] = (monthlyBreakdown[monthKey] || 0) + 1;
+          // Use string manipulation to avoid timezone issues
+          // Date format is expected to be "YYYY-MM-DD"
+          const dateParts = review.Date.split('-');
+          if (dateParts.length >= 2) {
+            const year = dateParts[0];
+            const month = dateParts[1];
+            const monthKey = `${year}-${month}`;
+            monthlyBreakdown[monthKey] = (monthlyBreakdown[monthKey] || 0) + 1;
+            console.log(`✅ Processed review date ${review.Date} -> ${monthKey}`);
+          } else {
+            console.log(`⚠️ Unexpected date format: ${review.Date}`);
+          }
         } catch (error) {
           console.error('❌ Error parsing date:', review.Date, error);
         }
