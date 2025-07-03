@@ -63,12 +63,19 @@ serve(async (req) => {
       urlWithParams.searchParams.append(key, String(value));
     });
 
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
     const n8nResponse = await fetch(urlWithParams.toString(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     console.log('📨 N8N Response status:', n8nResponse.status);
     console.log('📨 N8N Response headers:', Object.fromEntries(n8nResponse.headers.entries()));
