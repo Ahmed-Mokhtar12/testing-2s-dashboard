@@ -15,20 +15,18 @@ interface ActionRequest {
   messageId: string;
 }
 
-// n8n API configuration
+// n8n Webhook configuration
 const N8N_BASE_URL = 'https://n8n-2seasons-u38985.vm.elestio.app';
-const N8N_WORKFLOW_ID = '9b5a9d48-7f82-41b1-9028-4b06dd9be790';
-const N8N_API_KEY = Deno.env.get('N8N_API_KEY');
+const N8N_WEBHOOK_ID = Deno.env.get('N8N_WEBHOOK_ID') || 'YOUR_WEBHOOK_ID_HERE';
 
-console.log('🔧 N8N Workflow configured:', N8N_WORKFLOW_ID);
-console.log('🔧 N8N API Key configured:', !!N8N_API_KEY);
+console.log('🔧 N8N Webhook configured:', N8N_WEBHOOK_ID);
 
-// Function to execute action using n8n workflow API
+// Function to execute action using n8n webhook
 async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
-  console.log('🔧 Executing action via n8n workflow:', actionRequest);
+  console.log('🔧 Executing action via n8n webhook:', actionRequest);
   
-  // Build the workflow execution URL
-  const workflowUrl = `${N8N_BASE_URL}/api/v1/workflows/${N8N_WORKFLOW_ID}/execute`;
+  // Build the webhook URL
+  const webhookUrl = `${N8N_BASE_URL}/webhook/${N8N_WEBHOOK_ID}`;
   
   // Prepare workflow input data
   const workflowData = {
@@ -41,31 +39,32 @@ async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
     timestamp: new Date().toISOString()
   };
 
-  console.log('📤 Sending workflow execution request:', { workflowUrl, workflowData });
+  console.log('📤 Sending webhook request:', { webhookUrl, workflowData });
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
-
-  // Add authentication if API key is available
-  if (N8N_API_KEY) {
-    headers['Authorization'] = `Bearer ${N8N_API_KEY}`;
-  }
-
-  const response = await fetch(workflowUrl, {
+  const response = await fetch(webhookUrl, {
     method: 'POST',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(workflowData),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`n8n workflow execution failed with status ${response.status}: ${errorText}`);
+    throw new Error(`n8n webhook execution failed with status ${response.status}: ${errorText}`);
   }
 
-  const responseData = await response.json();
-  console.log('📥 Received n8n workflow response:', responseData);
+  // Webhooks might return different response formats
+  const responseText = await response.text();
+  console.log('📥 Received n8n webhook response:', responseText);
+  
+  // Try to parse as JSON, fallback to text response
+  let responseData;
+  try {
+    responseData = JSON.parse(responseText);
+  } catch {
+    responseData = { message: responseText, status: 'success' };
+  }
   
   return responseData;
 }
