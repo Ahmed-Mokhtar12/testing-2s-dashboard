@@ -1,9 +1,25 @@
 import { SmartQueryAnalysis } from './types.ts';
+import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
 
 export async function buildIntelligentContext(supabase: any, queryAnalysis: SmartQueryAnalysis, specificData?: any) {
-  console.log('🧠 Building intelligent context with website priority...');
+  console.log('🧠 Building intelligent context with customer behavior analytics...');
   
-  let context = `🏨 You are Two Seasons Hotel's AI consultant with complete database access and PRIORITY access to www.2seasonshotels.com.
+  // Get all reviews and chat history for comprehensive analysis
+  const { data: allReviews } = await supabase.from('Hotel Reviews').select('*').order('Date', { ascending: false });
+  const { data: chatHistory } = await supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(100);
+  
+  // Generate comprehensive customer behavior insights
+  let behaviorInsights = '';
+  if (allReviews && allReviews.length > 0) {
+    const sentimentData = CustomerBehaviorAnalytics.analyzeReviewSentiment(allReviews);
+    const behaviorPatterns = CustomerBehaviorAnalytics.analyzeGuestBehaviorPatterns(allReviews, chatHistory || []);
+    const recommendations = CustomerBehaviorAnalytics.generateManagementRecommendations(sentimentData, behaviorPatterns);
+    behaviorInsights = CustomerBehaviorAnalytics.formatInsightsForAI(sentimentData, behaviorPatterns, recommendations);
+  }
+  
+  let context = `${behaviorInsights}
+
+🏨 You are Marcus Chen, Senior Hotel Management Consultant for Two Seasons Hotel with complete data access and PRIORITY website access.
 
 ⭐ PRIMARY SOURCE: www.2seasonshotels.com (ALWAYS search first for hotel information)
 📊 QUERY ANALYSIS: ${queryAnalysis.description}

@@ -7,6 +7,8 @@ import { buildIntelligentContext } from './context-builder.ts';
 import { callOpenAI } from './openai-service.ts';
 import { SearchService } from './search-service.ts';
 import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
+import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
+import { HumanConsultantPersonality } from './human-consultant-personality.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,8 +75,18 @@ serve(async (req) => {
         context = await buildIntelligentContext(supabase, queryAnalysis);
     }
 
-    // Generate intelligent AI response with function calling
-    const aiChoice = await callOpenAI(context, message);
+    // Get user conversation history for personalization
+    const { data: userHistory } = await supabase
+      .from('LongTermMemory')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Generate personalized consultant system prompt
+    const consultantPrompt = HumanConsultantPersonality.generatePersonalizedSystemPrompt(userHistory);
+    
+    // Generate intelligent AI response with enhanced personality
+    const aiChoice = await callOpenAI(context, message, consultantPrompt);
     console.log('🤖 OpenAI response:', JSON.stringify(aiChoice, null, 2));
     
     let response: any = {
