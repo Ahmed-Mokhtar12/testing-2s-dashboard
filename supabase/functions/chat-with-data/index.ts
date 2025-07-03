@@ -69,6 +69,7 @@ serve(async (req) => {
 
     // Generate intelligent AI response with function calling
     const aiChoice = await callOpenAI(context, message);
+    console.log('🤖 OpenAI response:', JSON.stringify(aiChoice, null, 2));
     
     let response: any = {
       messageId,
@@ -127,7 +128,7 @@ serve(async (req) => {
       };
     } else {
       // Regular text response
-      response.response = aiChoice.message.content;
+      response.response = aiChoice.message?.content || "I'm here to help! How can I assist you today?";
     }
 
     // Save conversation
