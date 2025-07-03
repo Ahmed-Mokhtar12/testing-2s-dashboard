@@ -31,10 +31,10 @@ interface MCPResponse {
   };
 }
 
-// MCP SSE endpoint
-const N8N_MCP_SSE_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp/9b5a9d48-7f82-41b1-9028-4b06dd9be790/sse';
+// MCP endpoint (without /sse for direct HTTP communication)
+const N8N_MCP_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp/9b5a9d48-7f82-41b1-9028-4b06dd9be790';
 
-console.log('🔧 N8N MCP SSE URL configured:', N8N_MCP_SSE_URL);
+console.log('🔧 N8N MCP URL configured:', N8N_MCP_URL);
 
 // Function to create MCP tool call based on action type
 function createMCPToolCall(actionRequest: ActionRequest): MCPToolCall {
@@ -95,80 +95,59 @@ function createMCPToolCall(actionRequest: ActionRequest): MCPToolCall {
   }
 }
 
-// Function to execute MCP tool call via SSE
+// Function to execute MCP tool call via direct HTTP request
 async function executeMCPToolCall(toolCall: MCPToolCall): Promise<MCPResponse> {
   console.log('🔧 Executing MCP tool call:', toolCall);
   
-  return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-      reject(new Error('MCP tool call timeout after 30 seconds'));
-    }, 30000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, 30000);
 
-    // Create SSE connection
-    const eventSource = new EventSource(N8N_MCP_SSE_URL, {
+  try {
+    // Send MCP tool call directly to the MCP endpoint
+    const mcpEndpoint = N8N_MCP_URL;
+    console.log('🔧 Sending MCP request to:', mcpEndpoint);
+    
+    const response = await fetch(mcpEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Supabase-Edge-Function-MCP/1.0',
+      },
+      body: JSON.stringify(toolCall),
       signal: controller.signal,
     });
 
-    let responseReceived = false;
+    clearTimeout(timeoutId);
 
-    eventSource.onopen = () => {
-      console.log('✅ MCP SSE connection established');
-      
-      // Send the tool call request
-      // Note: EventSource doesn't support sending data directly
-      // We need to use a separate POST request to send the tool call
-      fetch(N8N_MCP_SSE_URL.replace('/sse', ''), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify(toolCall),
-        signal: controller.signal,
-      }).catch(error => {
-        console.error('❌ Error sending MCP tool call:', error);
-        if (!responseReceived) {
-          clearTimeout(timeoutId);
-          eventSource.close();
-          reject(error);
-        }
-      });
+    console.log('📨 MCP Response status:', response.status);
+    console.log('📨 MCP Response headers:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ MCP request failed:', response.status, errorText);
+      throw new Error(`MCP request failed with status ${response.status}: ${errorText}`);
+    }
+
+    const responseData = await response.json();
+    console.log('✅ MCP Response data:', responseData);
+
+    return {
+      result: responseData,
     };
 
-    eventSource.onmessage = (event) => {
-      console.log('📨 Received MCP message:', event.data);
-      
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Check if this is a tool call result
-        if (data.method === 'tools/call/result' || data.result || data.error) {
-          responseReceived = true;
-          clearTimeout(timeoutId);
-          eventSource.close();
-          
-          if (data.error) {
-            reject(new Error(`MCP tool call failed: ${data.error.message}`));
-          } else {
-            resolve(data);
-          }
-        }
-      } catch (parseError) {
-        console.error('❌ Error parsing MCP message:', parseError);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('❌ MCP SSE connection error:', error);
-      if (!responseReceived) {
-        clearTimeout(timeoutId);
-        eventSource.close();
-        reject(new Error('MCP SSE connection failed'));
-      }
-    };
-  });
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error('❌ MCP tool call error:', error);
+    
+    if (error.name === 'AbortError') {
+      throw new Error('MCP tool call timeout after 30 seconds');
+    }
+    
+    throw error;
+  }
 }
 
 serve(async (req) => {
