@@ -15,7 +15,7 @@ interface ActionRequest {
   messageId: string;
 }
 
-const N8N_WEBHOOK_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp/9b5a9d48-7f82-41b1-9028-4b06dd9be790/sse';
+const N8N_WEBHOOK_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp-test/9b5a9d48-7f82-41b1-9028-4b06dd9be790/sse';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
