@@ -11,8 +11,10 @@ import {
   createUserMessage, 
   createAIMessage, 
   createErrorMessage, 
-  sendMessageToAI 
+  sendMessageToAI,
+  executeAction 
 } from '@/utils/messageSender';
+import { ActionData } from '@/types/chat';
 
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -63,8 +65,26 @@ export const useChat = () => {
     setIsTyping(true);
 
     try {
-      const aiResponseContent = await sendMessageToAI(userMessageContent, userMessage.id);
-      const aiMessage = createAIMessage(aiResponseContent);
+      const aiResponseData = await sendMessageToAI(userMessageContent, userMessage.id);
+      
+      // Handle both old string responses and new structured responses
+      let aiMessage;
+      if (typeof aiResponseData === 'string') {
+        aiMessage = createAIMessage(aiResponseData);
+      } else {
+        aiMessage = createAIMessage(aiResponseData.response || "I'm here to help!");
+        
+        // Add action data if present
+        if (aiResponseData.hasAction && aiResponseData.actionData) {
+          aiMessage = {
+            ...aiMessage,
+            hasAction: true,
+            actionData: aiResponseData.actionData,
+            actionStatus: aiResponseData.actionStatus || 'pending_confirmation'
+          };
+        }
+      }
+      
       setMessages(prev => [...prev, aiMessage]);
       
     } catch (error) {
@@ -102,6 +122,62 @@ export const useChat = () => {
     }
   };
 
+  const handleActionConfirm = async (messageId: string, actionData: ActionData) => {
+    // Update message status to executing
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId 
+        ? { ...msg, actionStatus: 'executing' as const, actionData }
+        : msg
+    ));
+
+    try {
+      // Execute the action via N8N webhook
+      const result = await executeAction(actionData, messageId);
+      
+      // Update message status to completed
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, actionStatus: 'completed' as const }
+          : msg
+      ));
+
+      toast({
+        title: "Action Completed",
+        description: `${actionData.type === 'email' ? 'Email' : actionData.type.toUpperCase()} sent successfully`,
+      });
+
+    } catch (error) {
+      console.error('❌ Action execution error:', error);
+      
+      // Update message status to failed
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, actionStatus: 'failed' as const }
+          : msg
+      ));
+      
+      toast({
+        title: "Action Failed",
+        description: `Failed to send ${actionData.type}. Please try again.`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleActionCancel = (messageId: string) => {
+    // Remove the action from the message
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId 
+        ? { ...msg, hasAction: false, actionData: undefined, actionStatus: undefined }
+        : msg
+    ));
+
+    toast({
+      title: "Action Cancelled",
+      description: "The action has been cancelled.",
+    });
+  };
+
   return {
     messages,
     inputValue,
@@ -109,5 +185,7 @@ export const useChat = () => {
     setInputValue,
     handleFileUpload,
     handleSendMessage,
+    handleActionConfirm,
+    handleActionCancel,
   };
 };

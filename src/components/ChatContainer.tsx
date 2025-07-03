@@ -12,6 +12,8 @@ interface ChatContainerProps {
   onSendMessage: () => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
   onFileUpload: (file: File) => void;
+  onActionConfirm?: (messageId: string, actionData: any) => void;
+  onActionCancel?: (messageId: string) => void;
 }
 
 const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -21,12 +23,19 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   onInputChange,
   onSendMessage,
   onKeyPress,
-  onFileUpload
+  onFileUpload,
+  onActionConfirm,
+  onActionCancel
 }) => {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 min-h-0">
-        <MessageList messages={messages} isTyping={isTyping} />
+        <MessageList 
+          messages={messages} 
+          isTyping={isTyping} 
+          onActionConfirm={onActionConfirm}
+          onActionCancel={onActionCancel}
+        />
       </div>
       <div className="flex-shrink-0">
         <InputBar

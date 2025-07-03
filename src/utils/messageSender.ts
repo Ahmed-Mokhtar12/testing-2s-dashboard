@@ -39,5 +39,23 @@ export const sendMessageToAI = async (message: string, messageId: string) => {
 
   console.log('Received response from edge function:', data);
   
-  return data.response || "I'm unable to answer based on the current data.";
+  return data;
+};
+
+export const executeAction = async (actionData: any, messageId: string) => {
+  console.log('Executing action via N8N webhook:', actionData);
+  
+  const { data, error } = await supabase.functions.invoke('execute-n8n-action', {
+    body: {
+      ...actionData,
+      messageId
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  console.log('Action execution response:', data);
+  return data;
 };

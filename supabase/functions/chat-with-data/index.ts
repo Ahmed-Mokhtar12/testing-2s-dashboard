@@ -267,13 +267,13 @@ ${Object.entries(analytics.monthlyBreakdown)
   return context;
 }
 
-async function callOpenAI(context: string, message: string): Promise<string> {
+async function callOpenAI(context: string, message: string): Promise<any> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) {
     throw new Error('OpenAI API key not configured');
   }
 
-  console.log('🤖 Calling OpenAI with intelligent context...');
+  console.log('🤖 Calling OpenAI with intelligent context and function calling...');
   console.log(`📏 Context length: ${context.length} characters`);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -290,6 +290,46 @@ async function callOpenAI(context: string, message: string): Promise<string> {
       ],
       temperature: 0.7,
       max_tokens: 1500,
+      functions: [
+        {
+          name: 'send_email',
+          description: 'Send an email to a specified recipient',
+          parameters: {
+            type: 'object',
+            properties: {
+              recipient: { type: 'string', description: 'Email address of the recipient' },
+              subject: { type: 'string', description: 'Subject line of the email' },
+              message: { type: 'string', description: 'Email message content' }
+            },
+            required: ['recipient', 'subject', 'message']
+          }
+        },
+        {
+          name: 'send_sms',
+          description: 'Send an SMS to a specified phone number',
+          parameters: {
+            type: 'object',
+            properties: {
+              phoneNumber: { type: 'string', description: 'Phone number to send SMS to' },
+              message: { type: 'string', description: 'SMS message content' }
+            },
+            required: ['phoneNumber', 'message']
+          }
+        },
+        {
+          name: 'send_whatsapp',
+          description: 'Send a WhatsApp message to a specified phone number',
+          parameters: {
+            type: 'object',
+            properties: {
+              phoneNumber: { type: 'string', description: 'Phone number to send WhatsApp message to' },
+              message: { type: 'string', description: 'WhatsApp message content' }
+            },
+            required: ['phoneNumber', 'message']
+          }
+        }
+      ],
+      function_call: 'auto'
     }),
   });
 
@@ -298,7 +338,7 @@ async function callOpenAI(context: string, message: string): Promise<string> {
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  return data.choices[0];
 }
 
 serve(async (req) => {
@@ -357,23 +397,10 @@ serve(async (req) => {
         context = await buildIntelligentContext(supabase, queryAnalysis);
     }
 
-    // Generate intelligent AI response
-    const aiResponse = await callOpenAI(context, message);
-
-    // Save conversation
-    try {
-      await supabase.from('LongTermMemory').insert({
-        sender: 'User/Guest',
-        recipient: 'Two Seasons Hotel AI Consultant',
-        message: `👤 User: ${message}\n🤖 Consultant: ${aiResponse}`,
-        created_at: new Date().toISOString()
-      });
-    } catch (saveError) {
-      console.error('⚠️ Failed to save conversation:', saveError);
-    }
-
-    const response = {
-      response: aiResponse,
+    // Generate intelligent AI response with function calling
+    const aiChoice = await callOpenAI(context, message);
+    
+    let response: any = {
       messageId,
       timestamp: new Date().toISOString(),
       consultant: 'Two Seasons Hotel AI Consultant (Intelligent)',
@@ -383,6 +410,67 @@ serve(async (req) => {
         dataPoints: specificData?.reviews?.length || specificData?.analytics?.totalReviews || 'general'
       }
     };
+
+    // Check if AI wants to perform an action
+    if (aiChoice.function_call) {
+      console.log('🎯 AI detected action intent:', aiChoice.function_call);
+      
+      const functionName = aiChoice.function_call.name;
+      const functionArgs = JSON.parse(aiChoice.function_call.arguments);
+      
+      // Create action data based on function call
+      let actionData: any = {
+        message: functionArgs.message
+      };
+
+      switch (functionName) {
+        case 'send_email':
+          actionData = {
+            type: 'email',
+            recipient: functionArgs.recipient,
+            subject: functionArgs.subject,
+            message: functionArgs.message
+          };
+          break;
+        case 'send_sms':
+          actionData = {
+            type: 'sms',
+            phoneNumber: functionArgs.phoneNumber,
+            message: functionArgs.message
+          };
+          break;
+        case 'send_whatsapp':
+          actionData = {
+            type: 'whatsapp',
+            phoneNumber: functionArgs.phoneNumber,
+            message: functionArgs.message
+          };
+          break;
+      }
+
+      response = {
+        ...response,
+        response: aiChoice.message?.content || `I can ${actionData.type === 'email' ? 'send an email' : `send a ${actionData.type} message`} for you. Please review the details and confirm.`,
+        hasAction: true,
+        actionData,
+        actionStatus: 'pending_confirmation'
+      };
+    } else {
+      // Regular text response
+      response.response = aiChoice.message.content;
+    }
+
+    // Save conversation
+    try {
+      await supabase.from('LongTermMemory').insert({
+        sender: 'User/Guest',
+        recipient: 'Two Seasons Hotel AI Consultant',
+        message: `👤 User: ${message}\n🤖 Consultant: ${response.response}`,
+        created_at: new Date().toISOString()
+      });
+    } catch (saveError) {
+      console.error('⚠️ Failed to save conversation:', saveError);
+    }
 
     console.log('✅ Intelligent response generated successfully');
     return new Response(JSON.stringify(response), {

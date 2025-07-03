@@ -8,9 +8,11 @@ import { Message } from '@/types/chat';
 interface MessageListProps {
   messages: Message[];
   isTyping: boolean;
+  onActionConfirm?: (messageId: string, actionData: any) => void;
+  onActionCancel?: (messageId: string) => void;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, isTyping }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, isTyping, onActionConfirm, onActionCancel }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,7 +29,12 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isTyping }) => {
         <div className="px-4 py-6">
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <ChatMessage 
+                key={message.id} 
+                message={message} 
+                onActionConfirm={onActionConfirm}
+                onActionCancel={onActionCancel}
+              />
             ))}
             
             {isTyping && <TypingIndicator />}

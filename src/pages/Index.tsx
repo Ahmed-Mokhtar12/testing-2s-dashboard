@@ -27,6 +27,8 @@ const Index = () => {
     setInputValue,
     handleFileUpload,
     handleSendMessage,
+    handleActionConfirm,
+    handleActionCancel,
   } = useChat();
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -79,6 +81,8 @@ const Index = () => {
               onSendMessage={handleSendMessage}
               onKeyPress={handleKeyPress}
               onFileUpload={handleFileUpload}
+              onActionConfirm={handleActionConfirm}
+              onActionCancel={handleActionCancel}
             />
           )}
         </div>
