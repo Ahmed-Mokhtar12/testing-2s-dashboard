@@ -5,6 +5,7 @@ import { analyzeQueryIntelligently } from './query-analyzer.ts';
 import { queryReviewsByDateRange, getAnalyticsData } from './data-service.ts';
 import { buildIntelligentContext } from './context-builder.ts';
 import { callOpenAI } from './openai-service.ts';
+import { SearchService } from './search-service.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
