@@ -67,21 +67,30 @@ serve(async (req) => {
     });
 
     console.log('📨 N8N Response status:', n8nResponse.status);
+    console.log('📨 N8N Response headers:', Object.fromEntries(n8nResponse.headers.entries()));
 
     let responseData: any = { success: true };
+    let responseText = '';
     
     try {
       // Try to parse response if it's JSON
-      const responseText = await n8nResponse.text();
+      responseText = await n8nResponse.text();
+      console.log('📨 N8N Response body:', responseText);
+      
       if (responseText) {
-        responseData = JSON.parse(responseText);
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.log('ℹ️ N8N response was not JSON:', responseText);
+          responseData = { success: true, rawResponse: responseText };
+        }
       }
-    } catch (parseError) {
-      console.log('ℹ️ N8N response was not JSON, treating as success');
+    } catch (textError) {
+      console.error('❌ Error reading N8N response:', textError);
     }
 
     if (!n8nResponse.ok) {
-      throw new Error(`N8N webhook failed with status: ${n8nResponse.status}`);
+      throw new Error(`N8N webhook failed with status: ${n8nResponse.status}. Response: ${responseText}`);
     }
 
     const response = {
