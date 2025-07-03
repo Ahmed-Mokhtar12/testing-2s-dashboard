@@ -8,48 +8,129 @@ export class SearchService {
     const engineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
     
     if (!apiKey || !engineId) {
+      console.error('❌ Missing Google Search credentials:', { hasApiKey: !!apiKey, hasEngineId: !!engineId });
       throw new Error('Google Search API key or Search Engine ID not configured');
+    }
+    
+    // Validate API key format
+    if (!apiKey.startsWith('AIza')) {
+      console.error('❌ Invalid Google API key format');
+      throw new Error('Invalid Google API key format');
     }
     
     this.googleApiKey = apiKey;
     this.searchEngineId = engineId;
+    
+    console.log('✅ SearchService initialized successfully');
   }
 
   async searchWeb(query: string, numResults: number = 5): Promise<any[]> {
     console.log('🔍 Searching the web for:', query);
     
-    try {
-      const url = `https://www.googleapis.com/customsearch/v1?key=${this.googleApiKey}&cx=${this.searchEngineId}&q=${encodeURIComponent(query)}&num=${numResults}`;
+    // Try multiple search strategies for Two Seasons Hotel
+    const searchStrategies = this.getSearchStrategies(query);
+    
+    for (let i = 0; i < searchStrategies.length; i++) {
+      const strategy = searchStrategies[i];
+      console.log(`🎯 Trying search strategy ${i + 1}/${searchStrategies.length}:`, strategy.description);
       
-      const response = await fetch(url);
+      try {
+        const results = await this.executeSearch(strategy.query, numResults);
+        if (results.length > 0) {
+          console.log(`✅ Success with strategy: ${strategy.description}`);
+          return results;
+        }
+        console.log(`📭 No results with strategy: ${strategy.description}`);
+      } catch (error) {
+        console.error(`❌ Strategy ${i + 1} failed:`, error.message);
+        if (i === searchStrategies.length - 1) {
+          throw error; // Re-throw if all strategies failed
+        }
+      }
+    }
+    
+    console.log('📭 All search strategies failed');
+    return [];
+  }
+
+  private getSearchStrategies(originalQuery: string): Array<{query: string, description: string}> {
+    const lowerQuery = originalQuery.toLowerCase();
+    
+    // If it's a Two Seasons Hotel query, use specific strategies
+    if (lowerQuery.includes('site:2seasonshotels.com') || lowerQuery.includes('two seasons')) {
+      return [
+        { 
+          query: 'site:2seasonshotels.com', 
+          description: 'Direct site search' 
+        },
+        { 
+          query: '"Two Seasons Hotel" amenities services', 
+          description: 'Hotel services search' 
+        },
+        { 
+          query: '"Two Seasons Hotel" contact booking', 
+          description: 'Contact and booking search' 
+        },
+        { 
+          query: '"Two Seasons Hotel"', 
+          description: 'General hotel search' 
+        },
+        { 
+          query: '2seasonshotels.com', 
+          description: 'Domain search without site prefix' 
+        }
+      ];
+    }
+    
+    // For other queries, try the original query
+    return [{ query: originalQuery, description: 'Original query' }];
+  }
+
+  private async executeSearch(query: string, numResults: number): Promise<any[]> {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${this.googleApiKey}&cx=${this.searchEngineId}&q=${encodeURIComponent(query)}&num=${numResults}`;
+    
+    console.log('🌐 API Request URL (sanitized):', url.replace(this.googleApiKey, '[API_KEY]'));
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Google Search API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Google Search API Error:', response.status, errorText);
+      // Handle specific error types
+      if (response.status === 403) {
+        throw new Error('Google Search API quota exceeded or invalid credentials');
+      } else if (response.status === 400) {
+        throw new Error('Invalid search query or parameters');
+      } else {
         throw new Error(`Google Search API Error: ${response.statusText}`);
       }
-
-      const data = await response.json();
-      
-      if (!data.items || data.items.length === 0) {
-        console.log('📭 No search results found for:', query);
-        return [];
-      }
-
-      const searchResults = data.items.map((item: any) => ({
-        title: item.title,
-        link: item.link,
-        snippet: item.snippet,
-        displayLink: item.displayLink
-      }));
-
-      console.log('✅ Found', searchResults.length, 'search results');
-      return searchResults;
-      
-    } catch (error) {
-      console.error('❌ Search error:', error);
-      throw error;
     }
+
+    const data = await response.json();
+    console.log('📊 API Response structure:', {
+      hasItems: !!data.items,
+      itemCount: data.items?.length || 0,
+      searchInfo: data.searchInformation
+    });
+    
+    if (!data.items || data.items.length === 0) {
+      return [];
+    }
+
+    const searchResults = data.items.map((item: any) => ({
+      title: item.title,
+      link: item.link,
+      snippet: item.snippet,
+      displayLink: item.displayLink
+    }));
+
+    console.log('✅ Found', searchResults.length, 'search results');
+    return searchResults;
   }
 
   getCurrentDateTime(): string {
@@ -59,6 +140,35 @@ export class SearchService {
 
   formatSearchResults(results: any[], query: string): string {
     if (results.length === 0) {
+      // Provide helpful fallback information for Two Seasons Hotel queries
+      if (query.toLowerCase().includes('two seasons') || query.includes('2seasonshotels.com')) {
+        return `🏨 Two Seasons Hotel Information:
+
+While I couldn't find specific search results for "${query}", I can help you with general hotel information:
+
+📞 **Contact Information:**
+- For current rates and availability, please contact the hotel directly
+- Visit the official website: www.2seasonshotels.com
+- Call or email for immediate assistance
+
+🏨 **Typical Hotel Services:**
+- Accommodation and room bookings
+- Restaurant and dining services
+- Meeting and event facilities
+- Guest amenities and services
+
+📋 **For Specific Information:**
+- Room types and rates: Contact hotel reservations
+- Dining options: Check restaurant hours and menus
+- Amenities: Pool, gym, spa services availability
+- Policies: Cancellation, check-in/out times
+
+💡 **Booking Assistance:**
+I can help you send an email or message to the hotel for specific inquiries about rates, availability, or services.
+
+Would you like me to help you contact the hotel directly?`;
+      }
+      
       return `No search results found for "${query}".`;
     }
 
@@ -110,17 +220,42 @@ export class SearchService {
   async executeFunction(functionName: string, args: any): Promise<string> {
     console.log('🛠️ Executing function:', functionName, 'with args:', args);
     
-    switch (functionName) {
-      case 'search_web':
-        const results = await this.searchWeb(args.query, args.num_results || 5);
-        return this.formatSearchResults(results, args.query);
-        
-      case 'get_current_datetime':
-        const currentTime = this.getCurrentDateTime();
-        return `Current date and time: ${currentTime}`;
-        
-      default:
-        throw new Error(`Unknown function: ${functionName}`);
+    try {
+      switch (functionName) {
+        case 'search_web':
+          const results = await this.searchWeb(args.query, args.num_results || 5);
+          const formattedResults = this.formatSearchResults(results, args.query);
+          
+          // Log successful search
+          console.log('✅ Search completed:', {
+            query: args.query,
+            resultCount: results.length,
+            hasContent: formattedResults.length > 100
+          });
+          
+          return formattedResults;
+          
+        case 'get_current_datetime':
+          const currentTime = this.getCurrentDateTime();
+          return `Current date and time: ${currentTime}`;
+          
+        default:
+          throw new Error(`Unknown function: ${functionName}`);
+      }
+    } catch (error) {
+      console.error(`❌ Function execution failed:`, {
+        functionName,
+        args,
+        error: error.message,
+        stack: error.stack
+      });
+      
+      // For search_web failures, provide helpful fallback
+      if (functionName === 'search_web') {
+        return this.formatSearchResults([], args.query);
+      }
+      
+      throw error;
     }
   }
 }
