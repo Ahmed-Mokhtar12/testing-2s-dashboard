@@ -115,8 +115,9 @@ export async function callOpenAI(context: string, message: string): Promise<any>
 
       if (functionName === 'search_web' || functionName === 'get_current_datetime') {
         try {
-          console.log(`🔍 Executing ${functionName} function...`);
+          console.log(`🔍 Executing ${functionName} function with args:`, functionArgs);
           const result = await searchService.executeFunction(functionName, functionArgs);
+          console.log(`✅ Function ${functionName} completed successfully`);
           
           messages.push({
             role: 'tool',
@@ -125,10 +126,11 @@ export async function callOpenAI(context: string, message: string): Promise<any>
           });
         } catch (error) {
           console.error(`❌ Error executing ${functionName}:`, error);
+          const errorMessage = `Error searching website: ${error.message}. Please provide available information from database instead.`;
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: `Error executing ${functionName}: ${error.message}`
+            content: errorMessage
           });
         }
       } else {
