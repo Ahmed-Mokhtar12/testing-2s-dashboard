@@ -15,7 +15,30 @@ interface ActionRequest {
   messageId: string;
 }
 
-const N8N_WEBHOOK_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp-test/9b5a9d48-7f82-41b1-9028-4b06dd9be790/sse';
+// Enhanced webhook URL validation and configuration
+const validateWebhookUrl = (url: string): boolean => {
+  try {
+    const urlObj = new URL(url);
+    // Check if it's a valid HTTP/HTTPS URL
+    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+      return false;
+    }
+    // Check if it's not an SSE endpoint (which ends with /sse)
+    if (url.endsWith('/sse')) {
+      console.warn('⚠️ WARNING: Webhook URL appears to be an SSE endpoint, not a standard HTTP webhook');
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Use environment variable or fallback to hardcoded URL
+const N8N_WEBHOOK_URL = Deno.env.get('N8N_WEBHOOK_URL') || 'https://n8n-2seasons-u38985.vm.elestio.app/webhook/mcp-test/9b5a9d48-7f82-41b1-9028-4b06dd9be790';
+
+console.log('🔧 N8N Webhook URL configured:', N8N_WEBHOOK_URL);
+console.log('🔧 URL validation result:', validateWebhookUrl(N8N_WEBHOOK_URL));
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -24,9 +47,21 @@ serve(async (req) => {
 
   try {
     console.log('🚀 N8N Action Executor starting...');
-    const actionRequest: ActionRequest = await req.json();
+    console.log('🔧 Request method:', req.method);
+    console.log('🔧 Request headers:', Object.fromEntries(req.headers.entries()));
     
+    // Validate webhook URL first
+    if (!validateWebhookUrl(N8N_WEBHOOK_URL)) {
+      throw new Error(`Invalid webhook URL: ${N8N_WEBHOOK_URL}. Please check the URL format and ensure it's not an SSE endpoint.`);
+    }
+    
+    const actionRequest: ActionRequest = await req.json();
     console.log('📩 Received action request:', actionRequest);
+
+    // Validate action request
+    if (!actionRequest.type || !actionRequest.message || !actionRequest.messageId) {
+      throw new Error('Invalid action request: missing required fields (type, message, messageId)');
+    }
 
     // Prepare webhook payload based on action type
     let webhookPayload: any = {
@@ -39,6 +74,9 @@ serve(async (req) => {
     // Add type-specific data
     switch (actionRequest.type) {
       case 'email':
+        if (!actionRequest.recipient) {
+          throw new Error('Email action requires recipient');
+        }
         webhookPayload = {
           ...webhookPayload,
           recipient: actionRequest.recipient,
@@ -48,20 +86,20 @@ serve(async (req) => {
       
       case 'sms':
       case 'whatsapp':
+        if (!actionRequest.phoneNumber) {
+          throw new Error(`${actionRequest.type} action requires phoneNumber`);
+        }
         webhookPayload = {
           ...webhookPayload,
           phoneNumber: actionRequest.phoneNumber,
         };
         break;
+        
+      default:
+        throw new Error(`Unsupported action type: ${actionRequest.type}`);
     }
 
     console.log('📤 Sending payload to N8N:', webhookPayload);
-
-    // Call N8N webhook with GET method and query parameters
-    const urlWithParams = new URL(N8N_WEBHOOK_URL);
-    Object.entries(webhookPayload).forEach(([key, value]) => {
-      urlWithParams.searchParams.append(key, String(value));
-    });
 
     // Retry mechanism with exponential backoff
     const maxRetries = 3;
@@ -69,17 +107,20 @@ serve(async (req) => {
     let lastError: any;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`🔄 N8N webhook attempt ${attempt}/${maxRetries}`);
+      console.log(`🔄 N8N webhook attempt ${attempt}/${maxRetries} to ${N8N_WEBHOOK_URL}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
       try {
-        n8nResponse = await fetch(urlWithParams.toString(), {
-          method: 'GET',
+        // Use POST method with JSON body instead of GET with query params
+        n8nResponse = await fetch(N8N_WEBHOOK_URL, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'User-Agent': 'Supabase-Edge-Function/1.0',
           },
+          body: JSON.stringify(webhookPayload),
           signal: controller.signal,
         });
 

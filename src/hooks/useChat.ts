@@ -148,6 +148,13 @@ export const useChat = () => {
 
     } catch (error) {
       console.error('❌ Action execution error:', error);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        actionData,
+        messageId
+      });
       
       // Update message status to failed
       setMessages(prev => prev.map(msg => 
@@ -156,9 +163,27 @@ export const useChat = () => {
           : msg
       ));
       
+      // Enhanced error message based on error type
+      let errorTitle = "Action Failed";
+      let errorDescription = `Failed to send ${actionData.type}. Please try again.`;
+      
+      if (error.message.includes('Network error')) {
+        errorTitle = "Connection Error";
+        errorDescription = "Could not connect to the messaging service. Please check your internet connection.";
+      } else if (error.message.includes('timeout')) {
+        errorTitle = "Timeout Error";
+        errorDescription = "The messaging service is taking too long to respond. Please try again.";
+      } else if (error.message.includes('webhook URL')) {
+        errorTitle = "Configuration Error";
+        errorDescription = "The messaging service is not properly configured. Please contact support.";
+      } else if (error.message.includes('Service unavailable')) {
+        errorTitle = "Service Unavailable";
+        errorDescription = "The messaging service is currently unavailable. Please try again later.";
+      }
+      
       toast({
-        title: "Action Failed",
-        description: `Failed to send ${actionData.type}. Please try again.`,
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       });
     }
