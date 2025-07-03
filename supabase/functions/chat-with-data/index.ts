@@ -83,11 +83,12 @@ serve(async (req) => {
     };
 
     // Check if AI wants to perform an action
-    if (aiChoice.function_call) {
-      console.log('🎯 AI detected action intent:', aiChoice.function_call);
+    if (aiChoice.message.tool_calls && aiChoice.message.tool_calls.length > 0) {
+      console.log('🎯 AI detected action intent:', aiChoice.message.tool_calls[0]);
       
-      const functionName = aiChoice.function_call.name;
-      const functionArgs = JSON.parse(aiChoice.function_call.arguments);
+      const toolCall = aiChoice.message.tool_calls[0];
+      const functionName = toolCall.function.name;
+      const functionArgs = JSON.parse(toolCall.function.arguments);
       
       // Create action data based on function call
       let actionData: any = {
