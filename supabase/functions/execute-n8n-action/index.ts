@@ -15,137 +15,230 @@ interface ActionRequest {
   messageId: string;
 }
 
-interface MCPToolCall {
+// MCP Protocol Interfaces
+interface MCPRequest {
+  jsonrpc: "2.0";
+  id: string | number;
   method: string;
-  params: {
-    name: string;
-    arguments: Record<string, any>;
-  };
+  params?: any;
 }
 
 interface MCPResponse {
+  jsonrpc: "2.0";
+  id: string | number;
   result?: any;
   error?: {
     code: number;
     message: string;
+    data?: any;
   };
 }
 
-// MCP endpoint (without /sse for direct HTTP communication)
+interface MCPNotification {
+  jsonrpc: "2.0";
+  method: string;
+  params?: any;
+}
+
+// MCP endpoint
 const N8N_MCP_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp/9b5a9d48-7f82-41b1-9028-4b06dd9be790';
 
 console.log('🔧 N8N MCP URL configured:', N8N_MCP_URL);
 
-// Function to create MCP tool call based on action type
-function createMCPToolCall(actionRequest: ActionRequest): MCPToolCall {
-  const baseArgs = {
-    message: actionRequest.message,
-    messageId: actionRequest.messageId,
-  };
+// MCP Client class for proper protocol implementation
+class MCPClient {
+  private url: string;
+  private requestId: number = 1;
+  private initialized: boolean = false;
+  private availableTools: string[] = [];
 
-  switch (actionRequest.type) {
-    case 'email':
-      if (!actionRequest.recipient) {
-        throw new Error('Email action requires recipient');
-      }
-      return {
-        method: 'tools/call',
-        params: {
-          name: 'microsoft_outlook_send_email',
-          arguments: {
-            ...baseArgs,
-            to: actionRequest.recipient,
-            subject: actionRequest.subject || 'Message from Two Seasons Hotel AI',
-          },
-        },
-      };
-    
-    case 'sms':
-      if (!actionRequest.phoneNumber) {
-        throw new Error('SMS action requires phoneNumber');
-      }
-      return {
-        method: 'tools/call',
-        params: {
-          name: 'reson8_send_sms',
-          arguments: {
-            ...baseArgs,
-            phoneNumber: actionRequest.phoneNumber,
-          },
-        },
-      };
-    
-    case 'whatsapp':
-      if (!actionRequest.phoneNumber) {
-        throw new Error('WhatsApp action requires phoneNumber');
-      }
-      return {
-        method: 'tools/call',
-        params: {
-          name: 'reson8_send_whatsapp',
-          arguments: {
-            ...baseArgs,
-            phoneNumber: actionRequest.phoneNumber,
-          },
-        },
-      };
-    
-    default:
-      throw new Error(`Unsupported action type: ${actionRequest.type}`);
+  constructor(url: string) {
+    this.url = url;
   }
-}
 
-// Function to execute MCP tool call via direct HTTP request
-async function executeMCPToolCall(toolCall: MCPToolCall): Promise<MCPResponse> {
-  console.log('🔧 Executing MCP tool call:', toolCall);
-  
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, 30000);
+  private generateRequestId(): number {
+    return this.requestId++;
+  }
 
-  try {
-    // Send MCP tool call directly to the MCP endpoint
-    const mcpEndpoint = N8N_MCP_URL;
-    console.log('🔧 Sending MCP request to:', mcpEndpoint);
+  private async sendRequest(request: MCPRequest): Promise<MCPResponse> {
+    console.log('📤 Sending MCP request:', request);
     
-    const response = await fetch(mcpEndpoint, {
+    const response = await fetch(this.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'User-Agent': 'Supabase-Edge-Function-MCP/1.0',
       },
-      body: JSON.stringify(toolCall),
-      signal: controller.signal,
+      body: JSON.stringify(request),
     });
 
-    clearTimeout(timeoutId);
-
-    console.log('📨 MCP Response status:', response.status);
-    console.log('📨 MCP Response headers:', Object.fromEntries(response.headers.entries()));
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ MCP request failed:', response.status, errorText);
-      throw new Error(`MCP request failed with status ${response.status}: ${errorText}`);
+      throw new Error(`MCP request failed with status ${response.status}: ${await response.text()}`);
     }
 
     const responseData = await response.json();
-    console.log('✅ MCP Response data:', responseData);
+    console.log('📥 Received MCP response:', responseData);
+    
+    return responseData;
+  }
 
-    return {
-      result: responseData,
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    console.log('🔄 Initializing MCP client...');
+    
+    // Step 1: Initialize the connection
+    const initRequest: MCPRequest = {
+      jsonrpc: "2.0",
+      id: this.generateRequestId(),
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {
+          tools: {}
+        },
+        clientInfo: {
+          name: "Supabase-Edge-Function",
+          version: "1.0.0"
+        }
+      }
     };
 
-  } catch (error) {
-    clearTimeout(timeoutId);
-    console.error('❌ MCP tool call error:', error);
+    const initResponse = await this.sendRequest(initRequest);
     
-    if (error.name === 'AbortError') {
-      throw new Error('MCP tool call timeout after 30 seconds');
+    if (initResponse.error) {
+      throw new Error(`MCP initialization failed: ${initResponse.error.message}`);
     }
+
+    // Step 2: Send initialized notification
+    const initializedNotification: MCPNotification = {
+      jsonrpc: "2.0",
+      method: "notifications/initialized"
+    };
+
+    await fetch(this.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(initializedNotification),
+    });
+
+    // Step 3: List available tools
+    await this.listTools();
     
+    this.initialized = true;
+    console.log('✅ MCP client initialized successfully');
+  }
+
+  async listTools(): Promise<void> {
+    const listToolsRequest: MCPRequest = {
+      jsonrpc: "2.0",
+      id: this.generateRequestId(),
+      method: "tools/list"
+    };
+
+    const response = await this.sendRequest(listToolsRequest);
+    
+    if (response.error) {
+      console.warn('⚠️ Could not list tools:', response.error.message);
+      return;
+    }
+
+    if (response.result?.tools) {
+      this.availableTools = response.result.tools.map((tool: any) => tool.name);
+      console.log('🔧 Available tools:', this.availableTools);
+    }
+  }
+
+  async callTool(toolName: string, arguments_: Record<string, any>): Promise<any> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    console.log(`🔧 Calling tool: ${toolName} with arguments:`, arguments_);
+
+    const toolCallRequest: MCPRequest = {
+      jsonrpc: "2.0",
+      id: this.generateRequestId(),
+      method: "tools/call",
+      params: {
+        name: toolName,
+        arguments: arguments_
+      }
+    };
+
+    const response = await this.sendRequest(toolCallRequest);
+    
+    if (response.error) {
+      throw new Error(`Tool call failed: ${response.error.message}`);
+    }
+
+    return response.result;
+  }
+}
+
+// Global MCP client instance
+const mcpClient = new MCPClient(N8N_MCP_URL);
+
+// Function to execute action using proper MCP protocol
+async function executeActionViaMCP(actionRequest: ActionRequest): Promise<any> {
+  console.log('🔧 Executing action via MCP:', actionRequest);
+  
+  let toolName: string;
+  let toolArguments: Record<string, any>;
+
+  // Map action type to MCP tool name and arguments
+  switch (actionRequest.type) {
+    case 'email':
+      if (!actionRequest.recipient) {
+        throw new Error('Email action requires recipient');
+      }
+      toolName = 'microsoft_outlook_send_email';
+      toolArguments = {
+        to: actionRequest.recipient,
+        subject: actionRequest.subject || 'Message from Two Seasons Hotel AI',
+        message: actionRequest.message,
+        messageId: actionRequest.messageId,
+      };
+      break;
+    
+    case 'sms':
+      if (!actionRequest.phoneNumber) {
+        throw new Error('SMS action requires phoneNumber');
+      }
+      toolName = 'reson8_send_sms';
+      toolArguments = {
+        phoneNumber: actionRequest.phoneNumber,
+        message: actionRequest.message,
+        messageId: actionRequest.messageId,
+      };
+      break;
+    
+    case 'whatsapp':
+      if (!actionRequest.phoneNumber) {
+        throw new Error('WhatsApp action requires phoneNumber');
+      }
+      toolName = 'reson8_send_whatsapp';
+      toolArguments = {
+        phoneNumber: actionRequest.phoneNumber,
+        message: actionRequest.message,
+        messageId: actionRequest.messageId,
+      };
+      break;
+    
+    default:
+      throw new Error(`Unsupported action type: ${actionRequest.type}`);
+  }
+
+  // Execute the tool call using the MCP client
+  try {
+    const result = await mcpClient.callTool(toolName, toolArguments);
+    console.log('✅ MCP tool execution successful:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ MCP tool execution failed:', error);
     throw error;
   }
 }
@@ -168,29 +261,25 @@ serve(async (req) => {
       throw new Error('Invalid action request: missing required fields (type, message, messageId)');
     }
 
-    // Create MCP tool call
-    const toolCall = createMCPToolCall(actionRequest);
-    console.log('🔧 Created MCP tool call:', toolCall);
-
-    // Execute MCP tool call with retry mechanism
+    // Execute action via MCP with retry mechanism
     const maxRetries = 3;
-    let mcpResponse: MCPResponse;
+    let mcpResult: any;
     let lastError: any;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`🔄 MCP tool call attempt ${attempt}/${maxRetries}`);
+      console.log(`🔄 MCP action attempt ${attempt}/${maxRetries}`);
       
       try {
-        mcpResponse = await executeMCPToolCall(toolCall);
-        console.log('✅ MCP tool call successful:', mcpResponse);
+        mcpResult = await executeActionViaMCP(actionRequest);
+        console.log('✅ MCP action successful:', mcpResult);
         break;
         
       } catch (mcpError) {
         lastError = mcpError;
-        console.error(`❌ MCP tool call error (attempt ${attempt}):`, mcpError);
+        console.error(`❌ MCP action error (attempt ${attempt}):`, mcpError);
         
         if (attempt === maxRetries) {
-          throw new Error(`Failed to execute MCP tool call after ${maxRetries} attempts: ${mcpError.message}`);
+          throw new Error(`Failed to execute MCP action after ${maxRetries} attempts: ${mcpError.message}`);
         }
         
         // Exponential backoff delay
@@ -205,7 +294,7 @@ serve(async (req) => {
       actionType: actionRequest.type,
       messageId: actionRequest.messageId,
       timestamp: new Date().toISOString(),
-      mcpResponse: mcpResponse,
+      mcpResult: mcpResult,
       message: `${actionRequest.type} action executed successfully via MCP`
     };
 
