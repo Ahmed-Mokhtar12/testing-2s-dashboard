@@ -67,18 +67,25 @@ serve(async (req) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    const n8nResponse = await fetch(urlWithParams.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-    });
+    let n8nResponse: Response;
+    try {
+      n8nResponse = await fetch(urlWithParams.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
 
-    clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-    console.log('📨 N8N Response status:', n8nResponse.status);
-    console.log('📨 N8N Response headers:', Object.fromEntries(n8nResponse.headers.entries()));
+      console.log('📨 N8N Response status:', n8nResponse.status);
+      console.log('📨 N8N Response headers:', Object.fromEntries(n8nResponse.headers.entries()));
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      console.error('❌ N8N fetch error:', fetchError);
+      throw new Error(`Failed to call N8N webhook: ${fetchError.message}`);
+    }
 
     let responseData: any = { success: true };
     let responseText = '';
