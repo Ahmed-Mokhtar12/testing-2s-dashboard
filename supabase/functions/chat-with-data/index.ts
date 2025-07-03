@@ -6,6 +6,7 @@ import { queryReviewsByDateRange, getAnalyticsData } from './data-service.ts';
 import { buildIntelligentContext } from './context-builder.ts';
 import { callOpenAI } from './openai-service.ts';
 import { SearchService } from './search-service.ts';
+import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +33,10 @@ serve(async (req) => {
     // Intelligent query analysis
     const queryAnalysis = analyzeQueryIntelligently(message);
     console.log('🧠 Intelligent query analysis:', queryAnalysis);
+
+    // Website-first analysis
+    const websiteAnalysis = WebsiteQueryAnalyzer.analyzeForWebsiteSearch(message);
+    console.log('🌐 Website search analysis:', websiteAnalysis);
 
     let specificData: any = null;
     let context: string;
@@ -76,11 +81,14 @@ serve(async (req) => {
       messageId,
       timestamp: new Date().toISOString(),
       consultant: 'Two Seasons Hotel AI Consultant (Intelligent)',
-      queryAnalysis: {
-        type: queryAnalysis.type,
-        description: queryAnalysis.description,
-        dataPoints: specificData?.reviews?.length || specificData?.analytics?.totalReviews || 'general'
-      }
+        queryAnalysis: {
+          type: queryAnalysis.type,
+          description: queryAnalysis.description,
+          dataPoints: specificData?.reviews?.length || specificData?.analytics?.totalReviews || 'general',
+          websiteSearchRequired: websiteAnalysis.needsWebsiteSearch,
+          websiteCategory: websiteAnalysis.category,
+          websitePriority: websiteAnalysis.priority
+        }
     };
 
     // Check if AI wants to perform an action
