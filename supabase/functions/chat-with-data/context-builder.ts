@@ -9,7 +9,7 @@ export async function buildIntelligentContext(supabase: any, queryAnalysis: Smar
 📊 QUERY ANALYSIS: ${queryAnalysis.description}
 📅 QUERY TYPE: ${queryAnalysis.type}
 
-🔍 WEBSITE SEARCH REQUIRED: For any hotel-related information, search "site:2seasonshotels.com [topic]" FIRST
+🔍 WEBSITE SEARCH REQUIRED: For any hotel-related information, you MUST call search_web("site:2seasonshotels.com [topic]") function FIRST
 
 `;
 
@@ -61,9 +61,10 @@ ${Object.entries(analytics.monthlyBreakdown)
   }
 
   context += `🎯 CRITICAL WEBSITE-FIRST INSTRUCTIONS:
-- 🏨 MANDATORY: Search www.2seasonshotels.com FIRST before answering ANY hotel-related question
+- 🏨 MANDATORY: You MUST call search_web("site:2seasonshotels.com [topic]") function FIRST before answering ANY hotel-related question
 - ⭐ WEBSITE PRIORITY: Hotel website information is the PRIMARY source, database provides analytics
-- 🔍 SEARCH REQUIREMENT: Use "site:2seasonshotels.com [topic]" for hotel services, amenities, policies
+- 🔍 SEARCH REQUIREMENT: Use search_web function with "site:2seasonshotels.com [topic]" for hotel services, amenities, policies
+- 🚨 NEVER SKIP: Always call search_web function for hotel queries - never provide answers without searching the website first!
 - 📊 RESPONSE STRUCTURE: Lead with website information, supplement with database analytics
 - 💬 MESSAGING CAPABILITIES: Send emails, SMS, WhatsApp when requested
 - 📞 CONTACT EXTRACTION: Extract recipient info and message content from user requests
