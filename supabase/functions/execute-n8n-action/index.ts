@@ -15,30 +15,161 @@ interface ActionRequest {
   messageId: string;
 }
 
-// Enhanced webhook URL validation and configuration
-const validateWebhookUrl = (url: string): boolean => {
-  try {
-    const urlObj = new URL(url);
-    // Check if it's a valid HTTP/HTTPS URL
-    if (!['http:', 'https:'].includes(urlObj.protocol)) {
-      return false;
-    }
-    // Check if it's not an SSE endpoint (which ends with /sse)
-    if (url.endsWith('/sse')) {
-      console.warn('⚠️ WARNING: Webhook URL appears to be an SSE endpoint, not a standard HTTP webhook');
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
+interface MCPToolCall {
+  method: string;
+  params: {
+    name: string;
+    arguments: Record<string, any>;
+  };
+}
+
+interface MCPResponse {
+  result?: any;
+  error?: {
+    code: number;
+    message: string;
+  };
+}
+
+// MCP SSE endpoint
+const N8N_MCP_SSE_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp/9b5a9d48-7f82-41b1-9028-4b06dd9be790/sse';
+
+console.log('🔧 N8N MCP SSE URL configured:', N8N_MCP_SSE_URL);
+
+// Function to create MCP tool call based on action type
+function createMCPToolCall(actionRequest: ActionRequest): MCPToolCall {
+  const baseArgs = {
+    message: actionRequest.message,
+    messageId: actionRequest.messageId,
+  };
+
+  switch (actionRequest.type) {
+    case 'email':
+      if (!actionRequest.recipient) {
+        throw new Error('Email action requires recipient');
+      }
+      return {
+        method: 'tools/call',
+        params: {
+          name: 'microsoft_outlook_send_email',
+          arguments: {
+            ...baseArgs,
+            to: actionRequest.recipient,
+            subject: actionRequest.subject || 'Message from Two Seasons Hotel AI',
+          },
+        },
+      };
+    
+    case 'sms':
+      if (!actionRequest.phoneNumber) {
+        throw new Error('SMS action requires phoneNumber');
+      }
+      return {
+        method: 'tools/call',
+        params: {
+          name: 'reson8_send_sms',
+          arguments: {
+            ...baseArgs,
+            phoneNumber: actionRequest.phoneNumber,
+          },
+        },
+      };
+    
+    case 'whatsapp':
+      if (!actionRequest.phoneNumber) {
+        throw new Error('WhatsApp action requires phoneNumber');
+      }
+      return {
+        method: 'tools/call',
+        params: {
+          name: 'reson8_send_whatsapp',
+          arguments: {
+            ...baseArgs,
+            phoneNumber: actionRequest.phoneNumber,
+          },
+        },
+      };
+    
+    default:
+      throw new Error(`Unsupported action type: ${actionRequest.type}`);
   }
-};
+}
 
-// Use webhook format instead of MCP format
-const N8N_WEBHOOK_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/webhook/9b5a9d48-7f82-41b1-9028-4b06dd9be790';
+// Function to execute MCP tool call via SSE
+async function executeMCPToolCall(toolCall: MCPToolCall): Promise<MCPResponse> {
+  console.log('🔧 Executing MCP tool call:', toolCall);
+  
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error('MCP tool call timeout after 30 seconds'));
+    }, 30000);
 
-console.log('🔧 N8N Webhook URL configured:', N8N_WEBHOOK_URL);
-console.log('🔧 URL validation result:', validateWebhookUrl(N8N_WEBHOOK_URL));
+    // Create SSE connection
+    const eventSource = new EventSource(N8N_MCP_SSE_URL, {
+      signal: controller.signal,
+    });
+
+    let responseReceived = false;
+
+    eventSource.onopen = () => {
+      console.log('✅ MCP SSE connection established');
+      
+      // Send the tool call request
+      // Note: EventSource doesn't support sending data directly
+      // We need to use a separate POST request to send the tool call
+      fetch(N8N_MCP_SSE_URL.replace('/sse', ''), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify(toolCall),
+        signal: controller.signal,
+      }).catch(error => {
+        console.error('❌ Error sending MCP tool call:', error);
+        if (!responseReceived) {
+          clearTimeout(timeoutId);
+          eventSource.close();
+          reject(error);
+        }
+      });
+    };
+
+    eventSource.onmessage = (event) => {
+      console.log('📨 Received MCP message:', event.data);
+      
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Check if this is a tool call result
+        if (data.method === 'tools/call/result' || data.result || data.error) {
+          responseReceived = true;
+          clearTimeout(timeoutId);
+          eventSource.close();
+          
+          if (data.error) {
+            reject(new Error(`MCP tool call failed: ${data.error.message}`));
+          } else {
+            resolve(data);
+          }
+        }
+      } catch (parseError) {
+        console.error('❌ Error parsing MCP message:', parseError);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('❌ MCP SSE connection error:', error);
+      if (!responseReceived) {
+        clearTimeout(timeoutId);
+        eventSource.close();
+        reject(new Error('MCP SSE connection failed'));
+      }
+    };
+  });
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -46,14 +177,9 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🚀 N8N Action Executor starting...');
+    console.log('🚀 N8N MCP Action Executor starting...');
     console.log('🔧 Request method:', req.method);
     console.log('🔧 Request headers:', Object.fromEntries(req.headers.entries()));
-    
-    // Validate webhook URL first
-    if (!validateWebhookUrl(N8N_WEBHOOK_URL)) {
-      throw new Error(`Invalid webhook URL: ${N8N_WEBHOOK_URL}. Please check the URL format and ensure it's not an SSE endpoint.`);
-    }
     
     const actionRequest: ActionRequest = await req.json();
     console.log('📩 Received action request:', actionRequest);
@@ -63,82 +189,29 @@ serve(async (req) => {
       throw new Error('Invalid action request: missing required fields (type, message, messageId)');
     }
 
-    // Prepare webhook payload based on action type
-    let webhookPayload: any = {
-      action: actionRequest.type,
-      message: actionRequest.message,
-      messageId: actionRequest.messageId,
-      timestamp: new Date().toISOString(),
-    };
+    // Create MCP tool call
+    const toolCall = createMCPToolCall(actionRequest);
+    console.log('🔧 Created MCP tool call:', toolCall);
 
-    // Add type-specific data
-    switch (actionRequest.type) {
-      case 'email':
-        if (!actionRequest.recipient) {
-          throw new Error('Email action requires recipient');
-        }
-        webhookPayload = {
-          ...webhookPayload,
-          recipient: actionRequest.recipient,
-          subject: actionRequest.subject || 'Message from Two Seasons Hotel AI',
-        };
-        break;
-      
-      case 'sms':
-      case 'whatsapp':
-        if (!actionRequest.phoneNumber) {
-          throw new Error(`${actionRequest.type} action requires phoneNumber`);
-        }
-        webhookPayload = {
-          ...webhookPayload,
-          phoneNumber: actionRequest.phoneNumber,
-        };
-        break;
-        
-      default:
-        throw new Error(`Unsupported action type: ${actionRequest.type}`);
-    }
-
-    console.log('📤 Sending payload to N8N:', webhookPayload);
-
-    // Retry mechanism with exponential backoff
+    // Execute MCP tool call with retry mechanism
     const maxRetries = 3;
-    let n8nResponse: Response;
+    let mcpResponse: MCPResponse;
     let lastError: any;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`🔄 N8N webhook attempt ${attempt}/${maxRetries} to ${N8N_WEBHOOK_URL}`);
+      console.log(`🔄 MCP tool call attempt ${attempt}/${maxRetries}`);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
       try {
-        // Use POST method with JSON body instead of GET with query params
-        n8nResponse = await fetch(N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Supabase-Edge-Function/1.0',
-          },
-          body: JSON.stringify(webhookPayload),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        console.log(`📨 N8N Response status (attempt ${attempt}):`, n8nResponse.status);
-        console.log(`📨 N8N Response headers (attempt ${attempt}):`, Object.fromEntries(n8nResponse.headers.entries()));
-        
-        // If we get a response, break out of retry loop
+        mcpResponse = await executeMCPToolCall(toolCall);
+        console.log('✅ MCP tool call successful:', mcpResponse);
         break;
         
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        lastError = fetchError;
-        console.error(`❌ N8N fetch error (attempt ${attempt}):`, fetchError);
+      } catch (mcpError) {
+        lastError = mcpError;
+        console.error(`❌ MCP tool call error (attempt ${attempt}):`, mcpError);
         
         if (attempt === maxRetries) {
-          throw new Error(`Failed to call N8N webhook after ${maxRetries} attempts: ${fetchError.message}`);
+          throw new Error(`Failed to execute MCP tool call after ${maxRetries} attempts: ${mcpError.message}`);
         }
         
         // Exponential backoff delay
@@ -148,64 +221,28 @@ serve(async (req) => {
       }
     }
 
-    let responseData: any = { success: true };
-    let responseText = '';
-    
-    try {
-      // Try to parse response if it's JSON
-      responseText = await n8nResponse.text();
-      console.log('📨 N8N Response body:', responseText);
-      
-      if (responseText) {
-        try {
-          responseData = JSON.parse(responseText);
-        } catch (parseError) {
-          console.log('ℹ️ N8N response was not JSON:', responseText);
-          responseData = { success: true, rawResponse: responseText };
-        }
-      }
-    } catch (textError) {
-      console.error('❌ Error reading N8N response:', textError);
-    }
-
-    if (!n8nResponse.ok) {
-      let errorMessage = `N8N webhook failed with status: ${n8nResponse.status}`;
-      
-      // Provide specific guidance for common errors
-      if (n8nResponse.status === 404) {
-        errorMessage += '. The webhook endpoint is not available - this usually means the n8n workflow is in test mode and needs to be reactivated or switched to production mode.';
-      } else if (n8nResponse.status === 500) {
-        errorMessage += '. Internal server error in n8n workflow - check the workflow configuration.';
-      } else if (n8nResponse.status === 403) {
-        errorMessage += '. Access forbidden - check webhook authentication settings.';
-      }
-      
-      errorMessage += ` Response: ${responseText}`;
-      throw new Error(errorMessage);
-    }
-
     const response = {
       success: true,
       actionType: actionRequest.type,
       messageId: actionRequest.messageId,
       timestamp: new Date().toISOString(),
-      n8nResponse: responseData,
-      message: `${actionRequest.type} action executed successfully`
+      mcpResponse: mcpResponse,
+      message: `${actionRequest.type} action executed successfully via MCP`
     };
 
-    console.log('✅ Action executed successfully');
+    console.log('✅ Action executed successfully via MCP');
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('🚨 Error in N8N action executor:', error);
+    console.error('🚨 Error in N8N MCP action executor:', error);
     
     const errorResponse = {
       success: false,
       error: error.message,
       timestamp: new Date().toISOString(),
-      message: 'Failed to execute action'
+      message: 'Failed to execute MCP action'
     };
     
     return new Response(JSON.stringify(errorResponse), {
