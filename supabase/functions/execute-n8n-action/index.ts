@@ -63,28 +63,48 @@ serve(async (req) => {
       urlWithParams.searchParams.append(key, String(value));
     });
 
-    // Add timeout to prevent hanging
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
+    // Retry mechanism with exponential backoff
+    const maxRetries = 3;
     let n8nResponse: Response;
-    try {
-      n8nResponse = await fetch(urlWithParams.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
+    let lastError: any;
 
-      clearTimeout(timeoutId);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🔄 N8N webhook attempt ${attempt}/${maxRetries}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      console.log('📨 N8N Response status:', n8nResponse.status);
-      console.log('📨 N8N Response headers:', Object.fromEntries(n8nResponse.headers.entries()));
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      console.error('❌ N8N fetch error:', fetchError);
-      throw new Error(`Failed to call N8N webhook: ${fetchError.message}`);
+      try {
+        n8nResponse = await fetch(urlWithParams.toString(), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        console.log(`📨 N8N Response status (attempt ${attempt}):`, n8nResponse.status);
+        console.log(`📨 N8N Response headers (attempt ${attempt}):`, Object.fromEntries(n8nResponse.headers.entries()));
+        
+        // If we get a response, break out of retry loop
+        break;
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        lastError = fetchError;
+        console.error(`❌ N8N fetch error (attempt ${attempt}):`, fetchError);
+        
+        if (attempt === maxRetries) {
+          throw new Error(`Failed to call N8N webhook after ${maxRetries} attempts: ${fetchError.message}`);
+        }
+        
+        // Exponential backoff delay
+        const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
 
     let responseData: any = { success: true };
@@ -108,7 +128,19 @@ serve(async (req) => {
     }
 
     if (!n8nResponse.ok) {
-      throw new Error(`N8N webhook failed with status: ${n8nResponse.status}. Response: ${responseText}`);
+      let errorMessage = `N8N webhook failed with status: ${n8nResponse.status}`;
+      
+      // Provide specific guidance for common errors
+      if (n8nResponse.status === 404) {
+        errorMessage += '. The webhook endpoint is not available - this usually means the n8n workflow is in test mode and needs to be reactivated or switched to production mode.';
+      } else if (n8nResponse.status === 500) {
+        errorMessage += '. Internal server error in n8n workflow - check the workflow configuration.';
+      } else if (n8nResponse.status === 403) {
+        errorMessage += '. Access forbidden - check webhook authentication settings.';
+      }
+      
+      errorMessage += ` Response: ${responseText}`;
+      throw new Error(errorMessage);
     }
 
     const response = {
