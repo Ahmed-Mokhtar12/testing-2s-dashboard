@@ -34,8 +34,8 @@ const validateWebhookUrl = (url: string): boolean => {
   }
 };
 
-// Use environment variable or fallback to hardcoded URL
-const N8N_WEBHOOK_URL = Deno.env.get('N8N_WEBHOOK_URL') || 'https://n8n-2seasons-u38985.vm.elestio.app/webhook/mcp-test/9b5a9d48-7f82-41b1-9028-4b06dd9be790';
+// Use the correct production URL provided by user (removing /sse for HTTP POST)
+const N8N_WEBHOOK_URL = 'https://n8n-2seasons-u38985.vm.elestio.app/mcp/9b5a9d48-7f82-41b1-9028-4b06dd9be790';
 
 console.log('🔧 N8N Webhook URL configured:', N8N_WEBHOOK_URL);
 console.log('🔧 URL validation result:', validateWebhookUrl(N8N_WEBHOOK_URL));
