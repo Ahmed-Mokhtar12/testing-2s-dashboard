@@ -9,7 +9,8 @@ export async function buildIntelligentContext(supabase: any, queryAnalysis: Smar
 📊 QUERY ANALYSIS: ${queryAnalysis.description}
 📅 QUERY TYPE: ${queryAnalysis.type}
 
-🔍 WEBSITE SEARCH REQUIRED: For any hotel-related information, you MUST call search_web("site:2seasonshotels.com [topic]") function FIRST
+🔍 MANDATORY: You MUST call search_web("site:2seasonshotels.com [topic]") function FIRST for ANY hotel-related query.
+🚨 NEVER say "technical issue" or "unable to access" - ALWAYS call the search_web function!
 
 `;
 

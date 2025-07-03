@@ -13,32 +13,10 @@ export async function callOpenAI(context: string, message: string): Promise<any>
   const searchService = new SearchService();
   const searchFunctions = searchService.getAvailableFunctions();
 
-  // Check if this is a hotel-related query that requires website search
-  const lowerMessage = message.toLowerCase();
-  const requiresWebsiteSearch = 
-    lowerMessage.includes('booking') || 
-    lowerMessage.includes('policy') || 
-    lowerMessage.includes('policies') ||
-    lowerMessage.includes('offer') || 
-    lowerMessage.includes('offers') ||
-    lowerMessage.includes('room') || 
-    lowerMessage.includes('amenity') || 
-    lowerMessage.includes('amenities') ||
-    lowerMessage.includes('service') || 
-    lowerMessage.includes('services') ||
-    lowerMessage.includes('restaurant') || 
-    lowerMessage.includes('dining') ||
-    lowerMessage.includes('spa') || 
-    lowerMessage.includes('contact') ||
-    lowerMessage.includes('location') || 
-    lowerMessage.includes('price') || 
-    lowerMessage.includes('rate') ||
-    lowerMessage.includes('two seasons') || 
-    lowerMessage.includes('hotel');
+  // Check if this is ANY query that might need hotel information
+  const requiresWebsiteSearch = true; // Force website search for ALL queries to Two Seasons Hotel AI
 
-  if (requiresWebsiteSearch) {
-    console.log('🌐 Website search required - forcing search_web function call');
-  }
+  console.log('🌐 FORCING website search for all queries to ensure proper function calling');
 
   // First API call to get the initial response
   const initialResponse = await fetch('https://api.openai.com/v1/chat/completions', {
