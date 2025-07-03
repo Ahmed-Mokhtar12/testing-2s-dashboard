@@ -1,7 +1,10 @@
 
+import { WebScraper } from './web-scraper.ts';
+
 export class SearchService {
   private googleApiKey: string;
   private searchEngineId: string;
+  private webScraper: WebScraper;
 
   constructor() {
     const apiKey = Deno.env.get('GOOGLE_API_KEY');
@@ -20,6 +23,7 @@ export class SearchService {
     
     this.googleApiKey = apiKey;
     this.searchEngineId = engineId;
+    this.webScraper = new WebScraper();
     
     console.log('✅ SearchService initialized successfully');
   }
@@ -30,6 +34,27 @@ export class SearchService {
     // Try multiple search strategies for Two Seasons Hotel
     const searchStrategies = this.getSearchStrategies(query);
     
+    // For Two Seasons Hotel queries, try web scraping first
+    if (this.isTwoSeasonsQuery(query)) {
+      console.log('🏨 Two Seasons Hotel query detected, trying web scraping first...');
+      try {
+        const scrapedContent = await this.webScraper.scrapeHotelWebsite();
+        if (scrapedContent && scrapedContent.length > 100) {
+          console.log('✅ Successfully scraped hotel website content');
+          return [{
+            title: 'Two Seasons Hotel - Official Website',
+            snippet: scrapedContent.substring(0, 300) + '...',
+            link: 'https://www.2seasonshotels.com',
+            displayLink: '2seasonshotels.com',
+            fullContent: scrapedContent
+          }];
+        }
+      } catch (scrapeError) {
+        console.log('⚠️ Web scraping failed, falling back to search API:', scrapeError.message);
+      }
+    }
+    
+    // Fallback to Google Search API
     for (let i = 0; i < searchStrategies.length; i++) {
       const strategy = searchStrategies[i];
       console.log(`🎯 Trying search strategy ${i + 1}/${searchStrategies.length}:`, strategy.description);
@@ -51,6 +76,17 @@ export class SearchService {
     
     console.log('📭 All search strategies failed');
     return [];
+  }
+
+  private isTwoSeasonsQuery(query: string): boolean {
+    const lowerQuery = query.toLowerCase();
+    return lowerQuery.includes('site:2seasonshotels.com') || 
+           lowerQuery.includes('two seasons') || 
+           lowerQuery.includes('2seasonshotels') ||
+           lowerQuery.includes('hotel amenities') ||
+           lowerQuery.includes('pool') ||
+           lowerQuery.includes('gym') ||
+           lowerQuery.includes('spa');
   }
 
   private getSearchStrategies(originalQuery: string): Array<{query: string, description: string}> {
@@ -141,7 +177,7 @@ export class SearchService {
   formatSearchResults(results: any[], query: string): string {
     if (results.length === 0) {
       // Provide helpful fallback information for Two Seasons Hotel queries
-      if (query.toLowerCase().includes('two seasons') || query.includes('2seasonshotels.com')) {
+      if (this.isTwoSeasonsQuery(query)) {
         return `🏨 Two Seasons Hotel Information:
 
 While I couldn't find specific search results for "${query}", I can help you with general hotel information:
@@ -176,7 +212,14 @@ Would you like me to help you contact the hotel directly?`;
     
     results.forEach((result, index) => {
       formatted += `${index + 1}. **${result.title}**\n`;
-      formatted += `   ${result.snippet}\n`;
+      
+      // If we have full content from scraping, use it
+      if (result.fullContent) {
+        formatted += `   ${result.fullContent}\n`;
+      } else {
+        formatted += `   ${result.snippet}\n`;
+      }
+      
       formatted += `   Source: ${result.displayLink}\n`;
       formatted += `   Link: ${result.link}\n\n`;
     });
