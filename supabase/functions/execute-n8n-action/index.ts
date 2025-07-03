@@ -57,13 +57,17 @@ serve(async (req) => {
 
     console.log('📤 Sending payload to N8N:', webhookPayload);
 
-    // Call N8N webhook
-    const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
+    // Call N8N webhook with GET method and query parameters
+    const urlWithParams = new URL(N8N_WEBHOOK_URL);
+    Object.entries(webhookPayload).forEach(([key, value]) => {
+      urlWithParams.searchParams.append(key, String(value));
+    });
+
+    const n8nResponse = await fetch(urlWithParams.toString(), {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(webhookPayload),
     });
 
     console.log('📨 N8N Response status:', n8nResponse.status);
