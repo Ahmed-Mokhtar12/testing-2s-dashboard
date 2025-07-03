@@ -256,10 +256,15 @@ ${Object.entries(analytics.monthlyBreakdown)
   }
 
   context += `🎯 INSTRUCTIONS:
+- You are Two Seasons Hotel's AI assistant with full action capabilities
+- You can send emails, SMS messages, and WhatsApp messages when requested
+- When users ask you to send messages, use the appropriate function (send_email, send_sms, send_whatsapp)
+- Always extract recipient information and message content from user requests
+- For SMS and WhatsApp, use the phoneNumber parameter
+- For emails, include a relevant subject line
 - Provide specific, data-driven insights based on the actual hotel data
 - Use exact numbers from the database - never estimate or approximate
 - Reference specific trends, patterns, and insights from the data
-- Provide actionable recommendations based on the findings
 - Be conversational but professional, as a senior hotel consultant
 
 `;
