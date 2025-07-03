@@ -18,8 +18,10 @@ interface ActionRequest {
 // n8n API configuration
 const N8N_BASE_URL = 'https://n8n-2seasons-u38985.vm.elestio.app';
 const N8N_WORKFLOW_ID = '9b5a9d48-7f82-41b1-9028-4b06dd9be790';
+const N8N_API_KEY = Deno.env.get('N8N_API_KEY');
 
 console.log('🔧 N8N Workflow configured:', N8N_WORKFLOW_ID);
+console.log('🔧 N8N API Key configured:', !!N8N_API_KEY);
 
 // Function to execute action using n8n workflow API
 async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
@@ -41,12 +43,19 @@ async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
 
   console.log('📤 Sending workflow execution request:', { workflowUrl, workflowData });
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  // Add authentication if API key is available
+  if (N8N_API_KEY) {
+    headers['Authorization'] = `Bearer ${N8N_API_KEY}`;
+  }
+
   const response = await fetch(workflowUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
+    headers,
     body: JSON.stringify(workflowData),
   });
 
