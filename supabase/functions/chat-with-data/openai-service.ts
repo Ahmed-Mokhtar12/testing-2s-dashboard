@@ -1,193 +1,73 @@
-
-import { SearchService } from './search-service.ts';
-import { UncertaintyManager } from './uncertainty-manager.ts';
-import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
-
-export class OpenAIService {
-  private apiKey: string;
-  private searchService: SearchService;
-  private uncertaintyManager: UncertaintyManager;
-
-  constructor() {
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-    this.apiKey = apiKey;
-    this.searchService = new SearchService();
-    this.uncertaintyManager = new UncertaintyManager();
+export async function callOpenAI(context: string, message: string): Promise<any> {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured');
   }
 
-  async generateResponse(context: string, message: string, availableData?: any): Promise<string> {
-    console.log('🤖 Calling OpenAI API with enhanced database context...');
-    console.log('📏 Context length:', context.length, 'characters');
-    
-    // Log context sample for debugging
-    console.log('📄 Context preview:', context.substring(0, 500) + '...');
+  console.log('🤖 Calling OpenAI with intelligent context and function calling...');
+  console.log(`📏 Context length: ${context.length} characters`);
 
-    // Analyze question clarity and context relevance
-    const clarityAnalysis = this.uncertaintyManager.analyzeQuestionClarity(message);
-    console.log('🔍 Question clarity analysis:', clarityAnalysis);
-
-    let contextAssessment = { confidenceLevel: 'HIGH' as 'HIGH' | 'MEDIUM' | 'LOW' };
-    if (availableData) {
-      contextAssessment = this.uncertaintyManager.assessContextRelevance(availableData, message);
-      console.log('📊 Context relevance assessment:', contextAssessment);
-    }
-
-    // Enhanced system prompt with database access clarity
-    const enhancedContext = `${context}
-
-=== 🎯 FINAL CRITICAL REMINDER ===
-YOU ARE CONNECTED TO TWO SEASONS HOTEL'S DATABASE AND HAVE FULL ACCESS TO:
-- Real hotel guest reviews and ratings
-- Actual staff training records  
-- Historical guest interactions and chat logs
-- Email communications and summaries
-- Document uploads and contextual information
-- Long-term conversation memory
-
-CONFIDENCE LEVEL: ${contextAssessment.confidenceLevel}
-
-RESPOND AS: Senior Hotel Management Consultant with direct database access
-USE: Actual operational data provided above
-AVOID: Claiming you don't have access to hotel systems or data
-
-Current guest/management question: ${message}`;
-
-    const functions = this.searchService.getAvailableFunctions();
-
-    try {
-      const response = await EnhancedErrorHandler.withRetry(async () => {
-        const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4.1-2025-04-14',
-            messages: [
-              { role: 'system', content: enhancedContext },
-              { role: 'user', content: message }
-            ],
-            functions: functions,
-            function_call: "auto",
-            temperature: 0.7,
-            max_tokens: 1200,
-            presence_penalty: 0.1,
-            frequency_penalty: 0.1
-          }),
-        });
-
-        if (!apiResponse.ok) {
-          const errorText = await apiResponse.text();
-          console.error('❌ OpenAI API Error:', apiResponse.status, errorText);
-          
-          // Create specific error for retry logic
-          const error = new Error(`OpenAI API Error: ${apiResponse.status} - ${apiResponse.statusText}`);
-          if (apiResponse.status === 429) {
-            error.message = 'OpenAI API rate limit exceeded';
-          } else if (apiResponse.status >= 500) {
-            error.message = 'OpenAI API server error';
-          }
-          throw error;
-        }
-        
-        return apiResponse;
-      }, 'openai-api-call', { maxRetries: 2, baseDelay: 2000 });
-
-      const data = await response.json();
-      const choice = data.choices[0];
-
-      // Handle function calls
-      if (choice.message.function_call) {
-        console.log('🔧 AI requested function call:', choice.message.function_call);
-        
-        const functionName = choice.message.function_call.name;
-        const functionArgs = JSON.parse(choice.message.function_call.arguments);
-        
-        try {
-          const functionResult = await this.searchService.executeFunction(functionName, functionArgs);
-          console.log('✅ Function executed successfully');
-          
-          // Call OpenAI again with the function result
-          const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json',
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-2025-04-14',
+      messages: [
+        { role: 'system', content: context },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500,
+      functions: [
+        {
+          name: 'send_email',
+          description: 'Send an email to a specified recipient',
+          parameters: {
+            type: 'object',
+            properties: {
+              recipient: { type: 'string', description: 'Email address of the recipient' },
+              subject: { type: 'string', description: 'Subject line of the email' },
+              message: { type: 'string', description: 'Email message content' }
             },
-            body: JSON.stringify({
-              model: 'gpt-4.1-2025-04-14',
-              messages: [
-                { role: 'system', content: enhancedContext },
-                { role: 'user', content: message },
-                { role: 'assistant', content: null, function_call: choice.message.function_call },
-                { role: 'function', name: functionName, content: functionResult }
-              ],
-              temperature: 0.7,
-              max_tokens: 1200,
-              presence_penalty: 0.1,
-              frequency_penalty: 0.1
-            }),
-          });
-
-          if (!followUpResponse.ok) {
-            const errorText = await followUpResponse.text();
-            console.error('❌ OpenAI Follow-up API Error:', followUpResponse.status, errorText);
-            throw new Error(`OpenAI Follow-up API Error: ${followUpResponse.statusText}`);
+            required: ['recipient', 'subject', 'message']
           }
-
-          const followUpData = await followUpResponse.json();
-          const finalResponse = followUpData.choices[0].message.content;
-          
-          console.log('✅ Generated final AI response with function call result');
-          return finalResponse;
-          
-        } catch (functionError) {
-          console.error('❌ Function execution error:', functionError);
-          
-          const errorResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json',
+        },
+        {
+          name: 'send_sms',
+          description: 'Send an SMS to a specified phone number',
+          parameters: {
+            type: 'object',
+            properties: {
+              phoneNumber: { type: 'string', description: 'Phone number to send SMS to' },
+              message: { type: 'string', description: 'SMS message content' }
             },
-            body: JSON.stringify({
-              model: 'gpt-4.1-2025-04-14',
-              messages: [
-                { role: 'system', content: enhancedContext },
-                { role: 'user', content: message },
-                { role: 'system', content: `The search function failed with error: ${functionError.message}. Please respond based on your existing hotel database knowledge and acknowledge that you couldn't access current external information.` }
-              ],
-              temperature: 0.7,
-              max_tokens: 1200
-            }),
-          });
-
-          const errorData = await errorResponse.json();
-          return errorData.choices[0].message.content;
+            required: ['phoneNumber', 'message']
+          }
+        },
+        {
+          name: 'send_whatsapp',
+          description: 'Send a WhatsApp message to a specified phone number',
+          parameters: {
+            type: 'object',
+            properties: {
+              phoneNumber: { type: 'string', description: 'Phone number to send WhatsApp message to' },
+              message: { type: 'string', description: 'WhatsApp message content' }
+            },
+            required: ['phoneNumber', 'message']
+          }
         }
-      }
+      ],
+      function_call: 'auto'
+    }),
+  });
 
-      // No function call needed, return the direct response
-      const aiResponse = choice.message.content;
-      console.log('✅ Generated AI response with database context, length:', aiResponse.length, 'characters');
-      
-      // Log response preview for debugging
-      console.log('📤 AI Response preview:', aiResponse.substring(0, 200) + '...');
-      
-      return aiResponse;
-      
-    } catch (error) {
-      EnhancedErrorHandler.logError(error, 'OpenAI Service', { 
-        contextLength: enhancedContext.length,
-        messageLength: message.length 
-      });
-      
-      // Return user-friendly error message
-      throw new Error(EnhancedErrorHandler.createUserFriendlyMessage(error, 'AI response generation'));
-    }
+  if (!response.ok) {
+    throw new Error(`OpenAI API Error: ${response.statusText}`);
   }
+
+  const data = await response.json();
+  return data.choices[0];
 }

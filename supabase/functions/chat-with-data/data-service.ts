@@ -1,84 +1,60 @@
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
-import { DataStats } from './types.ts';
-
-export class DataService {
-  private supabase;
-
-  constructor() {
-    this.supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-  }
-
-  async fetchAllData() {
-    console.log('📊 Fetching comprehensive hotel data...');
+export async function queryReviewsByDateRange(supabase: any, startDate: string, endDate: string) {
+  console.log(`📊 Querying reviews from ${startDate} to ${endDate}`);
+  
+  const { data: reviews, error } = await supabase
+    .from('Hotel Reviews')
+    .select('*')
+    .gte('Date', startDate)
+    .lte('Date', endDate)
+    .order('Date', { ascending: false });
     
-    const [hotelReviews, chatHistory, infoSummary, conductedTraining, longTermMemory, vectorSearch] = await Promise.allSettled([
-      this.supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(20),
-      this.supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(30),
-      this.supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(20),
-      this.supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(20),
-      this.supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(25),
-      this.supabase.from('N8N_2S').select('*').order('created_at', { ascending: false }).limit(10)
-    ]);
+  return { reviews, error };
+}
 
-    this.logDataStats({
-      hotelReviews,
-      chatHistory,
-      infoSummary,
-      conductedTraining,
-      longTermMemory,
-      vectorSearch
-    });
-
-    return {
-      hotelReviews,
-      chatHistory,
-      infoSummary,
-      conductedTraining,
-      longTermMemory,
-      vectorSearch
-    };
+export async function getAnalyticsData(supabase: any) {
+  console.log('📈 Fetching analytics data...');
+  
+  // Get all reviews for comprehensive analytics
+  const { data: allReviews, error } = await supabase
+    .from('Hotel Reviews')
+    .select('*')
+    .order('Date', { ascending: false });
+    
+  if (error || !allReviews) {
+    return { allReviews: [], error };
   }
-
-  private logDataStats(results: any) {
-    console.log('📈 Hotel Reviews:', results.hotelReviews.status === 'fulfilled' ? `${results.hotelReviews.value.data?.length || 0} records` : results.hotelReviews.reason);
-    console.log('💬 Chat History:', results.chatHistory.status === 'fulfilled' ? `${results.chatHistory.value.data?.length || 0} records` : results.chatHistory.reason);
-    console.log('📧 Info Summary:', results.infoSummary.status === 'fulfilled' ? `${results.infoSummary.value.data?.length || 0} records` : results.infoSummary.reason);
-    console.log('🎓 Conducted Training:', results.conductedTraining.status === 'fulfilled' ? `${results.conductedTraining.value.data?.length || 0} records` : results.conductedTraining.reason);
-    console.log('🧠 Long Term Memory:', results.longTermMemory.status === 'fulfilled' ? `${results.longTermMemory.value.data?.length || 0} records` : results.longTermMemory.reason);
-    console.log('🔍 Vector Search:', results.vectorSearch.status === 'fulfilled' ? `${results.vectorSearch.value.data?.length || 0} records` : results.vectorSearch.reason);
+  
+  // Calculate analytics
+  const analytics = {
+    totalReviews: allReviews.length,
+    averageScore: 0,
+    sourceBreakdown: {} as Record<string, number>,
+    monthlyBreakdown: {} as Record<string, number>,
+    recentTrend: 0
+  };
+  
+  // Calculate average score
+  const reviewsWithScores = allReviews.filter(r => r.Score);
+  if (reviewsWithScores.length > 0) {
+    analytics.averageScore = reviewsWithScores.reduce((sum, r) => sum + r.Score, 0) / reviewsWithScores.length;
   }
-
-  async saveConversation(userMessage: string, aiResponse: string) {
-    try {
-      const memoryResult = await this.supabase.from('LongTermMemory').insert({
-        sender: 'User/Guest',
-        recipient: 'Two Seasons Hotel AI Consultant',
-        message: `👤 User: ${userMessage}\n🤖 Consultant: ${aiResponse}`,
-        created_at: new Date().toISOString()
-      });
-
-      if (memoryResult.error) {
-        console.error('❌ Error saving conversation:', memoryResult.error);
-      } else {
-        console.log('✅ Successfully saved conversation to long-term memory');
-      }
-    } catch (memoryError) {
-      console.error('❌ Failed to save conversation:', memoryError);
+  
+  // Source breakdown
+  allReviews.forEach(review => {
+    const source = review.Source || 'Unknown';
+    analytics.sourceBreakdown[source] = (analytics.sourceBreakdown[source] || 0) + 1;
+  });
+  
+  // Monthly breakdown (last 6 months)
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  allReviews.forEach(review => {
+    if (review.Date && new Date(review.Date) >= sixMonthsAgo) {
+      const monthKey = review.Date.substring(0, 7); // YYYY-MM
+      analytics.monthlyBreakdown[monthKey] = (analytics.monthlyBreakdown[monthKey] || 0) + 1;
     }
-  }
-
-  createDataStats(results: any): DataStats {
-    return {
-      hotelReviews: results.hotelReviews.status === 'fulfilled' ? results.hotelReviews.value.data?.length || 0 : 0,
-      chatHistory: results.chatHistory.status === 'fulfilled' ? results.chatHistory.value.data?.length || 0 : 0,
-      infoSummary: results.infoSummary.status === 'fulfilled' ? results.infoSummary.value.data?.length || 0 : 0,
-      conductedTraining: results.conductedTraining.status === 'fulfilled' ? results.conductedTraining.value.data?.length || 0 : 0,
-      longTermMemory: results.longTermMemory.status === 'fulfilled' ? results.longTermMemory.value.data?.length || 0 : 0,
-      vectorSearch: results.vectorSearch.status === 'fulfilled' ? results.vectorSearch.value.data?.length || 0 : 0
-    };
-  }
+  });
+  
+  return { analytics, allReviews, error: null };
 }

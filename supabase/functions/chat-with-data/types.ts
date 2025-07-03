@@ -1,4 +1,3 @@
-
 export interface ChatRequest {
   message: string;
   messageId: string;
@@ -51,4 +50,14 @@ export interface LongTermMemory extends DatabaseRecord {
 
 export interface VectorSearch extends DatabaseRecord {
   content?: string;
+}
+
+export interface SmartQueryAnalysis {
+  type: 'specific_month' | 'date_range' | 'recent_period' | 'analytics' | 'general';
+  startDate?: string;
+  endDate?: string;
+  month?: string;
+  year?: string;
+  days?: number;
+  description?: string;
 }
