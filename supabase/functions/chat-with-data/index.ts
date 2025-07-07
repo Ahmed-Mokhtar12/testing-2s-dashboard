@@ -8,7 +8,7 @@ import { callOpenAI } from './openai-service.ts';
 import { SearchService } from './search-service.ts';
 import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
 import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
-import { HumanConsultantPersonality } from './human-consultant-personality.ts';
+import { HumanConsultantPersonality } from './human-consultant-personality-refactored.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
