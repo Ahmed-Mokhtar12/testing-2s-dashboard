@@ -289,6 +289,36 @@ export type Database = {
         }
         Relationships: []
       }
+      website_chats: {
+        Row: {
+          ai_response: string | null
+          created_at: string
+          id: string
+          is_archived: boolean
+          session_id: string
+          user_id: string | null
+          user_message: string | null
+        }
+        Insert: {
+          ai_response?: string | null
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          session_id: string
+          user_id?: string | null
+          user_message?: string | null
+        }
+        Update: {
+          ai_response?: string | null
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          session_id?: string
+          user_id?: string | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

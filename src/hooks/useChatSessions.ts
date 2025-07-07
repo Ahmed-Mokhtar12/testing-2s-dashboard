@@ -22,7 +22,7 @@ export const useChatSessions = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('Chat History')
+        .from('website_chats')
         .select('*')
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
@@ -33,14 +33,14 @@ export const useChatSessions = () => {
       const sessionMap = new Map<string, ChatSession>();
       
       data?.forEach((chat) => {
-        const sessionId = chat["Sender Number"] || 'guest';
+        const sessionId = chat.session_id || 'guest';
         const timestamp = new Date(chat.created_at);
         
         if (!sessionMap.has(sessionId)) {
           sessionMap.set(sessionId, {
             id: sessionId,
-            title: chat["Sender Message"]?.substring(0, 50) + '...' || 'New Chat',
-            lastMessage: chat["Ai Reply"]?.substring(0, 100) + '...' || '',
+            title: chat.user_message?.substring(0, 50) + '...' || 'New Chat',
+            lastMessage: chat.ai_response?.substring(0, 100) + '...' || '',
             timestamp,
             messages: []
           });
@@ -49,13 +49,13 @@ export const useChatSessions = () => {
         const session = sessionMap.get(sessionId)!;
         if (timestamp > session.timestamp) {
           session.timestamp = timestamp;
-          session.lastMessage = chat["Ai Reply"]?.substring(0, 100) + '...' || '';
+          session.lastMessage = chat.ai_response?.substring(0, 100) + '...' || '';
         }
         
         session.messages.push({
           id: chat.id,
-          userMessage: chat["Sender Message"],
-          aiReply: chat["Ai Reply"],
+          userMessage: chat.user_message,
+          aiReply: chat.ai_response,
           timestamp
         });
       });
@@ -80,11 +80,11 @@ export const useChatSessions = () => {
       const finalSessionId = sessionId || activeSessionId || createNewSessionId();
       
       const { error } = await supabase
-        .from('Chat History')
+        .from('website_chats')
         .insert({
-          "Sender Message": userMessage,
-          "Ai Reply": aiReply,
-          "Sender Number": finalSessionId,
+          user_message: userMessage,
+          ai_response: aiReply,
+          session_id: finalSessionId,
           created_at: new Date().toISOString()
         });
 
@@ -130,9 +130,9 @@ export const useChatSessions = () => {
   const deleteSession = async (sessionId: string) => {
     try {
       const { error } = await supabase
-        .from('Chat History')
+        .from('website_chats')
         .update({ is_archived: true })
-        .eq('Sender Number', sessionId);
+        .eq('session_id', sessionId);
 
       if (error) throw error;
 
