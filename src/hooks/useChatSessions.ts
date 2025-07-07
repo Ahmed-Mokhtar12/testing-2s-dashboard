@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -71,19 +72,27 @@ export const useChatSessions = () => {
     }
   };
 
-  // Save a chat message to Supabase
+  // Save a chat message to Supabase with proper session ID
   const saveChatMessage = async (userMessage: string, aiReply: string, sessionId?: string) => {
     try {
+      // Use the active session ID or create a new one
+      const finalSessionId = sessionId || activeSessionId || createNewSessionId();
+      
       const { error } = await supabase
         .from('Chat History')
         .insert({
           "Sender Message": userMessage,
           "Ai Reply": aiReply,
-          "Sender Number": sessionId || 'guest',
+          "Sender Number": finalSessionId,
           created_at: new Date().toISOString()
         });
 
       if (error) throw error;
+      
+      // If this is a new session, set it as active
+      if (!activeSessionId) {
+        setActiveSessionId(finalSessionId);
+      }
       
       // Reload sessions to reflect the new message
       await loadChatSessions();
@@ -97,10 +106,15 @@ export const useChatSessions = () => {
     }
   };
 
+  // Create a new session ID
+  const createNewSessionId = () => {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
   // Create a new chat session
   const createNewSession = () => {
-    const newSessionId = `session_${Date.now()}`;
-    setActiveSessionId(null); // Reset to show welcome screen
+    const newSessionId = createNewSessionId();
+    setActiveSessionId(newSessionId);
     return newSessionId;
   };
 
@@ -123,6 +137,7 @@ export const useChatSessions = () => {
     loadChatSessions,
     saveChatMessage,
     createNewSession,
-    selectSession
+    selectSession,
+    createNewSessionId
   };
 };

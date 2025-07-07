@@ -17,13 +17,15 @@ const Index = () => {
     loading,
     saveChatMessage,
     createNewSession,
-    selectSession
+    selectSession,
+    createNewSessionId
   } = useChatSessions();
   
   const {
     messages,
     inputValue,
     isTyping,
+    currentSessionId,
     setInputValue,
     handleFileUpload,
     handleSendMessage,
@@ -33,7 +35,8 @@ const Index = () => {
     clearMessages,
   } = useChat({ 
     onSaveChatMessage: saveChatMessage,
-    activeSessionId 
+    activeSessionId,
+    createNewSessionId
   });
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -44,11 +47,14 @@ const Index = () => {
   };
 
   const startNewChat = () => {
-    createNewSession();
+    // Create new session and clear current messages
+    const newSessionId = createNewSession();
     clearMessages();
+    console.log('Started new chat with session ID:', newSessionId);
   };
 
   const handleSessionSelect = (sessionId: string) => {
+    console.log('Selecting session:', sessionId);
     const sessionMessages = selectSession(sessionId);
     loadSessionMessages(sessionMessages);
   };
@@ -58,7 +64,7 @@ const Index = () => {
       <Sidebar
         sidebarOpen={sidebarOpen}
         chatSessions={chatSessions}
-        activeSessionId={activeSessionId}
+        activeSessionId={activeSessionId || currentSessionId}
         onNewChat={startNewChat}
         onSessionSelect={handleSessionSelect}
       />

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Message } from '@/types/chat';
@@ -19,12 +18,14 @@ import { ActionData } from '@/types/chat';
 interface UseChatProps {
   onSaveChatMessage?: (userMessage: string, aiReply: string, sessionId?: string) => Promise<void>;
   activeSessionId?: string | null;
+  createNewSessionId?: () => string;
 }
 
-export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {}) => {
+export const useChat = ({ onSaveChatMessage, activeSessionId, createNewSessionId }: UseChatProps = {}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(activeSessionId || null);
   const { toast } = useToast();
 
   const handleFileUpload = async (file: File) => {
@@ -69,6 +70,13 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
     setInputValue('');
     setIsTyping(true);
 
+    // Create session ID if this is the first message
+    let sessionId = currentSessionId || activeSessionId;
+    if (!sessionId && createNewSessionId) {
+      sessionId = createNewSessionId();
+      setCurrentSessionId(sessionId);
+    }
+
     try {
       const aiResponseData = await sendMessageToAI(userMessageContent, userMessage.id);
       
@@ -95,13 +103,12 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
       // Save chat message if callback is provided
       if (onSaveChatMessage) {
         const aiReply = typeof aiResponseData === 'string' ? aiResponseData : aiResponseData.response;
-        await onSaveChatMessage(userMessageContent, aiReply || '', activeSessionId || undefined);
+        await onSaveChatMessage(userMessageContent, aiReply || '', sessionId || undefined);
       }
       
     } catch (error) {
       console.error('Error calling edge function:', error);
       
-      // Create enhanced error message based on error type
       let userFriendlyMessage = "I'm unable to answer based on the current data. Please try again.";
       let toastTitle = "Connection Error";
       let toastDescription = "Failed to connect to the AI service. Please try again.";
@@ -134,7 +141,6 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
   };
 
   const handleActionConfirm = async (messageId: string, actionData: ActionData) => {
-    // Update message status to executing
     setMessages(prev => prev.map(msg => 
       msg.id === messageId 
         ? { ...msg, actionStatus: 'executing' as const, actionData }
@@ -142,10 +148,8 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
     ));
 
     try {
-      // Execute the action via N8N webhook
       const result = await executeAction(actionData, messageId);
       
-      // Update message status to completed
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
           ? { ...msg, actionStatus: 'completed' as const }
@@ -167,14 +171,12 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
         messageId
       });
       
-      // Update message status to failed
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
           ? { ...msg, actionStatus: 'failed' as const }
           : msg
       ));
       
-      // Enhanced error message based on error type
       let errorTitle = "Action Failed";
       let errorDescription = `Failed to send ${actionData.type}. Please try again.`;
       
@@ -201,7 +203,6 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
   };
 
   const handleActionCancel = (messageId: string) => {
-    // Remove the action from the message
     setMessages(prev => prev.map(msg => 
       msg.id === messageId 
         ? { ...msg, hasAction: false, actionData: undefined, actionStatus: undefined }
@@ -231,12 +232,14 @@ export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {
   // Function to clear messages for new session
   const clearMessages = () => {
     setMessages([]);
+    setCurrentSessionId(null);
   };
 
   return {
     messages,
     inputValue,
     isTyping,
+    currentSessionId,
     setInputValue,
     handleFileUpload,
     handleSendMessage,
