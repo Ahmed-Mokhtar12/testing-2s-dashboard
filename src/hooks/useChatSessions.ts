@@ -17,13 +17,14 @@ export const useChatSessions = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Load chat sessions from Supabase
+  // Load chat sessions from Supabase (only non-archived)
   const loadChatSessions = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('Chat History')
         .select('*')
+        .eq('is_archived', false)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -125,33 +126,33 @@ export const useChatSessions = () => {
     return session?.messages || [];
   };
 
-  // Delete a chat session
+  // Archive a chat session (soft delete)
   const deleteSession = async (sessionId: string) => {
     try {
       const { error } = await supabase
         .from('Chat History')
-        .delete()
+        .update({ is_archived: true })
         .eq('Sender Number', sessionId);
 
       if (error) throw error;
 
-      // If deleting the active session, clear it
+      // If archiving the active session, clear it
       if (activeSessionId === sessionId) {
         setActiveSessionId(null);
       }
 
-      // Reload sessions to reflect the deletion
+      // Reload sessions to reflect the archiving
       await loadChatSessions();
       
       toast({
         title: "Success",
-        description: "Conversation deleted successfully"
+        description: "Conversation archived successfully"
       });
     } catch (error) {
-      console.error('Error deleting chat session:', error);
+      console.error('Error archiving chat session:', error);
       toast({
         title: "Error",
-        description: "Failed to delete conversation",
+        description: "Failed to archive conversation",
         variant: "destructive"
       });
     }

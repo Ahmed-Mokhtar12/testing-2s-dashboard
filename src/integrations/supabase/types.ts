@@ -19,6 +19,7 @@ export type Database = {
           "Ai Reply": string | null
           created_at: string
           id: number
+          is_archived: boolean
           "Sender Message": string | null
           "Sender Number": string | null
         }
@@ -26,6 +27,7 @@ export type Database = {
           "Ai Reply"?: string | null
           created_at: string
           id?: number
+          is_archived?: boolean
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }
@@ -33,6 +35,7 @@ export type Database = {
           "Ai Reply"?: string | null
           created_at?: string
           id?: number
+          is_archived?: boolean
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }

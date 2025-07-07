@@ -128,15 +128,15 @@ const Sidebar: React.FC<SidebarProps> = ({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogTitle>Archive Conversation</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this conversation? This action cannot be undone.
+              Are you sure you want to archive this conversation? It will be hidden from the sidebar but kept in the database.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
-              Delete
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-orange-600 hover:bg-orange-700">
+              Archive
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
