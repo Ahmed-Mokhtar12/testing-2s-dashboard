@@ -1,10 +1,12 @@
 export class HumanConsultantPersonality {
   
-  static generatePersonalizedSystemPrompt(userHistory?: any[]): string {
-    console.log('👤 Generating personalized consultant personality...');
+  static generatePersonalizedSystemPrompt(userHistory?: any[], currentMessage?: string): string {
+    console.log('👤 Generating personalized consultant personality with conversation context...');
     
-    // Analyze user interaction history for personalization
+    // Enhanced conversation context extraction
     let conversationContext = '';
+    let recentDataPoints = new Map<string, any>();
+    let conversationFlow = '';
     let userPreferences = {
       detailLevel: 'moderate',
       communicationStyle: 'professional',
@@ -12,7 +14,44 @@ export class HumanConsultantPersonality {
     };
 
     if (userHistory && userHistory.length > 0) {
-      const recentMessages = userHistory.slice(-5);
+      const recentMessages = userHistory.slice(-10); // Increased for better context
+      
+      // Extract recent data points and metrics mentioned
+      recentMessages.forEach(msg => {
+        if (msg.message) {
+          const message = msg.message.toLowerCase();
+          
+          // Extract numerical data mentioned (scores, ratings, percentages)
+          const scoreMatches = message.match(/(\d+\.?\d*)\s*(score|rating|average|avg|rate)/g);
+          if (scoreMatches) {
+            scoreMatches.forEach(match => {
+              const value = match.match(/(\d+\.?\d*)/)?.[1];
+              if (value) {
+                recentDataPoints.set('recent_score', value);
+                recentDataPoints.set('score_context', match);
+              }
+            });
+          }
+          
+          // Extract time periods mentioned
+          const timeMatches = message.match(/(january|february|march|april|may|june|july|august|september|october|november|december|\d{4}|last month|this month|recent|latest)/g);
+          if (timeMatches) {
+            recentDataPoints.set('time_period', timeMatches[timeMatches.length - 1]);
+          }
+          
+          // Extract topics of interest
+          const topicKeywords = ['reviews', 'staff', 'service', 'operations', 'guest', 'revenue', 'training', 'satisfaction', 'complaints'];
+          topicKeywords.forEach(keyword => {
+            if (message.includes(keyword)) {
+              const current = recentDataPoints.get('topics') || [];
+              if (!current.includes(keyword)) {
+                current.push(keyword);
+                recentDataPoints.set('topics', current);
+              }
+            }
+          });
+        }
+      });
       
       // Detect communication style preferences
       const hasDetailRequests = recentMessages.some(msg => 
@@ -30,6 +69,25 @@ export class HumanConsultantPersonality {
       if (hasDetailRequests) userPreferences.detailLevel = 'high';
       if (hasCasualTone) userPreferences.communicationStyle = 'friendly';
 
+      // Create conversation flow context
+      if (recentDataPoints.size > 0) {
+        conversationFlow = '\n🧠 RECENT CONVERSATION CONTEXT:\n';
+        
+        if (recentDataPoints.has('recent_score')) {
+          conversationFlow += `- Recently discussed score/rating: ${recentDataPoints.get('recent_score')} (${recentDataPoints.get('score_context')})\n`;
+        }
+        
+        if (recentDataPoints.has('time_period')) {
+          conversationFlow += `- Time period in focus: ${recentDataPoints.get('time_period')}\n`;
+        }
+        
+        if (recentDataPoints.has('topics')) {
+          conversationFlow += `- Topics discussed: ${recentDataPoints.get('topics').join(', ')}\n`;
+        }
+        
+        conversationFlow += '- CRITICAL: Reference these data points when user asks follow-up questions. DO NOT ask for clarification on recently mentioned metrics.\n';
+      }
+
       // Extract focus areas from recent conversations
       const focusKeywords = ['reviews', 'staff', 'service', 'operations', 'guest', 'revenue', 'training'];
       userPreferences.focusAreas = focusKeywords.filter(keyword =>
@@ -40,6 +98,7 @@ export class HumanConsultantPersonality {
     }
 
     const systemPrompt = `You are Marcus Chen, Senior Hotel Management Consultant for Two Seasons Hotel with 15+ years of luxury hospitality experience.
+${conversationFlow}
 
 PERSONALITY & COMMUNICATION:
 - Speak naturally and conversationally, like a trusted advisor
@@ -47,6 +106,7 @@ PERSONALITY & COMMUNICATION:
 - Always assume we're continuing our ongoing conversation
 - Be proactive with insights and recommendations
 - Address operational issues with urgency and expertise
+- NEVER ask for clarification on data points just mentioned in recent conversation
 
 CONSULTANT APPROACH:
 - Think like a hotel GM who cares about every detail
@@ -54,6 +114,7 @@ CONSULTANT APPROACH:
 - Focus on guest experience and revenue optimization
 - Identify problems before they escalate
 - Provide specific, actionable solutions
+- Reference recent conversation context naturally
 
 CONVERSATION STYLE:
 - Continue smoothly from previous context - no formal introductions
@@ -61,15 +122,23 @@ CONVERSATION STYLE:
 - Ask strategic questions: "Have you considered...?"
 - Share quick wins: "Here's what we should tackle first..."
 - Think revenue impact: "This could increase satisfaction by..."
+- Build on recently mentioned data points rather than asking for clarification
 
 ${conversationContext}
 
+CONVERSATION CONTINUITY RULES:
+- If user references data mentioned in recent messages, acknowledge and build on it
+- Never ask "which score/metric are you referring to" if it was just discussed
+- Maintain conversational flow like ChatGPT - intelligent and contextual
+- Connect current questions to recent conversation threads
+- Show you remember what we just talked about
+
 RESPONSE PATTERN:
-1. Quick insight or observation
+1. Quick insight or observation (referencing recent context when relevant)
 2. Specific recommendation with data backing
 3. Next logical question or follow-up action
 
-Remember: You're Marcus, not "an AI." You know this hotel inside and out. You've analyzed every review, every trend, every operational challenge. Speak with that expertise and familiarity.`;
+Remember: You're Marcus, not "an AI." You know this hotel inside and out. You've analyzed every review, every trend, every operational challenge. You REMEMBER our recent conversations and build on them naturally.`;
 
     console.log('✅ Personalized consultant personality generated');
     return systemPrompt;

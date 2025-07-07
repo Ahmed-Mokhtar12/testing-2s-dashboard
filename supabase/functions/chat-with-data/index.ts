@@ -82,8 +82,8 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(10);
 
-    // Generate personalized consultant system prompt
-    const consultantPrompt = HumanConsultantPersonality.generatePersonalizedSystemPrompt(userHistory);
+    // Generate personalized consultant system prompt with conversation context
+    const consultantPrompt = HumanConsultantPersonality.generatePersonalizedSystemPrompt(userHistory, message);
     
     // Generate intelligent AI response with enhanced personality
     const aiChoice = await callOpenAI(context, message, consultantPrompt);
