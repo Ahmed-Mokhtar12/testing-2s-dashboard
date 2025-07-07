@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
@@ -8,7 +9,8 @@ import { callOpenAI } from './openai-service.ts';
 import { SearchService } from './search-service.ts';
 import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
 import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
-import { HumanConsultantPersonality } from './human-consultant-personality-refactored.ts';
+import { ConversationContextAnalyzer } from './conversation-context-analyzer.ts';
+import { SystemPromptBuilder } from './system-prompt-builder.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,8 +84,9 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(10);
 
-    // Generate personalized consultant system prompt with conversation context
-    const consultantPrompt = HumanConsultantPersonality.generatePersonalizedSystemPrompt(userHistory, message);
+    // Analyze conversation context and generate personalized system prompt
+    const conversationData = ConversationContextAnalyzer.analyzeConversationHistory(userHistory);
+    const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData);
     
     // Generate intelligent AI response with enhanced personality
     const aiChoice = await callOpenAI(context, message, consultantPrompt);
