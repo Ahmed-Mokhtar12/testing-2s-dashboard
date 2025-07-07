@@ -1,17 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, LayoutDashboard, LogIn, Settings, Trash2 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 
 interface ChatSession {
   id: string;
@@ -37,21 +26,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSessionSelect,
   onDeleteSession
 }) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
-
   const handleDeleteClick = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSessionToDelete(sessionId);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (sessionToDelete) {
-      onDeleteSession(sessionToDelete);
-      setDeleteDialogOpen(false);
-      setSessionToDelete(null);
-    }
+    onDeleteSession(sessionId);
   };
   return (
     <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 bg-[#1E1E1E] text-white flex flex-col overflow-hidden`}>
@@ -124,23 +101,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Archive Conversation</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to archive this conversation? It will be hidden from the sidebar but kept in the database.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-orange-600 hover:bg-orange-700">
-              Archive
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
