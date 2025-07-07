@@ -9,7 +9,18 @@ export const useSessionManagement = () => {
     const formattedMessages: Message[] = [];
     sessionMessages.forEach((msg) => {
       if (msg.userMessage) {
-        formattedMessages.push(createUserMessage(msg.userMessage));
+        // Handle both old JSON format and new plain text format
+        let userMessageText = msg.userMessage;
+        try {
+          // If it's a JSON string, extract the body
+          if (typeof userMessageText === 'string' && userMessageText.startsWith('{')) {
+            const parsed = JSON.parse(userMessageText);
+            userMessageText = parsed.body || userMessageText;
+          }
+        } catch {
+          // If parsing fails, use the original text
+        }
+        formattedMessages.push(createUserMessage(userMessageText));
       }
       if (msg.aiReply) {
         formattedMessages.push(createAIMessage(msg.aiReply));

@@ -70,7 +70,11 @@ export const useMessageSending = ({
       // Save chat message if callback is provided
       if (onSaveChatMessage) {
         const aiReply = typeof aiResponseData === 'string' ? aiResponseData : aiResponseData.response;
-        await onSaveChatMessage(userMessageContent, aiReply || '', sessionId || undefined);
+        // Ensure we save the actual text content, not any wrapper objects
+        const cleanUserMessage = typeof userMessageContent === 'string' ? userMessageContent : 
+                                typeof userMessageContent === 'object' && userMessageContent && 'body' in userMessageContent ? 
+                                (userMessageContent as any).body : JSON.stringify(userMessageContent);
+        await onSaveChatMessage(cleanUserMessage, aiReply || '', sessionId || undefined);
       }
       
     } catch (error) {
