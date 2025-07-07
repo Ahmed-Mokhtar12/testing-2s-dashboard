@@ -11,6 +11,10 @@ import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
 import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
 import { ConversationContextAnalyzer } from './conversation-context-analyzer.ts';
 import { SystemPromptBuilder } from './system-prompt-builder.ts';
+import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
+import { ConversationSessionManager } from './conversation-session-manager.ts';
+import { PerformanceMonitor } from './performance-monitor.ts';
+import { SmartResponseValidator } from './smart-response-validator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,53 +27,85 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🚀 Intelligent chat-with-data function starting...');
-    const { message, messageId } = await req.json();
+    PerformanceMonitor.startTimer('total_request');
+    console.log('🚀 Enhanced chat-with-data function starting...');
+    const { message, messageId, sessionId } = await req.json();
     
-    console.log('📩 Received message:', message);
+    console.log('📩 Received message:', { message, messageId, sessionId });
 
-    // Initialize Supabase
+    // Initialize Supabase with enhanced error handling
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    if (!Deno.env.get('SUPABASE_URL') || !Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+      throw new Error('Supabase configuration missing');
+    }
+
+    // Enhanced conversation context retrieval with session support
+    console.log('📚 Retrieving conversation history...');
+    const { data: userHistory, error: historyError } = await supabase
+      .from('LongTermMemory')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (historyError) {
+      console.warn('⚠️ Error retrieving conversation history:', historyError);
+    }
+
+    // Enhanced conversation analysis with persistent context
+    const conversationData = ConversationContextAnalyzer.analyzeConversationHistory(userHistory);
+    console.log('🧠 Conversation context:', {
+      dataPoints: conversationData.recentDataPoints.size,
+      focusAreas: conversationData.userPreferences.focusAreas,
+      style: conversationData.userPreferences.communicationStyle
+    });
+
     // Intelligent query analysis
     const queryAnalysis = analyzeQueryIntelligently(message);
     console.log('🧠 Intelligent query analysis:', queryAnalysis);
 
-    // Website-first analysis
-    const websiteAnalysis = WebsiteQueryAnalyzer.analyzeForWebsiteSearch(message);
-    console.log('🌐 Website search analysis:', websiteAnalysis);
-
+    // Enhanced data gathering with conversation context
     let specificData: any = null;
     let context: string;
 
-    // Handle different query types with specific data gathering
+    // Handle different query types with enhanced context
     switch (queryAnalysis.type) {
       case 'specific_month':
       case 'recent_period':
       case 'date_range':
         console.log(`📅 Processing ${queryAnalysis.type} query...`);
-        const { reviews, error } = await queryReviewsByDateRange(
-          supabase, 
-          queryAnalysis.startDate!, 
-          queryAnalysis.endDate!
-        );
-        
-        if (error) throw new Error('Database query failed: ' + error.message);
-        
-        specificData = { reviews };
-        context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
+        try {
+          const { reviews, error } = await queryReviewsByDateRange(
+            supabase, 
+            queryAnalysis.startDate!, 
+            queryAnalysis.endDate!
+          );
+          
+          if (error) throw new Error('Database query failed: ' + error.message);
+          
+          specificData = { reviews };
+          context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
+        } catch (dbError) {
+          console.error('📊 Database query error:', dbError);
+          context = await buildIntelligentContext(supabase, queryAnalysis);
+        }
         break;
         
       case 'analytics':
         console.log('📈 Processing analytics query...');
-        const analyticsResult = await getAnalyticsData(supabase);
-        if (analyticsResult.error) throw new Error('Analytics query failed');
-        
-        specificData = { analytics: analyticsResult.analytics, allReviews: analyticsResult.allReviews };
-        context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
+        try {
+          const analyticsResult = await getAnalyticsData(supabase);
+          if (analyticsResult.error) throw new Error('Analytics query failed');
+          
+          specificData = { analytics: analyticsResult.analytics, allReviews: analyticsResult.allReviews };
+          context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
+        } catch (analyticsError) {
+          console.error('📈 Analytics error:', analyticsError);
+          context = await buildIntelligentContext(supabase, queryAnalysis);
+        }
         break;
         
       default:
@@ -77,33 +113,45 @@ serve(async (req) => {
         context = await buildIntelligentContext(supabase, queryAnalysis);
     }
 
-    // Get user conversation history for personalization
-    const { data: userHistory } = await supabase
-      .from('LongTermMemory')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    // Analyze conversation context and generate personalized system prompt
-    const conversationData = ConversationContextAnalyzer.analyzeConversationHistory(userHistory);
-    const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData);
+    // Build enhanced system prompt with conversation continuity
+    const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData, context);
     
-    // Generate intelligent AI response with enhanced personality
-    const aiChoice = await callOpenAI(context, message, consultantPrompt);
-    console.log('🤖 OpenAI response:', JSON.stringify(aiChoice, null, 2));
+    // Enhanced AI response with conversation context
+    console.log('🤖 Calling OpenAI with enhanced context...');
+    let aiChoice = await callOpenAI(context, message, consultantPrompt);
+    
+    // Validate and enhance response
+    const validationResult = SmartResponseValidator.validateAIResponse(aiChoice, message, conversationData);
+    SmartResponseValidator.logValidationResults(validationResult, {
+      conversationData,
+      userMessage: message,
+      response: aiChoice
+    });
+    
+    // Enhance response if needed
+    if (!validationResult.isValid) {
+      aiChoice = SmartResponseValidator.enhanceResponseIfNeeded(aiChoice, message, conversationData, validationResult);
+    }
+    
+    console.log('🤖 OpenAI response structure:', {
+      hasContent: !!aiChoice.message?.content,
+      hasToolCalls: !!aiChoice.message?.tool_calls,
+      toolCallCount: aiChoice.message?.tool_calls?.length || 0,
+      validationPassed: validationResult.isValid
+    });
     
     let response: any = {
       messageId,
       timestamp: new Date().toISOString(),
-      consultant: 'Two Seasons Hotel AI Consultant (Intelligent)',
-        queryAnalysis: {
-          type: queryAnalysis.type,
-          description: queryAnalysis.description,
-          dataPoints: specificData?.reviews?.length || specificData?.analytics?.totalReviews || 'general',
-          websiteSearchRequired: websiteAnalysis.needsWebsiteSearch,
-          websiteCategory: websiteAnalysis.category,
-          websitePriority: websiteAnalysis.priority
-        }
+      consultant: 'Two Seasons Hotel AI Consultant (Enhanced)',
+      sessionId: sessionId,
+      queryAnalysis: {
+        type: queryAnalysis.type,
+        description: queryAnalysis.description,
+        dataPoints: specificData?.reviews?.length || specificData?.analytics?.totalReviews || 'general',
+        hasConversationContext: conversationData.recentDataPoints.size > 0,
+        communicationStyle: conversationData.userPreferences.communicationStyle
+      }
     };
 
     // Check if AI wants to perform an action
@@ -156,33 +204,49 @@ serve(async (req) => {
       response.response = aiChoice.message?.content || "I'm here to help! How can I assist you today?";
     }
 
-    // Save conversation
-    try {
-      await supabase.from('LongTermMemory').insert({
-        sender: 'User/Guest',
-        recipient: 'Two Seasons Hotel AI Consultant',
-        message: `👤 User: ${message}\n🤖 Consultant: ${response.response}`,
-        created_at: new Date().toISOString()
-      });
-    } catch (saveError) {
-      console.error('⚠️ Failed to save conversation:', saveError);
-    }
+    // Enhanced conversation saving with full context
+    await ConversationSessionManager.saveConversationWithContext(
+      supabase,
+      message,
+      response.response,
+      sessionId,
+      {
+        queryType: queryAnalysis.type,
+        specificData: !!specificData,
+        hasAction: response.hasAction
+      }
+    );
 
-    console.log('✅ Intelligent response generated successfully');
+    // Performance monitoring and health check
+    const totalTime = PerformanceMonitor.endTimer('total_request');
+    const healthStats = PerformanceMonitor.getSystemHealth();
+    
+    console.log('✅ Enhanced response generated successfully');
+    console.log('📊 Request performance:', { totalTime, health: healthStats });
+    
+    // Add performance data to response
+    response.performance = {
+      totalTime,
+      health: healthStats.overallHealth,
+      averageResponseTime: healthStats.averageResponseTime
+    };
+    
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('🚨 Error in intelligent function:', error);
+    // Enhanced error logging with full context
+    EnhancedErrorHandler.logDetailedError(error, {
+      messageId: messageId || 'unknown',
+      sessionId: sessionId || 'unknown',
+      queryType: 'unknown',
+      userHistory: !!userHistory,
+      functionName: 'chat-with-data-main'
+    });
     
-    const errorResponse = {
-      response: `I encountered an issue processing your request: ${error.message}. Please try rephrasing your question.`,
-      messageId: 'error-' + Date.now(),
-      timestamp: new Date().toISOString(),
-      consultant: 'Two Seasons Hotel AI Consultant (Error)',
-      error: true
-    };
+    // Create user-friendly error response
+    const errorResponse = EnhancedErrorHandler.createErrorResponse(error, messageId || 'unknown', message);
     
     return new Response(JSON.stringify(errorResponse), {
       status: 200,

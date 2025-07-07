@@ -13,11 +13,19 @@ export async function callOpenAI(context: string, message: string, consultantPro
   const searchService = new SearchService();
   const searchFunctions = searchService.getAvailableFunctions();
 
-  // Check if this is ANY query that might need hotel information
-  const requiresWebsiteSearch = true; // Force website search for ALL queries to Two Seasons Hotel AI
+  // Smart search decision based on query content
+  const requiresWebsiteSearch = message.toLowerCase().includes('hotel') || 
+                               message.toLowerCase().includes('room') ||
+                               message.toLowerCase().includes('amenities') ||
+                               message.toLowerCase().includes('service') ||
+                               message.toLowerCase().includes('pool') ||
+                               message.toLowerCase().includes('restaurant') ||
+                               message.toLowerCase().includes('booking') ||
+                               message.toLowerCase().includes('price') ||
+                               !consultantPrompt?.includes('recently discussed');
 
-  console.log('🌐 FORCING website search for all queries to ensure proper function calling');
-  console.log('🔧 Using consultant prompt:', consultantPrompt ? 'Yes' : 'No');
+  console.log('🌐 Smart search decision:', { requiresWebsiteSearch, hasConsultantPrompt: !!consultantPrompt });
+  console.log('🔧 Context length:', { context: context.length, prompt: consultantPrompt?.length || 0 });
 
   // First API call to get the initial response
   const initialResponse = await fetch('https://api.openai.com/v1/chat/completions', {
