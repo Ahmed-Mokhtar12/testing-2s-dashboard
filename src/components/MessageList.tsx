@@ -10,9 +10,11 @@ interface MessageListProps {
   isTyping: boolean;
   onActionConfirm?: (messageId: string, actionData: any) => void;
   onActionCancel?: (messageId: string) => void;
+  onRegenerateMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, isTyping, onActionConfirm, onActionCancel }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, isTyping, onActionConfirm, onActionCancel, onRegenerateMessage, onEditMessage }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -34,6 +36,8 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isTyping, onActionC
                 message={message} 
                 onActionConfirm={onActionConfirm}
                 onActionCancel={onActionCancel}
+                onRegenerateMessage={onRegenerateMessage}
+                onEditMessage={onEditMessage}
               />
             ))}
             

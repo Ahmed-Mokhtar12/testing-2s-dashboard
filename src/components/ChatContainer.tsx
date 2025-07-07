@@ -14,6 +14,8 @@ interface ChatContainerProps {
   onFileUpload: (file: File) => void;
   onActionConfirm?: (messageId: string, actionData: any) => void;
   onActionCancel?: (messageId: string) => void;
+  onRegenerateMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
 const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -25,7 +27,9 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   onKeyPress,
   onFileUpload,
   onActionConfirm,
-  onActionCancel
+  onActionCancel,
+  onRegenerateMessage,
+  onEditMessage
 }) => {
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -35,6 +39,8 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           isTyping={isTyping} 
           onActionConfirm={onActionConfirm}
           onActionCancel={onActionCancel}
+          onRegenerateMessage={onRegenerateMessage}
+          onEditMessage={onEditMessage}
         />
       </div>
       <div className="flex-shrink-0">

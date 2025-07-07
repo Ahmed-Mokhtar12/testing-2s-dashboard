@@ -69,6 +69,31 @@ const Index = () => {
     }
   };
 
+  // Handle message regeneration
+  const handleRegenerateMessage = (messageId: string) => {
+    // Find the user message that preceded this AI message
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex > 0) {
+      const userMessage = messages[messageIndex - 1];
+      if (userMessage.isUser) {
+        setInputValue(userMessage.content);
+        handleSendMessage();
+      }
+    }
+  };
+
+  // Handle message editing
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    setInputValue(newContent);
+    // Optionally remove the message and subsequent ones
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex !== -1) {
+      // Remove this message and all subsequent ones
+      const newMessages = messages.slice(0, messageIndex);
+      // You might want to implement a method to update messages in useChat
+    }
+  };
+
   return (
     <div className="h-screen bg-white flex overflow-hidden">
       <Sidebar
@@ -107,6 +132,8 @@ const Index = () => {
               onFileUpload={handleFileUpload}
               onActionConfirm={handleActionConfirm}
               onActionCancel={handleActionCancel}
+              onRegenerateMessage={handleRegenerateMessage}
+              onEditMessage={handleEditMessage}
             />
           )}
         </div>

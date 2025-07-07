@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Send, Mic, Upload } from 'lucide-react';
 interface WelcomeScreenProps {
   inputValue: string;
@@ -19,6 +19,29 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onFileUpload
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [textareaHeight, setTextareaHeight] = useState(60);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 60), 200);
+      textareaRef.current.style.height = `${newHeight}px`;
+      setTextareaHeight(newHeight);
+    }
+  }, [inputValue]);
+
+  // Handle key presses for ChatGPT-style behavior
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (inputValue.trim() && !isTyping) {
+        onSendMessage();
+      }
+    }
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && onFileUpload) {
@@ -62,8 +85,17 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <div className="relative rounded-2xl border-2 border-gray-300 bg-white shadow-lg focus-within:border-[#C8A351] focus-within:ring-2 focus-within:ring-[#C8A351]/20 transition-all">
-              <Input value={inputValue} onChange={e => onInputChange(e.target.value)} onKeyPress={onKeyPress} placeholder="Ask anything about the hotel... like: How can we improve guest reviews?" className="border-0 rounded-2xl resize-none bg-transparent px-6 py-4 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[60px] text-lg" disabled={isTyping} />
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+              <Textarea 
+                ref={textareaRef}
+                value={inputValue} 
+                onChange={e => onInputChange(e.target.value)} 
+                onKeyDown={handleKeyDown}
+                placeholder="Ask anything about the hotel... like: How can we improve guest reviews? (Shift+Enter for new line)" 
+                className="border-0 rounded-2xl resize-none bg-transparent px-6 py-4 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[60px] max-h-[200px] text-lg pr-20 overflow-y-auto" 
+                disabled={isTyping}
+                style={{ height: `${textareaHeight}px` }}
+              />
+              <div className="absolute right-4 flex items-center gap-2" style={{ top: textareaHeight <= 60 ? '50%' : '16px', transform: textareaHeight <= 60 ? 'translateY(-50%)' : 'none' }}>
                 <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#C8A351] transition-colors">
                   <Mic size={18} />
                 </Button>

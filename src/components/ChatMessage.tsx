@@ -1,15 +1,56 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Message, ActionData } from '@/types/chat';
 import ActionConfirmationMessage from './ActionConfirmationMessage';
+import { Button } from '@/components/ui/button';
+import { Copy, RotateCcw, Edit3, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChatMessageProps {
   message: Message;
   onActionConfirm?: (messageId: string, actionData: ActionData) => void;
   onActionCancel?: (messageId: string) => void;
+  onRegenerateMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, onActionConfirm, onActionCancel }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ 
+  message, 
+  onActionConfirm, 
+  onActionCancel, 
+  onRegenerateMessage, 
+  onEditMessage 
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+  const { toast } = useToast();
+
+  // Copy message content
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast({
+        title: "تم النسخ",
+        description: "تم نسخ الرسالة إلى الحافظة",
+      });
+    } catch (err) {
+      toast({
+        title: "خطأ",
+        description: "فشل في نسخ الرسالة",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle edit submit
+  const handleEditSubmit = () => {
+    if (editContent.trim() !== message.content) {
+      onEditMessage?.(message.id, editContent.trim());
+    }
+    setIsEditing(false);
+  };
+
   // Enhanced formatting for text content
   const formatContent = (content: string) => {
     // Add better line breaks and spacing for text
@@ -24,8 +65,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onActionConfirm, onA
   };
 
   return (
-    <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6`}>
-      <div className="flex items-start gap-3 max-w-[85%]">
+    <div 
+      className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6 group`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="flex items-start gap-3 max-w-[85%] relative">
         {!message.isUser && (
           <div className="w-8 h-8 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center flex-shrink-0 mt-1">
             <span className="text-white font-bold text-xs">TS</span>
@@ -57,6 +102,45 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onActionConfirm, onA
                 hour12: true 
               })}
             </div>
+          </div>
+        )}
+
+        {/* Action buttons on hover */}
+        {isHovered && !message.hasAction && (
+          <div className={`absolute ${message.isUser ? 'left-0 -translate-x-2' : 'right-0 translate-x-2'} top-0 flex flex-col gap-1 bg-white shadow-lg rounded-lg p-1 border opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleCopy}
+              className="h-8 w-8 p-0 hover:bg-gray-100"
+              title="نسخ"
+            >
+              <Copy size={14} />
+            </Button>
+            
+            {!message.isUser && onRegenerateMessage && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onRegenerateMessage(message.id)}
+                className="h-8 w-8 p-0 hover:bg-gray-100"
+                title="إعادة إنتاج"
+              >
+                <RotateCcw size={14} />
+              </Button>
+            )}
+            
+            {message.isUser && onEditMessage && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsEditing(true)}
+                className="h-8 w-8 p-0 hover:bg-gray-100"
+                title="تعديل"
+              >
+                <Edit3 size={14} />
+              </Button>
+            )}
           </div>
         )}
 
