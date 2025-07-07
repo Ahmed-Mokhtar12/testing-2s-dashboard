@@ -1,6 +1,6 @@
 import { SearchService } from './search-service.ts';
 
-export async function callOpenAI(context: string, message: string): Promise<any> {
+export async function callOpenAI(context: string, message: string, consultantPrompt?: string): Promise<any> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) {
     throw new Error('OpenAI API key not configured');
@@ -17,6 +17,7 @@ export async function callOpenAI(context: string, message: string): Promise<any>
   const requiresWebsiteSearch = true; // Force website search for ALL queries to Two Seasons Hotel AI
 
   console.log('🌐 FORCING website search for all queries to ensure proper function calling');
+  console.log('🔧 Using consultant prompt:', consultantPrompt ? 'Yes' : 'No');
 
   // First API call to get the initial response
   const initialResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -28,7 +29,7 @@ export async function callOpenAI(context: string, message: string): Promise<any>
     body: JSON.stringify({
       model: 'gpt-4.1-2025-04-14',
       messages: [
-        { role: 'system', content: context },
+        { role: 'system', content: consultantPrompt || context },
         { role: 'user', content: message }
       ],
       temperature: 0.7,
@@ -103,7 +104,7 @@ export async function callOpenAI(context: string, message: string): Promise<any>
   if (choice.message.tool_calls) {
     const toolCalls = choice.message.tool_calls;
     const messages = [
-      { role: 'system', content: context },
+      { role: 'system', content: consultantPrompt || context },
       { role: 'user', content: message },
       choice.message
     ];
@@ -126,7 +127,13 @@ export async function callOpenAI(context: string, message: string): Promise<any>
           });
         } catch (error) {
           console.error(`❌ Error executing ${functionName}:`, error);
-          const errorMessage = `Error searching website: ${error.message}. Please provide available information from database instead.`;
+          console.error(`❌ Full error details:`, {
+            message: error.message,
+            stack: error.stack,
+            functionName,
+            functionArgs
+          });
+          const errorMessage = `⚠️ البحث الإلكتروني غير متاح حالياً. سأقدم لك المعلومات المتوفرة من قاعدة البيانات بدلاً من ذلك.`;
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,

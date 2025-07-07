@@ -10,6 +10,13 @@ export class SearchService {
     const apiKey = Deno.env.get('GOOGLE_API_KEY');
     const engineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
     
+    console.log('🔍 Initializing SearchService with credentials:', {
+      hasApiKey: !!apiKey,
+      hasEngineId: !!engineId,
+      apiKeyLength: apiKey?.length || 0,
+      engineIdLength: engineId?.length || 0
+    });
+    
     if (!apiKey || !engineId) {
       console.error('❌ Missing Google Search credentials:', { hasApiKey: !!apiKey, hasEngineId: !!engineId });
       throw new Error('Google Search API key or Search Engine ID not configured');
@@ -17,7 +24,7 @@ export class SearchService {
     
     // Validate API key format
     if (!apiKey.startsWith('AIza')) {
-      console.error('❌ Invalid Google API key format');
+      console.error('❌ Invalid Google API key format. Key should start with "AIza"');
       throw new Error('Invalid Google API key format');
     }
     
@@ -137,13 +144,15 @@ export class SearchService {
         error: errorText
       });
       
-      // Handle specific error types
+      // Handle specific error types with Arabic user messages
       if (response.status === 403) {
-        throw new Error('Google Search API quota exceeded or invalid credentials');
+        throw new Error('تم تجاوز حد استخدام Google Search API أو أن بيانات الاعتماد غير صحيحة');
       } else if (response.status === 400) {
-        throw new Error('Invalid search query or parameters');
+        throw new Error('استعلام البحث أو المعاملات غير صحيحة');
+      } else if (response.status === 429) {
+        throw new Error('تم تجاوز معدل الطلبات المسموح به، يرجى المحاولة لاحقاً');
       } else {
-        throw new Error(`Google Search API Error: ${response.statusText}`);
+        throw new Error(`خطأ في Google Search API: ${response.statusText}`);
       }
     }
 
@@ -178,37 +187,37 @@ export class SearchService {
     if (results.length === 0) {
       // Provide helpful fallback information for Two Seasons Hotel queries
       if (this.isTwoSeasonsQuery(query)) {
-        return `🏨 Two Seasons Hotel Information:
+        return `🏨 معلومات فندق Two Seasons:
 
-While I couldn't find specific search results for "${query}", I can help you with general hotel information:
+⚠️ لم أتمكن من العثور على نتائج بحث محددة لـ "${query}" في الوقت الحالي، ولكن يمكنني مساعدتك بالمعلومات العامة عن الفندق:
 
-📞 **Contact Information:**
-- For current rates and availability, please contact the hotel directly
-- Visit the official website: www.2seasonshotels.com
-- Call or email for immediate assistance
+📞 **معلومات الاتصال:**
+- للحصول على أسعار وتوفر حديثة، يرجى الاتصال بالفندق مباشرة
+- زيارة الموقع الرسمي: www.2seasonshotels.com
+- الاتصال أو إرسال بريد إلكتروني للمساعدة الفورية
 
-🏨 **Typical Hotel Services:**
-- Accommodation and room bookings
-- Restaurant and dining services
-- Meeting and event facilities
-- Guest amenities and services
+🏨 **خدمات الفندق العامة:**
+- الإقامة وحجز الغرف
+- المطاعم وخدمات الطعام
+- مرافق الاجتماعات والفعاليات
+- وسائل الراحة وخدمات الضيوف
 
-📋 **For Specific Information:**
-- Room types and rates: Contact hotel reservations
-- Dining options: Check restaurant hours and menus
-- Amenities: Pool, gym, spa services availability
-- Policies: Cancellation, check-in/out times
+📋 **للحصول على معلومات محددة:**
+- أنواع الغرف والأسعار: اتصل بقسم الحجوزات
+- خيارات الطعام: تحقق من ساعات وقوائم المطاعم
+- المرافق: توفر خدمات المسبح والجيم والسبا
+- السياسات: الإلغاء وأوقات تسجيل الوصول/المغادرة
 
-💡 **Booking Assistance:**
-I can help you send an email or message to the hotel for specific inquiries about rates, availability, or services.
+💡 **مساعدة في الحجز:**
+يمكنني مساعدتك في إرسال بريد إلكتروني أو رسالة للفندق للاستفسارات المحددة حول الأسعار أو التوفر أو الخدمات.
 
-Would you like me to help you contact the hotel directly?`;
+هل تريد مني مساعدتك في الاتصال بالفندق مباشرة؟`;
       }
       
-      return `No search results found for "${query}".`;
+      return `لم يتم العثور على نتائج بحث لـ "${query}". ⚠️ خدمة البحث غير متاحة حالياً.`;
     }
 
-    let formatted = `🔍 Search Results for "${query}" (${results.length} results):\n\n`;
+    let formatted = `🔍 نتائج البحث لـ "${query}" (${results.length} نتائج):\n\n`;
     
     results.forEach((result, index) => {
       formatted += `${index + 1}. **${result.title}**\n`;
@@ -220,8 +229,8 @@ Would you like me to help you contact the hotel directly?`;
         formatted += `   ${result.snippet}\n`;
       }
       
-      formatted += `   Source: ${result.displayLink}\n`;
-      formatted += `   Link: ${result.link}\n\n`;
+      formatted += `   المصدر: ${result.displayLink}\n`;
+      formatted += `   الرابط: ${result.link}\n\n`;
     });
 
     return formatted;
@@ -261,26 +270,32 @@ Would you like me to help you contact the hotel directly?`;
   }
 
   async executeFunction(functionName: string, args: any): Promise<string> {
-    console.log('🛠️ Executing function:', functionName, 'with args:', args);
+    console.log('🛠️ تنفيذ الوظيفة:', functionName, 'مع المعاملات:', args);
     
     try {
       switch (functionName) {
         case 'search_web':
+          console.log('🔍 بدء البحث على الويب...');
           const results = await this.searchWeb(args.query, args.num_results || 5);
           const formattedResults = this.formatSearchResults(results, args.query);
           
           // Log successful search
-          console.log('✅ Search completed:', {
+          console.log('✅ اكتمل البحث:', {
             query: args.query,
             resultCount: results.length,
-            hasContent: formattedResults.length > 100
+            hasContent: formattedResults.length > 100,
+            searchSuccessful: results.length > 0
           });
+          
+          if (results.length === 0) {
+            console.log('⚠️ لم يتم العثور على نتائج بحث');
+          }
           
           return formattedResults;
           
         case 'get_current_datetime':
           const currentTime = this.getCurrentDateTime();
-          return `Current date and time: ${currentTime}`;
+          return `التاريخ والوقت الحالي: ${currentTime}`;
           
         default:
           throw new Error(`Unknown function: ${functionName}`);
@@ -295,6 +310,7 @@ Would you like me to help you contact the hotel directly?`;
       
       // For search_web failures, provide helpful fallback
       if (functionName === 'search_web') {
+        console.log('🔄 استخدام الاحتياطي بعد فشل البحث');
         return this.formatSearchResults([], args.query);
       }
       
