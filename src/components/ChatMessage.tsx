@@ -21,7 +21,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   onRegenerateMessage, 
   onEditMessage 
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const { toast } = useToast();
@@ -65,11 +64,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   };
 
   return (
-    <div 
-      className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6 group`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6`}>
       <div className="flex items-start gap-3 max-w-[85%] relative">
         {!message.isUser && (
           <div className="w-8 h-8 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center flex-shrink-0 mt-1">
@@ -105,44 +100,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         )}
 
-        {/* Action buttons on hover */}
-        {isHovered && !message.hasAction && (
-          <div className={`absolute ${message.isUser ? 'left-0 -translate-x-2' : 'right-0 translate-x-2'} top-0 flex flex-col gap-1 bg-white shadow-lg rounded-lg p-1 border opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleCopy}
-              className="h-8 w-8 p-0 hover:bg-gray-100"
-              title="نسخ"
-            >
-              <Copy size={14} />
-            </Button>
-            
-            {!message.isUser && onRegenerateMessage && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onRegenerateMessage(message.id)}
-                className="h-8 w-8 p-0 hover:bg-gray-100"
-                title="إعادة إنتاج"
-              >
-                <RotateCcw size={14} />
-              </Button>
-            )}
-            
-            {message.isUser && onEditMessage && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setIsEditing(true)}
-                className="h-8 w-8 p-0 hover:bg-gray-100"
-                title="تعديل"
-              >
-                <Edit3 size={14} />
-              </Button>
-            )}
-          </div>
-        )}
 
         {message.isUser && (
           <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
