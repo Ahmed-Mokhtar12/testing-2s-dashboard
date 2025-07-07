@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, LayoutDashboard, LogIn, Settings } from 'lucide-react';
+import { Plus, LayoutDashboard, LogIn, Settings, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface ChatSession {
   id: string;
@@ -15,6 +26,7 @@ interface SidebarProps {
   activeSessionId: string | null;
   onNewChat: () => void;
   onSessionSelect: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -22,8 +34,25 @@ const Sidebar: React.FC<SidebarProps> = ({
   chatSessions,
   activeSessionId,
   onNewChat,
-  onSessionSelect
+  onSessionSelect,
+  onDeleteSession
 }) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+
+  const handleDeleteClick = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessionToDelete(sessionId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (sessionToDelete) {
+      onDeleteSession(sessionToDelete);
+      setDeleteDialogOpen(false);
+      setSessionToDelete(null);
+    }
+  };
   return (
     <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 bg-[#1E1E1E] text-white flex flex-col overflow-hidden`}>
       {/* Sidebar Header */}
@@ -62,15 +91,25 @@ const Sidebar: React.FC<SidebarProps> = ({
           {chatSessions.map((session) => (
             <div
               key={session.id}
-              className={`p-3 rounded-lg cursor-pointer transition-colors ${
+              className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
                 activeSessionId === session.id 
                   ? 'bg-gray-700' 
                   : 'hover:bg-gray-800'
               }`}
               onClick={() => onSessionSelect(session.id)}
             >
-              <div className="text-sm font-medium truncate">{session.title}</div>
-              <div className="text-xs text-gray-400 truncate">{session.lastMessage}</div>
+              <div className="text-sm font-medium truncate pr-8">{session.title}</div>
+              <div className="text-xs text-gray-400 truncate pr-8">{session.lastMessage}</div>
+              
+              {/* Delete Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-auto w-auto text-gray-400 hover:text-red-400 hover:bg-red-400/10"
+                onClick={(e) => handleDeleteClick(session.id, e)}
+              >
+                <Trash2 size={14} />
+              </Button>
             </div>
           ))}
         </div>
@@ -84,6 +123,24 @@ const Sidebar: React.FC<SidebarProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

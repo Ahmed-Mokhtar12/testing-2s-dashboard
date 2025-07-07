@@ -125,6 +125,38 @@ export const useChatSessions = () => {
     return session?.messages || [];
   };
 
+  // Delete a chat session
+  const deleteSession = async (sessionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('Chat History')
+        .delete()
+        .eq('Sender Number', sessionId);
+
+      if (error) throw error;
+
+      // If deleting the active session, clear it
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null);
+      }
+
+      // Reload sessions to reflect the deletion
+      await loadChatSessions();
+      
+      toast({
+        title: "Success",
+        description: "Conversation deleted successfully"
+      });
+    } catch (error) {
+      console.error('Error deleting chat session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete conversation",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Load chat sessions on mount
   useEffect(() => {
     loadChatSessions();
@@ -138,6 +170,7 @@ export const useChatSessions = () => {
     saveChatMessage,
     createNewSession,
     selectSession,
+    deleteSession,
     createNewSessionId
   };
 };

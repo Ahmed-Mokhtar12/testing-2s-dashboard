@@ -18,6 +18,7 @@ const Index = () => {
     saveChatMessage,
     createNewSession,
     selectSession,
+    deleteSession,
     createNewSessionId
   } = useChatSessions();
   
@@ -59,6 +60,15 @@ const Index = () => {
     loadSessionMessages(sessionMessages);
   };
 
+  const handleDeleteSession = (sessionId: string) => {
+    console.log('Deleting session:', sessionId);
+    deleteSession(sessionId);
+    // If the deleted session was active, clear messages
+    if (activeSessionId === sessionId || currentSessionId === sessionId) {
+      clearMessages();
+    }
+  };
+
   return (
     <div className="h-screen bg-white flex overflow-hidden">
       <Sidebar
@@ -67,6 +77,7 @@ const Index = () => {
         activeSessionId={activeSessionId || currentSessionId}
         onNewChat={startNewChat}
         onSessionSelect={handleSessionSelect}
+        onDeleteSession={handleDeleteSession}
       />
 
       <div className="flex-1 flex flex-col h-screen">
