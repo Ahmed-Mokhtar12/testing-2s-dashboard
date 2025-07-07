@@ -6,19 +6,19 @@ import ChatContainer from '@/components/ChatContainer';
 import ChatHeader from '@/components/ChatHeader';
 import ChatFooter from '@/components/ChatFooter';
 import { useChat } from '@/hooks/useChat';
-
-interface ChatSession {
-  id: string;
-  title: string;
-  lastMessage: string;
-  timestamp: Date;
-  messages: any[];
-}
+import { useChatSessions } from '@/hooks/useChatSessions';
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  
+  const {
+    chatSessions,
+    activeSessionId,
+    loading,
+    saveChatMessage,
+    createNewSession,
+    selectSession
+  } = useChatSessions();
   
   const {
     messages,
@@ -29,7 +29,12 @@ const Index = () => {
     handleSendMessage,
     handleActionConfirm,
     handleActionCancel,
-  } = useChat();
+    loadSessionMessages,
+    clearMessages,
+  } = useChat({ 
+    onSaveChatMessage: saveChatMessage,
+    activeSessionId 
+  });
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -39,11 +44,13 @@ const Index = () => {
   };
 
   const startNewChat = () => {
-    setActiveSessionId(null);
+    createNewSession();
+    clearMessages();
   };
 
   const handleSessionSelect = (sessionId: string) => {
-    setActiveSessionId(sessionId);
+    const sessionMessages = selectSession(sessionId);
+    loadSessionMessages(sessionMessages);
   };
 
   return (

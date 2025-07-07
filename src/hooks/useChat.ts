@@ -16,7 +16,12 @@ import {
 } from '@/utils/messageSender';
 import { ActionData } from '@/types/chat';
 
-export const useChat = () => {
+interface UseChatProps {
+  onSaveChatMessage?: (userMessage: string, aiReply: string, sessionId?: string) => Promise<void>;
+  activeSessionId?: string | null;
+}
+
+export const useChat = ({ onSaveChatMessage, activeSessionId }: UseChatProps = {}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -86,6 +91,12 @@ export const useChat = () => {
       }
       
       setMessages(prev => [...prev, aiMessage]);
+      
+      // Save chat message if callback is provided
+      if (onSaveChatMessage) {
+        const aiReply = typeof aiResponseData === 'string' ? aiResponseData : aiResponseData.response;
+        await onSaveChatMessage(userMessageContent, aiReply || '', activeSessionId || undefined);
+      }
       
     } catch (error) {
       console.error('Error calling edge function:', error);
@@ -203,6 +214,25 @@ export const useChat = () => {
     });
   };
 
+  // Function to load session messages
+  const loadSessionMessages = (sessionMessages: any[]) => {
+    const formattedMessages: Message[] = [];
+    sessionMessages.forEach((msg) => {
+      if (msg.userMessage) {
+        formattedMessages.push(createUserMessage(msg.userMessage));
+      }
+      if (msg.aiReply) {
+        formattedMessages.push(createAIMessage(msg.aiReply));
+      }
+    });
+    setMessages(formattedMessages);
+  };
+
+  // Function to clear messages for new session
+  const clearMessages = () => {
+    setMessages([]);
+  };
+
   return {
     messages,
     inputValue,
@@ -212,5 +242,7 @@ export const useChat = () => {
     handleSendMessage,
     handleActionConfirm,
     handleActionCancel,
+    loadSessionMessages,
+    clearMessages,
   };
 };
