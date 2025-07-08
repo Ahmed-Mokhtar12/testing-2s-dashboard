@@ -91,6 +91,24 @@ serve(async (req) => {
       recentDocuments
     };
 
+    // Get query-specific data based on analysis
+    let specificData = null;
+    try {
+      if (queryAnalysis.type === 'review_summary' || queryAnalysis.type === 'monthly_data') {
+        const reviewData = hotelReviews.status === 'fulfilled' ? hotelReviews.value.data || [] : [];
+        specificData = {
+          reviews: reviewData,
+          analytics: {
+            totalReviews: reviewData.length,
+            averageScore: reviewData.filter(r => r.Score).reduce((sum, r) => sum + r.Score, 0) / reviewData.filter(r => r.Score).length || 0
+          }
+        };
+      }
+    } catch (error) {
+      console.warn('⚠️ Error processing specific data:', error);
+      specificData = { reviews: [], analytics: { totalReviews: 0, averageScore: 0 } };
+    }
+
     // Build enhanced context using the enhanced context builder
     const enhancedContextBuilder = new EnhancedContextBuilder();
     const context = enhancedContextBuilder.buildContextWithDocuments(allData, message);
