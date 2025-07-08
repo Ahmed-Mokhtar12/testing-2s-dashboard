@@ -23,13 +23,18 @@ export class ConversationContextAnalyzer {
     let conversationContext = '';
 
     if (userHistory && userHistory.length > 0) {
-      const recentMessages = userHistory.slice(-10);
+      const recentExchanges = userHistory.slice(-5); // Last 5 conversation exchanges
       
-      // Enhanced data point extraction with conversation memory
-      recentMessages.forEach((msg, index) => {
-        if (msg.message) {
-          const message = msg.message.toLowerCase();
-          const isRecent = index < 5; // Last 5 messages are most recent
+      // Enhanced data point extraction with conversation memory from website_chats
+      recentExchanges.forEach((exchange, index) => {
+        // Process both user message and AI response for complete context
+        const messagesToProcess = [];
+        if (exchange.user_message) messagesToProcess.push(exchange.user_message);
+        if (exchange.ai_response) messagesToProcess.push(exchange.ai_response);
+        
+        messagesToProcess.forEach(messageText => {
+          const message = messageText.toLowerCase();
+          const isRecent = index < 3; // Last 3 exchanges are most recent
           
           // Extract numerical data mentioned (scores, ratings, percentages)
           const scoreMatches = message.match(/(\d+\.?\d*)\s*(score|rating|average|avg|rate|\/5|out of)/g);
@@ -100,17 +105,18 @@ export class ConversationContextAnalyzer {
         }
       });
       
-      // Detect communication style preferences
-      const hasDetailRequests = recentMessages.some(msg => 
-        msg.message?.toLowerCase().includes('detail') || 
-        msg.message?.toLowerCase().includes('specific') ||
-        msg.message?.toLowerCase().includes('analyze')
+      // Detect communication style preferences from website_chats structure
+      const hasDetailRequests = recentExchanges.some(exchange => 
+        exchange.user_message?.toLowerCase().includes('detail') || 
+        exchange.user_message?.toLowerCase().includes('specific') ||
+        exchange.user_message?.toLowerCase().includes('analyze') ||
+        exchange.ai_response?.toLowerCase().includes('detailed analysis')
       );
       
-      const hasCasualTone = recentMessages.some(msg =>
-        msg.message?.toLowerCase().includes('thanks') ||
-        msg.message?.toLowerCase().includes('great') ||
-        msg.message?.length < 50
+      const hasCasualTone = recentExchanges.some(exchange =>
+        exchange.user_message?.toLowerCase().includes('thanks') ||
+        exchange.user_message?.toLowerCase().includes('great') ||
+        (exchange.user_message?.length || 0) < 50
       );
 
       if (hasDetailRequests) userPreferences.detailLevel = 'high';

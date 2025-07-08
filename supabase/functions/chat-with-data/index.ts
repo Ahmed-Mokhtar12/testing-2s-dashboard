@@ -44,12 +44,14 @@ serve(async (req) => {
     }
 
     // Enhanced conversation context retrieval with session support
-    console.log('📚 Retrieving conversation history...');
+    console.log('📚 Retrieving conversation history for session:', sessionId);
     const { data: userHistory, error: historyError } = await supabase
-      .from('LongTermMemory')
+      .from('website_chats')
       .select('*')
+      .eq('session_id', sessionId || 'guest')
+      .eq('is_archived', false)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(10); // Last 5 exchanges (user + AI pairs)
 
     if (historyError) {
       console.warn('⚠️ Error retrieving conversation history:', historyError);
