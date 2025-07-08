@@ -50,7 +50,16 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           onInputChange={onInputChange}
           onSendMessage={onSendMessage}
           onKeyPress={onKeyPress}
-          onFileUpload={onFileUpload}
+          onSendWithFiles={(message, files) => {
+            // Handle files with message
+            if (files.length > 0) {
+              // Process files one by one for now
+              files.forEach(file => onFileUpload(file));
+            }
+            if (message.trim()) {
+              onSendMessage();
+            }
+          }}
         />
       </div>
     </div>

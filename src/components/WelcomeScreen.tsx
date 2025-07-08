@@ -1,7 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Send, Mic, Upload } from 'lucide-react';
+import React from 'react';
+import InputBar from './InputBar';
+
 interface WelcomeScreenProps {
   inputValue: string;
   isTyping: boolean;
@@ -18,43 +17,6 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onKeyPress,
   onFileUpload
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [textareaHeight, setTextareaHeight] = useState(60);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 60), 200);
-      textareaRef.current.style.height = `${newHeight}px`;
-      setTextareaHeight(newHeight);
-    }
-  }, [inputValue]);
-
-  // Handle key presses for ChatGPT-style behavior
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (inputValue.trim() && !isTyping) {
-        onSendMessage();
-      }
-    }
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && onFileUpload) {
-      onFileUpload(file);
-    }
-    // Reset the input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
-  };
   return <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="text-center max-w-3xl mb-8">
         <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg overflow-hidden">
@@ -82,45 +44,28 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       
       
       <div className="w-full max-w-4xl">
-        <div className="flex items-end space-x-3">
-          <div className="flex-1 relative">
-            <div className="relative rounded-2xl border-2 border-gray-300 bg-white shadow-lg focus-within:border-[#C8A351] focus-within:ring-2 focus-within:ring-[#C8A351]/20 transition-all">
-              <Textarea 
-                ref={textareaRef}
-                value={inputValue} 
-                onChange={e => onInputChange(e.target.value)} 
-                onKeyDown={handleKeyDown}
-                placeholder="Ask anything about the hotel... like: How can we improve guest reviews? (Shift+Enter for new line)" 
-                className="border-0 rounded-2xl resize-none bg-transparent px-6 py-4 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[60px] max-h-[200px] text-lg pr-20 overflow-y-auto" 
-                disabled={isTyping}
-                style={{ height: `${textareaHeight}px` }}
-              />
-              <div className="absolute right-4 flex items-center gap-2" style={{ top: textareaHeight <= 60 ? '50%' : '16px', transform: textareaHeight <= 60 ? 'translateY(-50%)' : 'none' }}>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#C8A351] transition-colors">
-                  <Mic size={18} />
-                </Button>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#C8A351] transition-colors" onClick={triggerFileUpload} disabled={isTyping}>
-                  <Upload size={18} />
-                </Button>
-              </div>
-            </div>
-          </div>
-          <Button onClick={onSendMessage} disabled={!inputValue.trim() || isTyping} className="rounded-2xl px-8 py-4 bg-gradient-to-r from-[#C8A351] to-[#B8934A] hover:from-[#B8934A] hover:to-[#A8834A] text-white font-medium transition-all shadow-lg hover:shadow-xl transform hover:scale-105 min-h-[60px]">
-            {isTyping ? <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Thinking...</span>
-              </div> : <Send size={18} />}
-          </Button>
-        </div>
+        <InputBar
+          inputValue={inputValue}
+          isTyping={isTyping}
+          onInputChange={onInputChange}
+          onSendMessage={onSendMessage}
+          onKeyPress={onKeyPress}
+          onSendWithFiles={(message, files) => {
+            // Handle files with message
+            if (files.length > 0) {
+              // Process files one by one for now
+              files.forEach(file => onFileUpload?.(file));
+            }
+            if (message.trim()) {
+              onSendMessage();
+            }
+          }}
+        />
         
         <div className="mt-4 text-center text-sm text-gray-500">
-          💡 Tip: You can ask about review analysis, operations improvement, marketing strategies, or any hotel management inquiry
+          💡 Tip: You can ask about review analysis, operations improvement, marketing strategies, or any hotel management inquiry. You can also attach documents!
         </div>
       </div>
-
-      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif" style={{
-      display: 'none'
-    }} />
     </div>;
 };
 export default WelcomeScreen;
