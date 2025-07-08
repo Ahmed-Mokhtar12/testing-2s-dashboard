@@ -96,11 +96,16 @@ serve(async (req) => {
     try {
       if (queryAnalysis.type === 'review_summary' || queryAnalysis.type === 'monthly_data') {
         const reviewData = hotelReviews.status === 'fulfilled' ? hotelReviews.value.data || [] : [];
+        // Import scoring utilities for accurate analysis
+        const { ScoreNormalizationUtils } = await import('./score-normalization-utils.ts');
+        const scoringData = ScoreNormalizationUtils.calculateNormalizedAverage(reviewData);
+        
         specificData = {
           reviews: reviewData,
           analytics: {
             totalReviews: reviewData.length,
-            averageScore: reviewData.filter(r => r.Score).reduce((sum, r) => sum + r.Score, 0) / reviewData.filter(r => r.Score).length || 0
+            averageScore: reviewData.filter(r => r.Score).reduce((sum, r) => sum + r.Score, 0) / reviewData.filter(r => r.Score).length || 0,
+            normalizedData: scoringData
           }
         };
       }

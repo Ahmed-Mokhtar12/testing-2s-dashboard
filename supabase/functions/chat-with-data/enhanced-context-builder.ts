@@ -1,6 +1,7 @@
 import { ReviewAnalysisUtils } from './review-analysis-utils.ts';
 import { ContextDataStatsBuilder } from './context-data-stats-builder.ts';
 import { ContextSectionBuilder } from './context-section-builder.ts';
+import { ScoreNormalizationUtils } from './score-normalization-utils.ts';
 
 export class EnhancedContextBuilder {
   buildContextWithDocuments(data: any, userMessage: string): string {
@@ -95,10 +96,10 @@ export class EnhancedContextBuilder {
       contextSections.push(`   • Total historical reviews: ${allReviews.length}`);
     }
     
-    // Calculate average score if available
+    // Enhanced scoring analysis with normalization
     if (reviewsWithScores.length > 0) {
-      const avgScore = reviewsWithScores.reduce((sum: number, review: any) => sum + review.Score, 0) / reviewsWithScores.length;
-      contextSections.push(`📊 AVERAGE REVIEW SCORE: ${avgScore.toFixed(1)}/5 (based on ${reviewsWithScores.length} scored reviews)`);
+      const scoringContext = ScoreNormalizationUtils.generateScoringContext(allReviews);
+      contextSections.push(scoringContext);
     }
     
     // Show sample reviews

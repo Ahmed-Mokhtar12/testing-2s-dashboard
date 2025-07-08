@@ -1,6 +1,7 @@
 import { QueryAnalysis } from './query-analyzer.ts';
 import { ReviewAnalysisUtils } from './review-analysis-utils.ts';
 import { ContextLengthManager } from './context-length-manager.ts';
+import { ScoreNormalizationUtils } from './score-normalization-utils.ts';
 
 export class SmartContextBuilder {
   buildOptimizedContext(data: any, queryAnalysis: QueryAnalysis, userMessage: string): string {
@@ -143,8 +144,9 @@ export class SmartContextBuilder {
       sections.push(`📊 Total Reviews: ${allReviews.length}`);
       
       if (reviewsWithScores.length > 0) {
-        const avgScore = reviewsWithScores.reduce((sum: number, review: any) => sum + review.Score, 0) / reviewsWithScores.length;
-        sections.push(`📊 Average Score: ${avgScore.toFixed(1)}/5`);
+        const scoringData = ScoreNormalizationUtils.calculateNormalizedAverage(allReviews);
+        sections.push(`📊 Normalized Average Score: ${scoringData.normalizedAverage}/5`);
+        sections.push(`🎯 Cross-platform normalized scoring ensures accurate comparisons`);
       }
       
       // Source breakdown
