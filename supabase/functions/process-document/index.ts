@@ -20,25 +20,28 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Health check endpoint
-  const body = await req.json().catch(() => ({}));
-  if (body.health === 'check') {
-    return new Response(JSON.stringify({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      service: 'process-document'
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
+    // Parse request body once
+    const body = await req.json().catch(() => ({}));
+    
+    // Health check endpoint
+    if (body.health === 'check') {
+      console.log('🔍 Health check requested');
+      return new Response(JSON.stringify({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        service: 'process-document'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { documentId, sessionId }: DocumentProcessingRequest = body.documentId ? body : await req.json();
+    const { documentId, sessionId }: DocumentProcessingRequest = body;
     console.log('🔄 Processing document:', documentId);
 
     // Update document status to processing
@@ -176,9 +179,17 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Error processing document:', error);
     
-    // Update document status to failed if we have documentId
-    const { documentId: docIdFromBody } = await req.json().catch(() => ({ documentId: null }));
-    const finalDocumentId = documentId || docIdFromBody;
+    // Try to get documentId from the already parsed body or request
+    let finalDocumentId = 'unknown';
+    try {
+      // If we have body from earlier parsing, try to get documentId from it
+      const bodyFromError = await req.json().catch(() => null);
+      if (bodyFromError && bodyFromError.documentId) {
+        finalDocumentId = bodyFromError.documentId;
+      }
+    } catch {
+      // If parsing fails, continue with unknown documentId
+    }
     
     if (finalDocumentId) {
       try {
