@@ -1,6 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/chat';
+import { ClientSideDocumentProcessor, ProcessingProgress } from './clientSideDocumentProcessor';
 
 export const createEnhancedFileUploadMessage = (file: File): Message => {
   const getFileTypeDescription = (type: string, name: string) => {
@@ -36,139 +37,67 @@ Please wait while I analyze and process your document.`,
   };
 };
 
-export const processFileUpload = async (file: File): Promise<Message> => {
+export const processFileUpload = async (
+  file: File, 
+  sessionId?: string,
+  onProgress?: (progress: ProcessingProgress) => void
+): Promise<Message> => {
+  console.log('📎 Client-side file processing started:', file.name, file.type, file.size);
+  
   try {
-    // Generate session ID for tracking
-    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Upload file to storage
-    const filePath = `${sessionId}/${file.name}`;
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file);
+    // Use client-side document processor
+    const processor = new ClientSideDocumentProcessor(onProgress);
+    const result = await processor.processDocument(file, currentSessionId);
 
-    if (uploadError) {
-      throw new Error(`Upload failed: ${uploadError.message}`);
+    if (!result.success) {
+      throw new Error(result.error || 'فشل في معالجة المستند');
     }
 
-    console.log('✅ File uploaded to storage:', filePath);
-
-    // Create document record
-    const { data: documentData, error: documentError } = await supabase
-      .from('uploaded_documents')
-      .insert({
-        session_id: sessionId,
-        original_filename: file.name,
-        file_path: filePath,
-        file_size: file.size,
-        mime_type: file.type,
-        upload_status: 'uploaded'
-      })
-      .select()
-      .single();
-
-    if (documentError || !documentData) {
-      throw new Error(`Failed to create document record: ${documentError?.message}`);
-    }
-
-    console.log('📄 Document record created:', documentData.id);
-
-    console.log('🔄 Starting document processing...');
+    console.log('✅ Client-side processing completed:', result);
     
-    // Health check first to ensure function is available
-    try {
-      const healthCheck = await supabase.functions.invoke('process-document', {
-        body: { health: 'check' }
-      });
-      console.log('📡 Function health check:', healthCheck);
-    } catch (healthError) {
-      console.error('❌ Function not available:', healthError);
-      throw new Error('Document processing service is currently unavailable. Please try again later.');
-    }
-    
-    // Trigger document processing with proper error handling
-    const { data: processData, error: processError } = await supabase.functions.invoke('process-document', {
-      body: {
-        documentId: documentData.id,
-        sessionId: sessionId
-      }
-    });
-
-    if (processError) {
-      console.error('❌ Processing function error:', processError);
-      // Update document status to failed
-      await supabase
-        .from('uploaded_documents')
-        .update({ 
-          upload_status: 'failed',
-          processing_error: processError.message || 'Processing function failed'
-        })
-        .eq('id', documentData.id);
-        
-      throw new Error(`Document processing failed: ${processError.message}`);
-    }
-
-    const processingResult = processData;
-    console.log('🔄 Processing result:', processingResult);
-
-    // Create AI response based on processing result
-    if (processingResult?.success) {
-      const relevanceScore = processingResult.relevanceScore || 0;
-      const status = processingResult.status || 'processed';
-      
-      if (status === 'processed') {
-        return {
-          id: (Date.now() + 1).toString(),
-          content: `✅ تم بنجاح! لقد قمت بمعالجة "${file.name}" بنجاح ووجدته ذا صلة عالية بعمليات الفندق (${(relevanceScore * 100).toFixed(0)}% صلة). 
-
-🔍 تفاصيل المعالجة:
-${processingResult.reason || 'يحتوي المستند على معلومات قيمة لمحادثتنا.'}
-
-📋 الوضع الحالي:
-• ✅ تم استخراج النص بنجاح
-• ✅ تم تحليل المحتوى وتصنيفه  
-• ✅ تم دمج المستند في قاعدة المعرفة
-• ✅ جاهز للإجابة على الأسئلة
-
-يمكنك الآن أن تسألني أي شيء عن محتوى المستند أو كيف يتعلق بعمليات الفندق! سأركز على تقديم إجابات مفصلة ومدروسة بناءً على محتوى المستند المرفوع.`,
-          isUser: false,
-          timestamp: new Date(),
-        };
-      } else {
-        return {
-          id: (Date.now() + 1).toString(),
-          content: `📋 I've reviewed "${file.name}" but determined it has limited relevance to our hotel operations (${(relevanceScore * 100).toFixed(0)}% relevance). 
-
-${processingResult.reason || 'The content may not be directly related to hotel management or guest services.'}
-
-While I won't prioritize this document in our conversation, I'm still here to help you with any hotel-related questions you might have!`,
-          isUser: false,
-          timestamp: new Date(),
-        };
-      }
-    } else {
-      // Fallback response if processing fails
-      return {
-        id: (Date.now() + 1).toString(),
-        content: `📎 I've received your file "${file.name}" successfully. While I'm still learning to process different file types optimally, I'm here to help you with any questions about hotel operations, guest services, or management practices. 
-
-What would you like to discuss about your hotel business?`,
-        isUser: false,
-        timestamp: new Date(),
-      };
-    }
-
-  } catch (error) {
-    console.error('❌ File upload error:', error);
-    
-    return {
+    // Create success message with document analysis
+    const aiMessage: Message = {
       id: (Date.now() + 1).toString(),
-      content: `❌ I encountered an issue processing your file: ${error instanceof Error ? error.message : 'Unknown error'}. 
+      content: `✅ تم تحليل المستند "${file.name}" بنجاح! 📄
 
-Please try uploading again, or feel free to ask me any questions directly. I'm here to help with hotel management, guest services, and operational inquiries!`,
+📊 **تفاصيل المعالجة:**
+- تم استخراج ${result.text?.length || 0} حرف من النص
+- تم تقسيم المحتوى إلى ${result.chunkCount || 0} أجزاء للفهرسة
+- تمت المعالجة محلياً في المتصفح
+
+💡 **ما يمكنني فعله الآن:**
+- الإجابة على أسئلة حول محتوى المستند
+- تلخيص المعلومات الرئيسية
+- البحث في النص المستخرج
+- مقارنة المحتوى مع بيانات الفندق الأخرى
+
+يمكنك الآن طرح أي سؤال عن محتوى هذا المستند وسأكون قادراً على الإجابة بناءً على المعلومات المستخرجة.`,
       isUser: false,
       timestamp: new Date(),
+      fileName: file.name,
+      fileType: file.type,
     };
+
+    return aiMessage;
+
+  } catch (error) {
+    console.error('❌ Client-side file processing error:', error);
+    
+    // Return error message
+    const errorMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      content: `حدث خطأ أثناء معالجة المستند "${file.name}": ${error instanceof Error ? error.message : 'خطأ غير معروف'}
+
+يرجى المحاولة مرة أخرى أو التأكد من أن المستند في تنسيق مدعوم (PDF، Word، أو نص عادي).`,
+      isUser: false,
+      timestamp: new Date(),
+      fileName: file.name,
+      fileType: file.type,
+    };
+
+    return errorMessage;
   }
 };
 

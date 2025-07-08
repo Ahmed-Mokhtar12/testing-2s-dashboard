@@ -17,7 +17,7 @@ export const useChat = ({ onSaveChatMessage, activeSessionId, createNewSessionId
   const [isTyping, setIsTyping] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(activeSessionId || null);
 
-  const { handleFileUpload } = useFileUpload();
+  const { handleFileUpload, processingProgress, clearProgress } = useFileUpload();
   const { handleSendMessage: sendMessage } = useMessageSending({ 
     onSaveChatMessage, 
     activeSessionId, 
@@ -27,7 +27,7 @@ export const useChat = ({ onSaveChatMessage, activeSessionId, createNewSessionId
   const { loadSessionMessages, clearMessages } = useSessionManagement();
 
   const wrappedFileUpload = (file: File) => {
-    return handleFileUpload(file, setMessages, setIsTyping);
+    return handleFileUpload(file, setMessages, setIsTyping, currentSessionId);
   };
 
   const wrappedSendMessage = () => {
@@ -55,6 +55,7 @@ export const useChat = ({ onSaveChatMessage, activeSessionId, createNewSessionId
     inputValue,
     isTyping,
     currentSessionId,
+    processingProgress,
     setInputValue,
     handleFileUpload: wrappedFileUpload,
     handleSendMessage: wrappedSendMessage,
@@ -62,5 +63,6 @@ export const useChat = ({ onSaveChatMessage, activeSessionId, createNewSessionId
     handleActionCancel: wrappedActionCancel,
     loadSessionMessages: wrappedLoadSessionMessages,
     clearMessages: wrappedClearMessages,
+    clearProgress,
   };
 };

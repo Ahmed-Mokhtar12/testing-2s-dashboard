@@ -5,6 +5,7 @@ import WelcomeScreen from '@/components/WelcomeScreen';
 import ChatContainer from '@/components/ChatContainer';
 import ChatHeader from '@/components/ChatHeader';
 import ChatFooter from '@/components/ChatFooter';
+import DocumentProcessingProgress from '@/components/DocumentProcessingProgress';
 import { useChat } from '@/hooks/useChat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 
@@ -27,6 +28,7 @@ const Index = () => {
     inputValue,
     isTyping,
     currentSessionId,
+    processingProgress,
     setInputValue,
     handleFileUpload,
     handleSendMessage,
@@ -34,6 +36,7 @@ const Index = () => {
     handleActionCancel,
     loadSessionMessages,
     clearMessages,
+    clearProgress,
   } = useChat({ 
     onSaveChatMessage: saveChatMessage,
     activeSessionId,
@@ -140,6 +143,15 @@ const Index = () => {
 
         <ChatFooter />
       </div>
+
+      {/* Document Processing Progress */}
+      {processingProgress && (
+        <DocumentProcessingProgress
+          progress={processingProgress}
+          fileName={processingProgress.stage !== 'complete' ? 'معالجة المستند...' : 'اكتمل'}
+          onClose={clearProgress}
+        />
+      )}
     </div>
   );
 };
