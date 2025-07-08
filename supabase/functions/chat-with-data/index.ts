@@ -4,7 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { analyzeQueryIntelligently } from './query-analyzer.ts';
 import { queryReviewsByDateRange, getAnalyticsData } from './data-service.ts';
-import { buildIntelligentContext } from './context-builder.ts';
+import { EnhancedContextBuilder } from './enhanced-context-builder.ts';
 import { callOpenAI } from './openai-service.ts';
 import { SearchService } from './search-service.ts';
 import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
@@ -67,51 +67,35 @@ serve(async (req) => {
     const queryAnalysis = analyzeQueryIntelligently(message);
     console.log('🧠 Intelligent query analysis:', queryAnalysis);
 
-    // Enhanced data gathering with conversation context
-    let specificData: any = null;
-    let context: string;
+    // Enhanced data gathering with enhanced context builder
+    console.log('📚 Building enhanced context with document integration...');
+    
+    // Get all available data for context building
+    const [hotelReviews, chatHistory, conductedTraining, infoSummary, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
+      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(10),
+      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(10),
+      supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.rpc('get_recent_document_context', { limit_count: 10 }),
+      supabase.from('uploaded_documents').select('*').eq('upload_status', 'processed').order('last_accessed', { ascending: false }).limit(5)
+    ]);
 
-    // Handle different query types with enhanced context
-    switch (queryAnalysis.type) {
-      case 'specific_month':
-      case 'recent_period':
-      case 'date_range':
-        console.log(`📅 Processing ${queryAnalysis.type} query...`);
-        try {
-          const { reviews, error } = await queryReviewsByDateRange(
-            supabase, 
-            queryAnalysis.startDate!, 
-            queryAnalysis.endDate!
-          );
-          
-          if (error) throw new Error('Database query failed: ' + error.message);
-          
-          specificData = { reviews };
-          context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
-        } catch (dbError) {
-          console.error('📊 Database query error:', dbError);
-          context = await buildIntelligentContext(supabase, queryAnalysis);
-        }
-        break;
-        
-      case 'analytics':
-        console.log('📈 Processing analytics query...');
-        try {
-          const analyticsResult = await getAnalyticsData(supabase);
-          if (analyticsResult.error) throw new Error('Analytics query failed');
-          
-          specificData = { analytics: analyticsResult.analytics, allReviews: analyticsResult.allReviews };
-          context = await buildIntelligentContext(supabase, queryAnalysis, specificData);
-        } catch (analyticsError) {
-          console.error('📈 Analytics error:', analyticsError);
-          context = await buildIntelligentContext(supabase, queryAnalysis);
-        }
-        break;
-        
-      default:
-        console.log('💬 Processing general query...');
-        context = await buildIntelligentContext(supabase, queryAnalysis);
-    }
+    const allData = {
+      hotelReviews,
+      chatHistory,
+      conductedTraining,
+      infoSummary,
+      longTermMemory,
+      documentContext,
+      recentDocuments
+    };
+
+    // Build enhanced context using the enhanced context builder
+    const enhancedContextBuilder = new EnhancedContextBuilder();
+    const context = enhancedContextBuilder.buildContextWithDocuments(allData, message);
+    
+    console.log('✅ Enhanced context built with document integration');
 
     // Build enhanced system prompt with conversation continuity
     const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData, context);
