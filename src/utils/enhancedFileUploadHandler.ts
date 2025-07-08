@@ -4,7 +4,15 @@ import { Message } from '@/types/chat';
 
 export const createEnhancedFileUploadMessage = (file: File): Message => ({
   id: Date.now().toString(),
-  content: `📎 I've uploaded "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)}MB). Please wait while I analyze its relevance and process it for our conversation.`,
+  content: `📎 Uploading "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)}MB)...
+
+🔄 Processing status:
+• ✅ File uploaded to storage
+• 🔄 Extracting text content...
+• ⏳ Analyzing relevance...
+• ⏳ Integrating into knowledge base...
+
+Please wait while I analyze and process your document.`,
   isUser: true,
   timestamp: new Date(),
   fileName: file.name,
@@ -48,7 +56,9 @@ export const processFileUpload = async (file: File): Promise<Message> => {
 
     console.log('📄 Document record created:', documentData.id);
 
-    // Trigger document processing
+    console.log('🔄 Starting document processing...');
+    
+    // Trigger document processing with proper error handling
     const { data: processData, error: processError } = await supabase.functions.invoke('process-document', {
       body: {
         documentId: documentData.id,
@@ -57,8 +67,17 @@ export const processFileUpload = async (file: File): Promise<Message> => {
     });
 
     if (processError) {
-      console.error('⚠️ Processing error:', processError);
-      // Continue with basic response even if processing fails
+      console.error('❌ Processing function error:', processError);
+      // Update document status to failed
+      await supabase
+        .from('uploaded_documents')
+        .update({ 
+          upload_status: 'failed',
+          processing_error: processError.message || 'Processing function failed'
+        })
+        .eq('id', documentData.id);
+        
+      throw new Error(`Document processing failed: ${processError.message}`);
     }
 
     const processingResult = processData;
@@ -72,11 +91,18 @@ export const processFileUpload = async (file: File): Promise<Message> => {
       if (status === 'processed') {
         return {
           id: (Date.now() + 1).toString(),
-          content: `✅ Perfect! I've successfully processed "${file.name}" and found it highly relevant to our hotel operations (${(relevanceScore * 100).toFixed(0)}% relevance). 
+          content: `✅ تم بنجاح! لقد قمت بمعالجة "${file.name}" بنجاح ووجدته ذا صلة عالية بعمليات الفندق (${(relevanceScore * 100).toFixed(0)}% صلة). 
 
-${processingResult.reason || 'The document contains valuable information for our conversation.'}
+🔍 تفاصيل المعالجة:
+${processingResult.reason || 'يحتوي المستند على معلومات قيمة لمحادثتنا.'}
 
-The document has been analyzed and integrated into my knowledge base. I can now provide more accurate and contextual responses based on this new information. Feel free to ask me anything about the content or how it relates to your hotel operations!`,
+📋 الوضع الحالي:
+• ✅ تم استخراج النص بنجاح
+• ✅ تم تحليل المحتوى وتصنيفه  
+• ✅ تم دمج المستند في قاعدة المعرفة
+• ✅ جاهز للإجابة على الأسئلة
+
+يمكنك الآن أن تسألني أي شيء عن محتوى المستند أو كيف يتعلق بعمليات الفندق! سأركز على تقديم إجابات مفصلة ومدروسة بناءً على محتوى المستند المرفوع.`,
           isUser: false,
           timestamp: new Date(),
         };

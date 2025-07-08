@@ -149,9 +149,25 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Error processing document:', error);
     
+    // Update document status to failed if we have documentId
+    if (documentId) {
+      try {
+        await supabase
+          .from('uploaded_documents')
+          .update({ 
+            upload_status: 'failed',
+            processing_error: error.message || 'Processing failed'
+          })
+          .eq('id', documentId);
+      } catch (updateError) {
+        console.error('Failed to update document status:', updateError);
+      }
+    }
+    
     return new Response(JSON.stringify({
       error: error.message,
-      success: false
+      success: false,
+      documentId: documentId || 'unknown'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -270,18 +286,47 @@ async function extractPDFText(fileData: Blob): Promise<string> {
   }
 }
 
-// Word Document Text Extraction (Basic implementation)
+// Enhanced Word Document Text Extraction
 async function extractWordText(fileData: Blob): Promise<string> {
   try {
-    // For .docx files, we can extract text from the XML structure
-    if (fileData.type.includes('openxmlformats')) {
+    console.log('📄 Processing Word document, type:', fileData.type);
+    
+    // For .docx files, extract text from XML structure
+    if (fileData.type.includes('openxmlformats') || fileData.type.includes('wordprocessingml')) {
       const arrayBuffer = await fileData.arrayBuffer();
       const text = await extractDocxText(arrayBuffer);
-      return text;
+      
+      if (text && text.length > 50) {
+        console.log('✅ DOCX text extraction successful, length:', text.length);
+        return text;
+      } else {
+        console.warn('⚠️ DOCX extraction returned minimal content');
+        return 'Word document processed but minimal text content was extracted. The document may contain mostly images, tables, or complex formatting.';
+      }
+    } 
+    // For older .doc files
+    else if (fileData.type.includes('msword') || fileData.type === 'application/msword') {
+      console.warn('⚠️ Legacy .doc format detected');
+      // Try basic text extraction for .doc files
+      const arrayBuffer = await fileData.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      let rawText = decoder.decode(uint8Array);
+      
+      // Clean up extracted text (basic approach for .doc files)
+      rawText = rawText.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove control characters
+                       .replace(/\s+/g, ' ') // Normalize whitespace
+                       .trim();
+      
+      if (rawText.length > 100) {
+        console.log('✅ Legacy .doc text extraction completed, length:', rawText.length);
+        return rawText.substring(0, 5000); // Limit to 5000 chars
+      } else {
+        return 'Legacy Word document (.doc format) uploaded. For better text extraction, please convert to .docx format or PDF before uploading.';
+      }
     } else {
-      // For older .doc files, we provide a fallback message
-      console.warn('⚠️ Old Word format (.doc) requires specialized processing');
-      return 'Word document uploaded. This appears to be an older .doc format. For best results, please convert to .docx format or PDF before uploading.';
+      console.warn('⚠️ Unrecognized Word document format:', fileData.type);
+      return 'Word document uploaded but format not fully supported. Please try converting to .docx or PDF format for better text extraction.';
     }
   } catch (error) {
     console.error('❌ Word extraction error:', error);
