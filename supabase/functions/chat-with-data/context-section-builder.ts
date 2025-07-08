@@ -34,15 +34,24 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
 
     // Priority 1: Recent Document Context (highest priority)
     if (data.documentContext?.status === 'fulfilled' && data.documentContext.value.data?.length > 0) {
-      sections.push('📄 RECENT DOCUMENT CONTEXT (Priority Information):');
+      sections.push('📄 UPLOADED DOCUMENT CONTENT (HIGHEST PRIORITY - Use this content to answer user questions):');
+      sections.push('');
       data.documentContext.value.data.forEach((doc: any, index: number) => {
         if (doc.content) {
-          sections.push(`${index + 1}. [${doc.document_category?.toUpperCase() || 'GENERAL'}] ${doc.document_filename || 'Document'}`);
-          sections.push(`   Relevance: ${(doc.relevance_score * 100).toFixed(0)}%`);
-          sections.push(`   Content: ${doc.content.substring(0, 300)}${doc.content.length > 300 ? '...' : ''}`);
+          sections.push(`=== DOCUMENT ${index + 1}: ${doc.document_filename || 'Document'} ===`);
+          sections.push(`Category: ${doc.document_category?.toUpperCase() || 'GENERAL'}`);
+          sections.push(`Relevance Score: ${(doc.relevance_score * 100).toFixed(0)}%`);
+          sections.push(`Chunk ${doc.chunk_index || 0}`);
+          sections.push('');
+          sections.push('FULL CONTENT:');
+          sections.push(doc.content);
+          sections.push('');
+          sections.push('='.repeat(50));
           sections.push('');
         }
       });
+      sections.push('⚠️ CRITICAL: Base your responses primarily on the document content shown above. This is the most relevant and recent information available.');
+      sections.push('');
     }
 
     // Priority 2: Recent Documents Metadata

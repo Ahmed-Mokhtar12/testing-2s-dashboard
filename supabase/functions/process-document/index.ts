@@ -2,6 +2,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
+import pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,14 +56,23 @@ serve(async (req) => {
 
     // Extract text content based on file type
     let textContent = '';
-    if (document.mime_type === 'text/plain') {
-      textContent = await fileData.text();
-    } else if (document.mime_type.includes('image/')) {
-      // For images, we'll use OCR or image description
-      textContent = `Image file: ${document.original_filename}. Visual content analysis needed.`;
-    } else {
-      // For PDFs and other documents, we'll extract basic text
-      textContent = `Document: ${document.original_filename}. Content extraction needed for ${document.mime_type}.`;
+    try {
+      if (document.mime_type === 'text/plain') {
+        textContent = await fileData.text();
+      } else if (document.mime_type === 'application/pdf') {
+        textContent = await extractPDFText(fileData);
+      } else if (document.mime_type.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+                 document.mime_type.includes('application/msword')) {
+        textContent = await extractWordText(fileData);
+      } else if (document.mime_type.includes('image/')) {
+        textContent = await processImageWithOCR(fileData, document.original_filename);
+      } else {
+        console.warn(`⚠️ Unsupported file type: ${document.mime_type}`);
+        textContent = `Document: ${document.original_filename}. Unsupported format: ${document.mime_type}. Manual review required.`;
+      }
+    } catch (extractionError) {
+      console.error('❌ Text extraction failed:', extractionError);
+      textContent = `Document: ${document.original_filename}. Text extraction failed: ${extractionError.message}`;
     }
 
     console.log('📄 Extracted text length:', textContent.length);
@@ -238,4 +248,133 @@ function chunkText(text: string, maxChunkSize: number): string[] {
   }
   
   return chunks.length > 0 ? chunks : [text.substring(0, maxChunkSize)];
+}
+
+// PDF Text Extraction
+async function extractPDFText(fileData: Blob): Promise<string> {
+  try {
+    const arrayBuffer = await fileData.arrayBuffer();
+    const buffer = new Uint8Array(arrayBuffer);
+    const pdf = await pdfParse(buffer);
+    
+    if (pdf.text && pdf.text.length > 50) {
+      console.log('✅ PDF text extracted successfully, length:', pdf.text.length);
+      return pdf.text;
+    } else {
+      console.warn('⚠️ PDF text extraction returned minimal content');
+      return 'PDF document processed but minimal text content was extracted. This may be a scanned PDF that requires OCR.';
+    }
+  } catch (error) {
+    console.error('❌ PDF extraction error:', error);
+    throw new Error(`PDF text extraction failed: ${error.message}`);
+  }
+}
+
+// Word Document Text Extraction (Basic implementation)
+async function extractWordText(fileData: Blob): Promise<string> {
+  try {
+    // For .docx files, we can extract text from the XML structure
+    if (fileData.type.includes('openxmlformats')) {
+      const arrayBuffer = await fileData.arrayBuffer();
+      const text = await extractDocxText(arrayBuffer);
+      return text;
+    } else {
+      // For older .doc files, we provide a fallback message
+      console.warn('⚠️ Old Word format (.doc) requires specialized processing');
+      return 'Word document uploaded. This appears to be an older .doc format. For best results, please convert to .docx format or PDF before uploading.';
+    }
+  } catch (error) {
+    console.error('❌ Word extraction error:', error);
+    throw new Error(`Word document text extraction failed: ${error.message}`);
+  }
+}
+
+// Basic DOCX text extraction
+async function extractDocxText(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    // This is a simplified approach - in production you'd want a proper DOCX parser
+    const text = new TextDecoder().decode(arrayBuffer);
+    
+    // Extract text between XML tags (very basic approach)
+    const textMatches = text.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+    if (textMatches) {
+      const extractedText = textMatches
+        .map(match => match.replace(/<w:t[^>]*>([^<]*)<\/w:t>/, '$1'))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (extractedText.length > 50) {
+        console.log('✅ DOCX text extracted successfully, length:', extractedText.length);
+        return extractedText;
+      }
+    }
+    
+    console.warn('⚠️ DOCX text extraction returned minimal content');
+    return 'Word document processed but text extraction was limited. Document may contain complex formatting, tables, or images.';
+  } catch (error) {
+    console.error('❌ DOCX parsing error:', error);
+    throw new Error(`DOCX parsing failed: ${error.message}`);
+  }
+}
+
+// Image OCR Processing (placeholder for future implementation)
+async function processImageWithOCR(fileData: Blob, filename: string): Promise<string> {
+  console.log('📷 Processing image for OCR:', filename);
+  
+  // For now, we'll use OpenAI's vision capabilities as a fallback
+  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+  
+  if (!openAIApiKey) {
+    return `Image file: ${filename}. OCR processing requires OpenAI API configuration. Please convert image to text manually or upload a text document.`;
+  }
+  
+  try {
+    // Convert image to base64
+    const arrayBuffer = await fileData.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const mimeType = fileData.type;
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Extract all text from this image. If this is a document, transcribe it completely. If it contains tables, preserve the structure. Return only the extracted text.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64}`
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 2000
+      }),
+    });
+    
+    const data = await response.json();
+    const extractedText = data.choices[0].message.content;
+    
+    if (extractedText && extractedText.length > 20) {
+      console.log('✅ Image OCR completed successfully, length:', extractedText.length);
+      return extractedText;
+    } else {
+      return `Image file: ${filename}. OCR processing completed but minimal text was detected. This may be a non-text image.`;
+    }
+  } catch (error) {
+    console.error('❌ Image OCR error:', error);
+    return `Image file: ${filename}. OCR processing failed: ${error.message}`;
+  }
 }

@@ -13,8 +13,13 @@ export class EnhancedContextBuilder {
     const dataStats = ContextDataStatsBuilder.buildDataStatistics(data);
     contextSections.push(dataStats);
 
-    // Add document context sections
-    contextSections.push(...ContextSectionBuilder.buildDocumentContextSections(data));
+    // Add document context sections - PRIORITIZE recent uploaded documents
+    const documentSections = ContextSectionBuilder.buildDocumentContextSections(data);
+    if (documentSections.length > 0) {
+      contextSections.push('🔥 RECENTLY UPLOADED DOCUMENTS (PRIORITY CONTEXT):');
+      contextSections.push(...documentSections);
+      contextSections.push('');
+    }
 
     // Priority 3: Hotel Reviews - COMPREHENSIVE ANALYSIS
     if (data.hotelReviews?.status === 'fulfilled' && data.hotelReviews.value.data?.length > 0) {
