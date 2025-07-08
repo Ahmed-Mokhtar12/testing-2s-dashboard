@@ -19,13 +19,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Health check endpoint
+  const body = await req.json().catch(() => ({}));
+  if (body.health === 'check') {
+    return new Response(JSON.stringify({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      service: 'process-document'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { documentId, sessionId }: DocumentProcessingRequest = await req.json();
+    const { documentId, sessionId }: DocumentProcessingRequest = body.documentId ? body : await req.json();
     console.log('🔄 Processing document:', documentId);
 
     // Update document status to processing
@@ -150,7 +162,10 @@ serve(async (req) => {
     console.error('❌ Error processing document:', error);
     
     // Update document status to failed if we have documentId
-    if (documentId) {
+    const { documentId: docIdFromBody } = await req.json().catch(() => ({ documentId: null }));
+    const finalDocumentId = documentId || docIdFromBody;
+    
+    if (finalDocumentId) {
       try {
         await supabase
           .from('uploaded_documents')
@@ -158,7 +173,7 @@ serve(async (req) => {
             upload_status: 'failed',
             processing_error: error.message || 'Processing failed'
           })
-          .eq('id', documentId);
+          .eq('id', finalDocumentId);
       } catch (updateError) {
         console.error('Failed to update document status:', updateError);
       }
@@ -167,7 +182,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       error: error.message,
       success: false,
-      documentId: documentId || 'unknown'
+      documentId: finalDocumentId || 'unknown'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

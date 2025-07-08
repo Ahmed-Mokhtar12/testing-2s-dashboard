@@ -58,6 +58,17 @@ export const processFileUpload = async (file: File): Promise<Message> => {
 
     console.log('🔄 Starting document processing...');
     
+    // Health check first to ensure function is available
+    try {
+      const healthCheck = await supabase.functions.invoke('process-document', {
+        body: { health: 'check' }
+      });
+      console.log('📡 Function health check:', healthCheck);
+    } catch (healthError) {
+      console.error('❌ Function not available:', healthError);
+      throw new Error('Document processing service is currently unavailable. Please try again later.');
+    }
+    
     // Trigger document processing with proper error handling
     const { data: processData, error: processError } = await supabase.functions.invoke('process-document', {
       body: {
