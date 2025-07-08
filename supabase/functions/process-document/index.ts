@@ -3,6 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,22 +70,36 @@ serve(async (req) => {
     // Extract text content based on file type
     let textContent = '';
     try {
-      if (document.mime_type === 'text/plain') {
-        textContent = await fileData.text();
+      console.log(`🔍 Processing file type: ${document.mime_type} | ${document.original_filename}`);
+      
+      if (document.mime_type === 'text/plain' || document.mime_type === 'text/rtf') {
+        textContent = await extractTextFile(fileData);
       } else if (document.mime_type === 'application/pdf') {
         textContent = await extractPDFText(fileData);
       } else if (document.mime_type.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
                  document.mime_type.includes('application/msword')) {
         textContent = await extractWordText(fileData);
+      } else if (document.mime_type.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+                 document.mime_type.includes('application/vnd.ms-excel') ||
+                 document.mime_type === 'text/csv') {
+        textContent = await extractSpreadsheetText(fileData, document.original_filename);
+      } else if (document.mime_type.includes('application/vnd.openxmlformats-officedocument.presentationml.presentation') ||
+                 document.mime_type.includes('application/vnd.ms-powerpoint')) {
+        textContent = await extractPresentationText(fileData, document.original_filename);
+      } else if (document.mime_type.includes('application/vnd.oasis.opendocument')) {
+        textContent = await extractOpenDocumentText(fileData, document.original_filename);
       } else if (document.mime_type.includes('image/')) {
         textContent = await processImageWithOCR(fileData, document.original_filename);
+      } else if (document.mime_type === 'application/json' || document.mime_type === 'application/xml' || 
+                 document.mime_type === 'text/xml' || document.mime_type === 'text/html') {
+        textContent = await extractStructuredText(fileData, document.mime_type);
       } else {
         console.warn(`⚠️ Unsupported file type: ${document.mime_type}`);
-        textContent = `Document: ${document.original_filename}. Unsupported format: ${document.mime_type}. Manual review required.`;
+        textContent = await attemptGenericTextExtraction(fileData, document.original_filename, document.mime_type);
       }
     } catch (extractionError) {
       console.error('❌ Text extraction failed:', extractionError);
-      textContent = `Document: ${document.original_filename}. Text extraction failed: ${extractionError.message}`;
+      textContent = `Document: ${document.original_filename}. Text extraction failed: ${extractionError.message}. Please try converting to PDF or plain text format.`;
     }
 
     console.log('📄 Extracted text length:', textContent.length);
@@ -378,11 +393,231 @@ async function extractDocxText(arrayBuffer: ArrayBuffer): Promise<string> {
   }
 }
 
-// Image OCR Processing (placeholder for future implementation)
+// Text File Extraction
+async function extractTextFile(fileData: Blob): Promise<string> {
+  try {
+    const text = await fileData.text();
+    console.log('✅ Text file extracted successfully, length:', text.length);
+    return text;
+  } catch (error) {
+    console.error('❌ Text file extraction error:', error);
+    throw new Error(`Text file extraction failed: ${error.message}`);
+  }
+}
+
+// Spreadsheet Text Extraction (Excel, CSV)
+async function extractSpreadsheetText(fileData: Blob, filename: string): Promise<string> {
+  try {
+    console.log('📊 Processing spreadsheet:', filename);
+    
+    if (filename.toLowerCase().endsWith('.csv')) {
+      // Handle CSV files
+      const text = await fileData.text();
+      const lines = text.split('\n');
+      const processedLines = lines.map(line => {
+        return line.split(',').map(cell => cell.replace(/"/g, '').trim()).join(' | ');
+      });
+      
+      const result = `Spreadsheet Data (CSV):\n${processedLines.join('\n')}`;
+      console.log('✅ CSV extraction successful, length:', result.length);
+      return result;
+    } else {
+      // For Excel files, we'll use a basic approach to extract readable text
+      const arrayBuffer = await fileData.arrayBuffer();
+      const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
+      
+      // Try to extract readable text patterns from Excel files
+      const textMatches = text.match(/[a-zA-Z0-9\s\.,;:!?\-_]+/g);
+      if (textMatches) {
+        const extractedText = textMatches
+          .filter(match => match.trim().length > 2)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (extractedText.length > 50) {
+          console.log('✅ Excel text extraction completed, length:', extractedText.length);
+          return `Spreadsheet Content:\n${extractedText}`;
+        }
+      }
+      
+      return `Excel spreadsheet: ${filename}. Text extraction was limited. For better results, save as CSV or convert to PDF.`;
+    }
+  } catch (error) {
+    console.error('❌ Spreadsheet extraction error:', error);
+    throw new Error(`Spreadsheet extraction failed: ${error.message}`);
+  }
+}
+
+// Presentation Text Extraction (PowerPoint)
+async function extractPresentationText(fileData: Blob, filename: string): Promise<string> {
+  try {
+    console.log('📽️ Processing presentation:', filename);
+    
+    const arrayBuffer = await fileData.arrayBuffer();
+    
+    if (filename.toLowerCase().includes('.pptx')) {
+      // Extract text from PowerPoint XML structure
+      const text = new TextDecoder().decode(arrayBuffer);
+      
+      // Look for slide text patterns in PPTX XML
+      const textMatches = text.match(/<a:t[^>]*>([^<]*)<\/a:t>/g) || text.match(/<t>([^<]*)<\/t>/g);
+      if (textMatches) {
+        const extractedText = textMatches
+          .map(match => match.replace(/<[^>]*>/g, ''))
+          .filter(text => text.trim().length > 0)
+          .join('\n')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (extractedText.length > 50) {
+          console.log('✅ PowerPoint text extraction successful, length:', extractedText.length);
+          return `Presentation Content:\n${extractedText}`;
+        }
+      }
+    } else {
+      // Basic text extraction for legacy PPT files
+      const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
+      const textMatches = text.match(/[a-zA-Z0-9\s\.,;:!?\-_]+/g);
+      
+      if (textMatches) {
+        const extractedText = textMatches
+          .filter(match => match.trim().length > 3)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (extractedText.length > 50) {
+          console.log('✅ Legacy PowerPoint text extraction completed, length:', extractedText.length);
+          return `Presentation Content:\n${extractedText.substring(0, 3000)}`;
+        }
+      }
+    }
+    
+    return `PowerPoint presentation: ${filename}. Text extraction was limited. For better results, convert to PDF or export slides as text.`;
+  } catch (error) {
+    console.error('❌ Presentation extraction error:', error);
+    throw new Error(`Presentation extraction failed: ${error.message}`);
+  }
+}
+
+// OpenDocument Text Extraction (ODT, ODS, ODP)
+async function extractOpenDocumentText(fileData: Blob, filename: string): Promise<string> {
+  try {
+    console.log('📄 Processing OpenDocument:', filename);
+    
+    const arrayBuffer = await fileData.arrayBuffer();
+    const text = new TextDecoder().decode(arrayBuffer);
+    
+    // Extract text from OpenDocument XML structure
+    const textMatches = text.match(/<text:p[^>]*>([^<]*)<\/text:p>/g) || 
+                       text.match(/<text:span[^>]*>([^<]*)<\/text:span>/g);
+    
+    if (textMatches) {
+      const extractedText = textMatches
+        .map(match => match.replace(/<[^>]*>/g, ''))
+        .filter(text => text.trim().length > 0)
+        .join('\n')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (extractedText.length > 50) {
+        console.log('✅ OpenDocument text extraction successful, length:', extractedText.length);
+        return `OpenDocument Content:\n${extractedText}`;
+      }
+    }
+    
+    return `OpenDocument file: ${filename}. Text extraction was limited. For better results, convert to PDF or plain text.`;
+  } catch (error) {
+    console.error('❌ OpenDocument extraction error:', error);
+    throw new Error(`OpenDocument extraction failed: ${error.message}`);
+  }
+}
+
+// Structured Text Extraction (JSON, XML, HTML)
+async function extractStructuredText(fileData: Blob, mimeType: string): Promise<string> {
+  try {
+    console.log('🔍 Processing structured document:', mimeType);
+    
+    const text = await fileData.text();
+    
+    if (mimeType.includes('json')) {
+      // Parse and format JSON
+      try {
+        const jsonData = JSON.parse(text);
+        const formattedJson = JSON.stringify(jsonData, null, 2);
+        return `JSON Data:\n${formattedJson}`;
+      } catch {
+        return `JSON file with invalid format. Raw content:\n${text.substring(0, 2000)}`;
+      }
+    } else if (mimeType.includes('xml') || mimeType.includes('html')) {
+      // Extract text content from XML/HTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, mimeType.includes('html') ? 'text/html' : 'text/xml');
+      const textContent = doc.body?.textContent || doc.documentElement?.textContent || text;
+      
+      return `${mimeType.includes('html') ? 'HTML' : 'XML'} Content:\n${textContent.replace(/\s+/g, ' ').trim()}`;
+    }
+    
+    return text;
+  } catch (error) {
+    console.error('❌ Structured text extraction error:', error);
+    throw new Error(`Structured text extraction failed: ${error.message}`);
+  }
+}
+
+// Generic Text Extraction Attempt
+async function attemptGenericTextExtraction(fileData: Blob, filename: string, mimeType: string): Promise<string> {
+  try {
+    console.log('🔄 Attempting generic text extraction for:', filename, mimeType);
+    
+    // Try to read as text first
+    try {
+      const text = await fileData.text();
+      if (text && text.length > 50) {
+        // Filter out mostly binary content
+        const readableChars = text.match(/[a-zA-Z0-9\s\.,;:!?\-_]/g);
+        if (readableChars && readableChars.length > text.length * 0.7) {
+          console.log('✅ Generic text extraction successful, length:', text.length);
+          return `Document Content (${filename}):\n${text}`;
+        }
+      }
+    } catch (textError) {
+      console.log('📄 Text extraction failed, trying binary approach...');
+    }
+    
+    // Try binary text extraction
+    const arrayBuffer = await fileData.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    let rawText = decoder.decode(uint8Array);
+    
+    // Extract readable text patterns
+    const textMatches = rawText.match(/[a-zA-Z0-9\s\.,;:!?\-_]{3,}/g);
+    if (textMatches && textMatches.length > 0) {
+      const extractedText = textMatches
+        .filter(match => match.trim().length > 3)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (extractedText.length > 100) {
+        console.log('✅ Binary text extraction completed, length:', extractedText.length);
+        return `Document Content (${filename}):\n${extractedText.substring(0, 3000)}`;
+      }
+    }
+    
+    return `Document: ${filename} (${mimeType}). Unable to extract readable text. Please convert to PDF, Word, or plain text format for better processing.`;
+  } catch (error) {
+    console.error('❌ Generic extraction error:', error);
+    return `Document: ${filename}. File format not supported for text extraction. Please convert to a supported format (PDF, Word, text).`;
+  }
+}
+
+// Enhanced Image OCR Processing
 async function processImageWithOCR(fileData: Blob, filename: string): Promise<string> {
   console.log('📷 Processing image for OCR:', filename);
   
-  // For now, we'll use OpenAI's vision capabilities as a fallback
   const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
   
   if (!openAIApiKey) {
@@ -409,7 +644,7 @@ async function processImageWithOCR(fileData: Blob, filename: string): Promise<st
             content: [
               {
                 type: 'text',
-                text: 'Extract all text from this image. If this is a document, transcribe it completely. If it contains tables, preserve the structure. Return only the extracted text.'
+                text: 'Extract all text from this image. If this is a hotel document, SOP, policy, or procedure, transcribe it completely preserving structure. If it contains tables, preserve the table structure. Return only the extracted text content.'
               },
               {
                 type: 'image_url',
@@ -420,7 +655,7 @@ async function processImageWithOCR(fileData: Blob, filename: string): Promise<st
             ]
           }
         ],
-        max_tokens: 2000
+        max_tokens: 3000
       }),
     });
     
@@ -429,12 +664,12 @@ async function processImageWithOCR(fileData: Blob, filename: string): Promise<st
     
     if (extractedText && extractedText.length > 20) {
       console.log('✅ Image OCR completed successfully, length:', extractedText.length);
-      return extractedText;
+      return `Image Document Content (${filename}):\n${extractedText}`;
     } else {
-      return `Image file: ${filename}. OCR processing completed but minimal text was detected. This may be a non-text image.`;
+      return `Image file: ${filename}. OCR processing completed but minimal text was detected. This may be a non-text image or low-quality scan.`;
     }
   } catch (error) {
     console.error('❌ Image OCR error:', error);
-    return `Image file: ${filename}. OCR processing failed: ${error.message}`;
+    return `Image file: ${filename}. OCR processing failed: ${error.message}. Please try uploading a clearer image or convert to text format.`;
   }
 }
