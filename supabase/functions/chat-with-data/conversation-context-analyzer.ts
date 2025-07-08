@@ -102,7 +102,7 @@ export class ConversationContextAnalyzer {
               recentDataPoints.set(`recent_${sentiment}`, current);
             }
           });
-        }
+        });
       });
       
       // Detect communication style preferences from website_chats structure
