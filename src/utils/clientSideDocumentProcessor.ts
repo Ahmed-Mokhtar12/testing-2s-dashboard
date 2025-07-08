@@ -1,6 +1,9 @@
-import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist';
 import { supabase } from '@/integrations/supabase/client';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export interface DocumentProcessingResult {
   success: boolean;
@@ -133,8 +136,25 @@ export class ClientSideDocumentProcessor {
   private async extractPdfText(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
-    const data = await pdfParse(uint8Array);
-    return data.text;
+    
+    try {
+      const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+      let text = '';
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str || '')
+          .join(' ');
+        text += pageText + '\n';
+      }
+      
+      return text.trim();
+    } catch (error) {
+      console.error('Error extracting PDF text:', error);
+      throw new Error('فشل في استخراج النص من ملف PDF');
+    }
   }
 
   private async extractWordText(file: File): Promise<string> {
