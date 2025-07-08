@@ -20,9 +20,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Parse request body once at the beginning
+  let body: any = {};
   try {
-    // Parse request body once
-    const body = await req.json().catch(() => ({}));
+    body = await req.json();
+  } catch (parseError) {
+    console.warn('Failed to parse request body:', parseError);
+    body = {};
+  }
+
+  try {
     
     // Health check endpoint
     if (body.health === 'check') {
@@ -179,17 +186,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Error processing document:', error);
     
-    // Try to get documentId from the already parsed body or request
-    let finalDocumentId = 'unknown';
-    try {
-      // If we have body from earlier parsing, try to get documentId from it
-      const bodyFromError = await req.json().catch(() => null);
-      if (bodyFromError && bodyFromError.documentId) {
-        finalDocumentId = bodyFromError.documentId;
-      }
-    } catch {
-      // If parsing fails, continue with unknown documentId
-    }
+    // Use the already parsed body variable to get documentId
+    const finalDocumentId = body?.documentId || 'unknown';
+    console.log('📄 Using documentId for error handling:', finalDocumentId);
     
     if (finalDocumentId) {
       try {
