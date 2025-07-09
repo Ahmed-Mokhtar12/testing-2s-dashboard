@@ -13,16 +13,20 @@ export async function callOpenAI(context: string, message: string, consultantPro
   const searchService = new SearchService();
   const searchFunctions = searchService.getAvailableFunctions();
 
-  // Smart search decision based on query content
-  const requiresWebsiteSearch = message.toLowerCase().includes('hotel') || 
-                               message.toLowerCase().includes('room') ||
-                               message.toLowerCase().includes('amenities') ||
-                               message.toLowerCase().includes('service') ||
-                               message.toLowerCase().includes('pool') ||
-                               message.toLowerCase().includes('restaurant') ||
-                               message.toLowerCase().includes('booking') ||
-                               message.toLowerCase().includes('price') ||
-                               !consultantPrompt?.includes('recently discussed');
+  // Intelligent search decision - only trigger if database context seems insufficient
+  const hasRichDatabaseContext = context.includes('HOTEL REVIEWS') || 
+                                context.includes('COMPREHENSIVE HOTEL ANALYTICS') ||
+                                context.includes('RECENTLY UPLOADED DOCUMENTS');
+  
+  const requiresWebsiteSearch = !hasRichDatabaseContext && (
+    message.toLowerCase().includes('current') ||
+    message.toLowerCase().includes('latest') ||
+    message.toLowerCase().includes('today') ||
+    message.toLowerCase().includes('now') ||
+    message.toLowerCase().includes('availability') ||
+    message.toLowerCase().includes('contact') ||
+    message.toLowerCase().includes('location')
+  );
 
   console.log('🌐 Smart search decision:', { requiresWebsiteSearch, hasConsultantPrompt: !!consultantPrompt });
   console.log('🔧 Context length:', { context: context.length, prompt: consultantPrompt?.length || 0 });
