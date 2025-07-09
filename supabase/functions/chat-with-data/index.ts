@@ -15,6 +15,7 @@ import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
 import { ConversationSessionManager } from './conversation-session-manager.ts';
 import { PerformanceMonitor } from './performance-monitor.ts';
 import { SmartResponseValidator } from './smart-response-validator.ts';
+import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -125,21 +126,49 @@ serve(async (req) => {
     // Build enhanced system prompt with conversation continuity
     const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData, context);
     
-    // Enhanced AI response with conversation context
-    console.log('🤖 Calling OpenAI with enhanced context...');
+    // 🎯 INTELLIGENT AI RESPONSE WITH DATA ENFORCEMENT
+    console.log('🤖 Calling OpenAI with intelligent context and data enforcement...');
     let aiChoice = await callOpenAI(context, message, consultantPrompt);
     
-    // Validate and enhance response
-    const validationResult = SmartResponseValidator.validateAIResponse(aiChoice, message, conversationData);
+    // 🔥 CRITICAL: Apply Response Completeness Engine for intelligent data incorporation
+    console.log('🔧 Applying Response Completeness Engine...');
+    aiChoice = await ResponseCompletenessEngine.enforceDataIncorporation(
+      aiChoice,
+      message,
+      conversationData,
+      specificData,
+      context,
+      consultantPrompt,
+      callOpenAI
+    );
+    
+    // Enhanced validation with data utilization scoring
+    const validationResult = SmartResponseValidator.validateAIResponse(
+      aiChoice, 
+      message, 
+      conversationData, 
+      specificData
+    );
+    
+    console.log('📊 Intelligence metrics:', {
+      dataUtilization: validationResult.dataUtilizationScore,
+      validationPassed: validationResult.isValid,
+      issues: validationResult.issues.length
+    });
+    
     SmartResponseValidator.logValidationResults(validationResult, {
       conversationData,
       userMessage: message,
       response: aiChoice
     });
     
-    // Enhance response if needed
-    if (!validationResult.isValid) {
-      aiChoice = SmartResponseValidator.enhanceResponseIfNeeded(aiChoice, message, conversationData, validationResult);
+    // Final enhancement with interactive elements
+    if (aiChoice.message?.content) {
+      aiChoice.message.content = ResponseCompletenessEngine.addInteractiveElements(
+        aiChoice.message.content,
+        specificData,
+        message
+      );
     }
     
     console.log('🤖 OpenAI response structure:', {

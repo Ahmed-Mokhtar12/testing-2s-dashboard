@@ -190,4 +190,108 @@ export class ConversationContextAnalyzer {
       conversationContext
     };
   }
+  
+  // Enhanced intelligent tracking methods
+  static enhanceDataPointTracking(recentDataPoints: Map<string, any>, chatHistory: any[]): void {
+    console.log('🎯 Enhancing data point tracking with semantic analysis...');
+    
+    // Add semantic patterns and context relationships
+    if (chatHistory && chatHistory.length > 0) {
+      const allText = chatHistory.map(h => `${h.user_message || ''} ${h.ai_response || ''}`).join(' ').toLowerCase();
+      
+      // Detect data request patterns
+      const dataRequestPatterns = [
+        'past.*days?',
+        'last.*month',
+        'recent.*reviews?',
+        'latest.*data',
+        'current.*status',
+        'الأيام الماضية',
+        'الشهر الماضي',
+        'المراجعات الأخيرة'
+      ];
+      
+      dataRequestPatterns.forEach(pattern => {
+        const regex = new RegExp(pattern, 'gi');
+        const matches = allText.match(regex);
+        if (matches) {
+          recentDataPoints.set('data_request_type', matches[0]);
+          recentDataPoints.set('expects_specific_data', true);
+        }
+      });
+      
+      // Track question complexity
+      const questionWords = ['what', 'how', 'why', 'when', 'where', 'which', 'ما', 'كيف', 'لماذا', 'متى', 'أين', 'أي'];
+      const questionCount = questionWords.reduce((count, word) => {
+        return count + (allText.match(new RegExp(word, 'gi')) || []).length;
+      }, 0);
+      
+      if (questionCount > 2) {
+        recentDataPoints.set('conversation_complexity', 'high');
+      } else if (questionCount > 0) {
+        recentDataPoints.set('conversation_complexity', 'moderate');
+      }
+    }
+  }
+  
+  static addSemanticContextTracking(conversationContext: string, chatHistory: any[]): string {
+    console.log('🧠 Adding semantic context tracking...');
+    
+    if (chatHistory && chatHistory.length > 0) {
+      const recentMessages = chatHistory.slice(-3);
+      
+      // Detect conversation momentum
+      const topics = new Set<string>();
+      recentMessages.forEach(msg => {
+        const text = `${msg.user_message || ''} ${msg.ai_response || ''}`.toLowerCase();
+        
+        // Extract key topics
+        const keyTerms = text.match(/\b(review|score|rating|guest|service|room|food|staff|booking|price|facility|amenity)\w*\b/g);
+        if (keyTerms) {
+          keyTerms.forEach(term => topics.add(term));
+        }
+      });
+      
+      if (topics.size > 0) {
+        conversationContext += ` Focus topics: ${Array.from(topics).join(', ')}.`;
+      }
+    }
+    
+    return conversationContext;
+  }
+  
+  static generateSmartFollowUps(recentDataPoints: Map<string, any>, userMessage: string): string[] {
+    const followUps: string[] = [];
+    
+    // Generate contextual follow-ups based on data points
+    if (recentDataPoints.has('recent_score')) {
+      const score = recentDataPoints.get('recent_score');
+      if (score < 3) {
+        followUps.push('هل تريد استراتيجية محددة لتحسين هذه التقييمات المنخفضة؟');
+      } else if (score > 4) {
+        followUps.push('هل تريد معرفة العوامل التي تجعل تجربة الضيوف متميزة؟');
+      }
+    }
+    
+    if (recentDataPoints.has('time_period')) {
+      followUps.push('هل تريد مقارنة هذه النتائج مع فترات أخرى؟');
+    }
+    
+    if (recentDataPoints.has('focus_areas')) {
+      const areas = recentDataPoints.get('focus_areas');
+      if (areas.includes('service')) {
+        followUps.push('هل تحتاج توصيات محددة لتطوير الخدمة؟');
+      }
+      if (areas.includes('rooms')) {
+        followUps.push('هل تريد تحليل تفصيلي لتجربة الغرف؟');
+      }
+    }
+    
+    // Add general intelligent follow-ups
+    if (userMessage.toLowerCase().includes('data') || userMessage.includes('بيانات')) {
+      followUps.push('هل تريد تحليلاً أعمق أو رؤى إضافية من البيانات؟');
+    }
+    
+    return followUps;
+  }
 }
