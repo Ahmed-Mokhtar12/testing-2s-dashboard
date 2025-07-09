@@ -11,7 +11,7 @@ export class LanguageDetector {
       return 'English';
     }
     
-    // Default to the same language as the user's input
-    return 'the same language as the user';
+    // Default to English as the primary language for Two Seasons Hotel
+    return 'English';
   }
 }

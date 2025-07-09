@@ -5,6 +5,7 @@ import ActionConfirmationMessage from './ActionConfirmationMessage';
 import { Button } from '@/components/ui/button';
 import { Copy, RotateCcw, Edit3, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatChatTimestamp } from '@/utils/timezone';
 
 interface ChatMessageProps {
   message: Message;
@@ -91,11 +92,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
               {formatContent(message.content)}
             </div>
             <div className={`text-xs mt-3 ${message.isUser ? 'text-white/70' : 'text-gray-500'} text-left`}>
-              {message.timestamp.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-              })}
+              {formatChatTimestamp(message.timestamp)} <span className="opacity-60">(Dubai Time)</span>
             </div>
           </div>
         )}

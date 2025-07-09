@@ -2,6 +2,7 @@ import { ReviewAnalysisUtils } from './review-analysis-utils.ts';
 import { ContextDataStatsBuilder } from './context-data-stats-builder.ts';
 import { ContextSectionBuilder } from './context-section-builder.ts';
 import { ScoreNormalizationUtils } from './score-normalization-utils.ts';
+import { getDubaiTimezoneContext, DEFAULT_LANGUAGE } from './timezone-utils.ts';
 
 export class EnhancedContextBuilder {
   buildContextWithDocuments(data: any, userMessage: string): string {
@@ -9,6 +10,13 @@ export class EnhancedContextBuilder {
 
     // Add clear database access statement and role definition
     contextSections.push(ContextSectionBuilder.buildRoleAndAccessSection());
+    
+    // Add Dubai timezone and language context
+    contextSections.push('⏰ OPERATIONAL CONTEXT:');
+    contextSections.push(getDubaiTimezoneContext());
+    contextSections.push(`Default Language: ${DEFAULT_LANGUAGE}`);
+    contextSections.push('Hotel operates in Dubai timezone (GST, UTC+4) for all business operations.');
+    contextSections.push('');
 
     // Add data statistics to show AI what's available
     const dataStats = ContextDataStatsBuilder.buildDataStatistics(data);

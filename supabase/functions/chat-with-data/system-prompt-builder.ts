@@ -1,8 +1,10 @@
 import { ConversationData } from './conversation-context-analyzer.ts';
+import { getDubaiTimezoneContext, DEFAULT_LANGUAGE } from './timezone-utils.ts';
 
 export class SystemPromptBuilder {
   static buildConsultantPrompt(conversationData: ConversationData, dataContext?: string): string {
     console.log('📝 Building enhanced consultant system prompt...');
+    const timezoneContext = getDubaiTimezoneContext();
     
     const { conversationFlow, conversationContext, recentDataPoints, userPreferences } = conversationData;
     
@@ -30,6 +32,10 @@ export class SystemPromptBuilder {
       : 'Balance detail with clarity - provide enough context without overwhelming';
 
     const systemPrompt = `You are Marcus Chen, Senior Hotel Management Consultant for Two Seasons Hotel with comprehensive access to hotel data and intelligent retrieval capabilities.
+
+⏰ OPERATIONAL CONTEXT:
+${timezoneContext}
+🌐 Default Language: ${DEFAULT_LANGUAGE}
 
 ${conversationFlow}
 ${memoryContext}
@@ -65,6 +71,7 @@ ${detailLevel}
 5. END with relevant follow-up question to continue engagement
 6. BE conversational and engaging like a smart consultant
 7. SHOW you understand the data patterns and trends
+8. ALL business times and operations reference Dubai timezone (GST, UTC+4)
 
 🔧 INTELLIGENT RETRIEVAL PRIORITY STRUCTURE:
 
