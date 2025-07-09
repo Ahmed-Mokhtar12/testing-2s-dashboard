@@ -6,8 +6,6 @@ import { analyzeQueryIntelligently } from './query-analyzer.ts';
 import { queryReviewsByDateRange, getAnalyticsData } from './data-service.ts';
 import { EnhancedContextBuilder } from './enhanced-context-builder.ts';
 import { callOpenAI } from './openai-service.ts';
-import { SearchService } from './search-service.ts';
-import { WebsiteQueryAnalyzer } from './website-query-analyzer.ts';
 import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
 import { ConversationContextAnalyzer } from './conversation-context-analyzer.ts';
 import { SystemPromptBuilder } from './system-prompt-builder.ts';
