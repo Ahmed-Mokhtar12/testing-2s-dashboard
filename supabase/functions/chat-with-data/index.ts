@@ -14,6 +14,8 @@ import { ConversationSessionManager } from './conversation-session-manager.ts';
 import { PerformanceMonitor } from './performance-monitor.ts';
 import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
+import { DataAvailabilityChecker } from './data-availability-checker.ts';
+import { HonestResponseGenerator } from './honest-response-generator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -124,13 +126,23 @@ serve(async (req) => {
     // Build enhanced system prompt with conversation continuity
     const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData, context);
     
-    // 🎯 INTELLIGENT AI RESPONSE WITH DATA ENFORCEMENT
-    console.log('🤖 Calling OpenAI with intelligent context and data enforcement...');
+    // 🎯 DATA AVAILABILITY ASSESSMENT
+    console.log('🔍 Assessing data availability...');
+    const dataAvailability = DataAvailabilityChecker.assessDataAvailability(message, allData);
+    console.log('📊 Data availability assessment:', {
+      canAnswer: dataAvailability.canAnswerCompletely,
+      available: dataAvailability.availableDataSources,
+      missing: dataAvailability.missingDataSources,
+      confidence: dataAvailability.confidenceLevel
+    });
+
+    // 🤖 HONEST AI RESPONSE WITH DATA INTEGRITY
+    console.log('🤖 Calling OpenAI with honest data-aware context...');
     let aiChoice = await callOpenAI(context, message, consultantPrompt);
     
-    // 🔥 CRITICAL: Apply Response Completeness Engine for intelligent data incorporation
-    console.log('🔧 Applying Response Completeness Engine...');
-    aiChoice = await ResponseCompletenessEngine.enforceDataIncorporation(
+    // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication
+    console.log('🔧 Applying Data Honesty Engine...');
+    aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(
       aiChoice,
       message,
       conversationData,

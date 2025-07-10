@@ -16,30 +16,59 @@ export class SmartResponseValidator {
     const content = response.message?.content || '';
     let dataUtilizationScore = 0.5; // Base score
     
-    // CRITICAL: Check for data retrieval vs data usage disconnect
+    // CRITICAL: Check for DATA HONESTY vs FABRICATION
     if (availableData) {
       const hasReviewData = availableData.reviews && availableData.reviews.length > 0;
       const hasAnalyticsData = availableData.analytics && availableData.analytics.totalReviews > 0;
       
+      // Check for FABRICATED OPERATIONAL DATA (Major Issue)
+      const fabricationIndicators = [
+        /occupancy.{0,20}\d+%/i,
+        /adr.{0,20}\$?\d+/i,
+        /revenue.{0,20}\$?\d+/i,
+        /\d+%.*occupancy/i,
+        /average daily rate.{0,20}\d+/i,
+        /revpar.{0,20}\d+/i,
+        /booking.*\d+/i
+      ];
+      
+      const containsFabrication = fabricationIndicators.some(pattern => pattern.test(content));
+      if (containsFabrication) {
+        issues.push('CRITICAL: AI fabricated operational data that does not exist in database');
+        suggestions.push('AI must request missing data instead of fabricating it');
+        dataUtilizationScore = 0.0; // Severe penalty for fabrication
+      }
+      
+      // Reward HONEST responses about data limitations
+      const honestyIndicators = [
+        'لا أملك',
+        'غير متوفر',
+        'أحتاج بيانات',
+        'don\'t have',
+        'not available',
+        'need data'
+      ];
+      
+      const isHonestAboutLimitations = honestyIndicators.some(phrase => 
+        content.toLowerCase().includes(phrase.toLowerCase())
+      );
+      
+      if (isHonestAboutLimitations && !containsFabrication) {
+        dataUtilizationScore += 0.4; // Reward honesty
+      }
+      
       if (hasReviewData || hasAnalyticsData) {
-        dataUtilizationScore += 0.3;
-        
-        // Check if AI incorporated specific data points
+        // Check if AI properly used available review data
         const reviewCount = availableData.reviews?.length || availableData.analytics?.totalReviews || 0;
         const avgScore = availableData.analytics?.averageScore;
         
-        // Critical data incorporation checks
         if (reviewCount > 0) {
           const hasCountReference = content.includes(reviewCount.toString()) || 
                                   content.includes('review') || 
                                   content.includes('مراجعة');
           
-          if (!hasCountReference) {
-            issues.push('AI failed to incorporate retrieved review count data');
-            suggestions.push(`Must mention the ${reviewCount} reviews found in database`);
-            dataUtilizationScore -= 0.4;
-          } else {
-            dataUtilizationScore += 0.2;
+          if (hasCountReference && !containsFabrication) {
+            dataUtilizationScore += 0.3; // Reward proper use of available data
           }
         }
         
@@ -50,29 +79,9 @@ export class SmartResponseValidator {
                                    content.includes('نقاط') ||
                                    content.includes('تقييم');
           
-          if (!hasScoreReference) {
-            issues.push('AI failed to incorporate retrieved score data');
-            suggestions.push(`Must mention the average score of ${avgScore.toFixed(1)}`);
-            dataUtilizationScore -= 0.3;
-          } else {
-            dataUtilizationScore += 0.2;
+          if (hasScoreReference && !containsFabrication) {
+            dataUtilizationScore += 0.2; // Reward proper use of available data
           }
-        }
-        
-        // Check for "retrieving data" or similar incomplete responses
-        const incompleteResponsePhrases = [
-          'retrieving',
-          'جاري البحث',
-          'getting data',
-          'جاري الحصول',
-          'looking for',
-          'searching database'
-        ];
-        
-        if (incompleteResponsePhrases.some(phrase => content.toLowerCase().includes(phrase.toLowerCase()))) {
-          issues.push('CRITICAL: AI gave incomplete response despite having data available');
-          suggestions.push('AI must provide complete analysis using available data immediately');
-          dataUtilizationScore = 0.1;
         }
       }
     }

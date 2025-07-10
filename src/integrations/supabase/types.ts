@@ -235,6 +235,33 @@ export type Database = {
         }
         Relationships: []
       }
+      Sop: {
+        Row: {
+          department_name: string | null
+          file_id: string
+          id: string
+          section: string | null
+          sop: string | null
+          title: string | null
+        }
+        Insert: {
+          department_name?: string | null
+          file_id: string
+          id?: string
+          section?: string | null
+          sop?: string | null
+          title?: string | null
+        }
+        Update: {
+          department_name?: string | null
+          file_id?: string
+          id?: string
+          section?: string | null
+          sop?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
       uploaded_documents: {
         Row: {
           chunk_count: number | null
