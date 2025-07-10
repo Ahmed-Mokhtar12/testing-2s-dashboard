@@ -12,7 +12,7 @@ import { SystemPromptBuilder } from './system-prompt-builder.ts';
 import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
 import { ConversationSessionManager } from './conversation-session-manager.ts';
 import { PerformanceMonitor } from './performance-monitor.ts';
-import { SmartResponseValidator } from './smart-response-validator-refactored.ts';
+import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 import { DataAvailabilityChecker } from './data-availability-checker.ts';
 import { HonestResponseGenerator } from './honest-response-generator.ts';
