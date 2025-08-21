@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -358,10 +358,10 @@ export type Database = {
       get_recent_document_context: {
         Args: { limit_count?: number }
         Returns: {
-          content: string
-          document_filename: string
-          document_category: string
           chunk_index: number
+          content: string
+          document_category: string
+          document_filename: string
           relevance_score: number
         }[]
       }
@@ -422,10 +422,10 @@ export type Database = {
         Returns: undefined
       }
       match_documents: {
-        Args: { query_embedding: string; match_count?: number; filter?: Json }
+        Args: { filter?: Json; match_count?: number; query_embedding: string }
         Returns: {
-          id: number
           content: string
+          id: number
           metadata: Json
           similarity: number
         }[]
@@ -433,8 +433,8 @@ export type Database = {
       N8N_2S: {
         Args: { filter: Json; match_count: number; query_embedding: string }
         Returns: {
-          id: number
           content: string
+          id: number
           metadata: Json
           similarity: number
         }[]
