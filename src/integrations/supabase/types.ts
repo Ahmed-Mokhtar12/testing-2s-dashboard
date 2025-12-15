@@ -59,75 +59,24 @@ export type Database = {
         }
         Relationships: []
       }
-      "Hotel Reviews": {
-        Row: {
-          Author: string | null
-          created_at: string
-          Date: string | null
-          Hotel: string | null
-          id: number
-          Language: string | null
-          Response: string | null
-          "Reviews Summary": string | null
-          Score: number | null
-          Source: string | null
-          Text: string | null
-          Title: string | null
-          URL: string | null
-        }
-        Insert: {
-          Author?: string | null
-          created_at?: string
-          Date?: string | null
-          Hotel?: string | null
-          id?: number
-          Language?: string | null
-          Response?: string | null
-          "Reviews Summary"?: string | null
-          Score?: number | null
-          Source?: string | null
-          Text?: string | null
-          Title?: string | null
-          URL?: string | null
-        }
-        Update: {
-          Author?: string | null
-          created_at?: string
-          Date?: string | null
-          Hotel?: string | null
-          id?: number
-          Language?: string | null
-          Response?: string | null
-          "Reviews Summary"?: string | null
-          Score?: number | null
-          Source?: string | null
-          Text?: string | null
-          Title?: string | null
-          URL?: string | null
-        }
-        Relationships: []
-      }
-      "Info Summary": {
+      conducted_training: {
         Row: {
           created_at: string
-          "Email Summary": string | null
-          From: string | null
+          embedding: string | null
           id: number
-          To: string | null
+          summary_of_the_training: string | null
         }
         Insert: {
-          created_at?: string
-          "Email Summary"?: string | null
-          From?: string | null
+          created_at: string
+          embedding?: string | null
           id?: number
-          To?: string | null
+          summary_of_the_training?: string | null
         }
         Update: {
           created_at?: string
-          "Email Summary"?: string | null
-          From?: string | null
+          embedding?: string | null
           id?: number
-          To?: string | null
+          summary_of_the_training?: string | null
         }
         Relationships: []
       }
@@ -186,15 +135,7 @@ export type Database = {
           is_recent_context?: boolean | null
           metadata?: Json | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "N8N_2S_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "uploaded_documents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       n8n_chat_histories: {
         Row: {
@@ -214,24 +155,45 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
+      reviews: {
         Row: {
-          created_at: string | null
-          email: string | null
-          id: string
-          updated_at: string | null
+          Author: string | null
+          Date: string | null
+          "Hotel Name": string | null
+          id: number
+          Language: string | null
+          "Response Text": string | null
+          Score: number | null
+          Source: string | null
+          Text: string | null
+          Title: string | null
+          URL: string | null
         }
         Insert: {
-          created_at?: string | null
-          email?: string | null
-          id: string
-          updated_at?: string | null
+          Author?: string | null
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number
+          Language?: string | null
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
         }
         Update: {
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          updated_at?: string | null
+          Author?: string | null
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number
+          Language?: string | null
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
         }
         Relationships: []
       }
@@ -259,60 +221,6 @@ export type Database = {
           section?: string | null
           sop?: string | null
           title?: string | null
-        }
-        Relationships: []
-      }
-      uploaded_documents: {
-        Row: {
-          chunk_count: number | null
-          created_at: string
-          document_category: string | null
-          file_path: string
-          file_size: number
-          id: string
-          last_accessed: string | null
-          mime_type: string
-          original_filename: string
-          processed_at: string | null
-          processing_error: string | null
-          relevance_reason: string | null
-          relevance_score: number | null
-          session_id: string
-          upload_status: string
-        }
-        Insert: {
-          chunk_count?: number | null
-          created_at?: string
-          document_category?: string | null
-          file_path: string
-          file_size: number
-          id?: string
-          last_accessed?: string | null
-          mime_type: string
-          original_filename: string
-          processed_at?: string | null
-          processing_error?: string | null
-          relevance_reason?: string | null
-          relevance_score?: number | null
-          session_id: string
-          upload_status?: string
-        }
-        Update: {
-          chunk_count?: number | null
-          created_at?: string
-          document_category?: string | null
-          file_path?: string
-          file_size?: number
-          id?: string
-          last_accessed?: string | null
-          mime_type?: string
-          original_filename?: string
-          processed_at?: string | null
-          processing_error?: string | null
-          relevance_reason?: string | null
-          relevance_score?: number | null
-          session_id?: string
-          upload_status?: string
         }
         Relationships: []
       }
@@ -351,10 +259,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
       get_recent_document_context: {
         Args: { limit_count?: number }
         Returns: {
@@ -364,58 +268,6 @@ export type Database = {
           document_filename: string
           relevance_score: number
         }[]
-      }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
       }
       mark_recent_document_context: {
         Args: { doc_id: string }
@@ -438,42 +290,6 @@ export type Database = {
           metadata: Json
           similarity: number
         }[]
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
       }
     }
     Enums: {
