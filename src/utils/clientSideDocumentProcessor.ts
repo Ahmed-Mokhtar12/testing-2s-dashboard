@@ -56,27 +56,10 @@ export class ClientSideDocumentProcessor {
         throw new Error('لم يتم العثور على نص في المستند');
       }
 
-      // Store document metadata
-      this.updateProgress('storing', 50, 'حفظ معلومات المستند...');
+      // Generate a unique document ID
+      const documentId = crypto.randomUUID();
       
-      const { data: documentData, error: docError } = await supabase
-        .from('uploaded_documents')
-        .insert({
-          original_filename: file.name,
-          file_path: `client-processed/${Date.now()}-${file.name}`,
-          file_size: file.size,
-          mime_type: file.type,
-          session_id: sessionId,
-          upload_status: 'processed',
-          processed_at: new Date().toISOString(),
-          document_category: 'user_upload'
-        })
-        .select()
-        .single();
-
-      if (docError) {
-        throw new Error(`خطأ في حفظ معلومات المستند: ${docError.message}`);
-      }
+      this.updateProgress('storing', 50, 'حفظ معلومات المستند...');
 
       this.updateProgress('indexing', 70, 'فهرسة محتوى المستند...');
 
@@ -86,7 +69,7 @@ export class ClientSideDocumentProcessor {
         const { error: chunkError } = await supabase
           .from('N8N_2S')
           .insert({
-            document_id: documentData.id,
+            document_id: documentId,
             content: chunk,
             chunk_index: index,
             is_recent_context: true,
@@ -95,7 +78,8 @@ export class ClientSideDocumentProcessor {
               file_type: file.type,
               chunk_size: chunk.length,
               total_chunks: chunks.length,
-              processed_client_side: true
+              processed_client_side: true,
+              session_id: sessionId
             }
           });
 
@@ -106,20 +90,11 @@ export class ClientSideDocumentProcessor {
 
       await Promise.all(chunkPromises);
 
-      // Update document with chunk count
-      await supabase
-        .from('uploaded_documents')
-        .update({ 
-          chunk_count: chunks.length,
-          last_accessed: new Date().toISOString()
-        })
-        .eq('id', documentData.id);
-
       this.updateProgress('complete', 100, 'تم معالجة المستند بنجاح');
 
       return {
         success: true,
-        documentId: documentData.id,
+        documentId: documentId,
         text: extractedText,
         chunkCount: chunks.length
       };
