@@ -15,11 +15,15 @@ interface ActionRequest {
   messageId: string;
 }
 
-// n8n Webhook configuration
-const N8N_BASE_URL = 'https://n8n-2seasons-u38985.vm.elestio.app';
-const N8N_WEBHOOK_ID = Deno.env.get('N8N_WEBHOOK_ID') || 'YOUR_WEBHOOK_ID_HERE';
+// n8n Webhook configuration - loaded from environment variables for security
+const N8N_BASE_URL = Deno.env.get('N8N_BASE_URL');
+const N8N_WEBHOOK_ID = Deno.env.get('N8N_WEBHOOK_ID');
 
-console.log('🔧 N8N Webhook configured:', N8N_WEBHOOK_ID);
+if (!N8N_BASE_URL || !N8N_WEBHOOK_ID) {
+  console.error('🚨 Missing N8N configuration: N8N_BASE_URL or N8N_WEBHOOK_ID not set');
+}
+
+console.log('🔧 N8N Webhook configured:', N8N_WEBHOOK_ID ? 'Set' : 'Not Set');
 
 // Function to execute action using n8n webhook
 async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
