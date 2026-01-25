@@ -43,3 +43,6 @@ port = 54331
 [functions]
 enabled = true
 port = 54332
+
+[functions.whatsapp-web-chat]
+verify_jwt = false
