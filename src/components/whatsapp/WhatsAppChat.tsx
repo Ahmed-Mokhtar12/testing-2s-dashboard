@@ -4,7 +4,15 @@ import WhatsAppInput from './WhatsAppInput';
 import { useWhatsAppChat, WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
 
 const WhatsAppChat: React.FC = () => {
-  const { messages, isLoading, isLoadingHistory, sendMessage } = useWhatsAppChat();
+  const { 
+    messages, 
+    isLoading, 
+    isLoadingHistory, 
+    sendMessage, 
+    senderNumber,
+    availableNumbers,
+    changeSenderNumber 
+  } = useWhatsAppChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -17,6 +25,23 @@ const WhatsAppChat: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Sender selector */}
+      {availableNumbers.length > 0 && (
+        <div className="bg-[#F0F2F5] px-4 py-2 border-b border-gray-200">
+          <select
+            value={senderNumber}
+            onChange={(e) => changeSenderNumber(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#25D366]"
+          >
+            {availableNumbers.map((num) => (
+              <option key={num} value={num}>
+                +{num}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Chat area with WhatsApp background pattern */}
       <div 
         className="flex-1 overflow-y-auto px-4 py-2"
