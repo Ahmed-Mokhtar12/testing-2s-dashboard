@@ -1,11 +1,9 @@
 import React from 'react';
-import WhatsAppHeader from '@/components/whatsapp/WhatsAppHeader';
 import WhatsAppChat from '@/components/whatsapp/WhatsAppChat';
 
 const WhatsAppLanding: React.FC = () => {
   return (
-    <div className="h-screen flex flex-col bg-[#E5DDD5]">
-      <WhatsAppHeader />
+    <div className="h-screen w-full overflow-hidden">
       <WhatsAppChat />
     </div>
   );
