@@ -1,169 +1,103 @@
 
-# WhatsApp Web Landing Page with n8n Workflow Integration
+
+# Switch to Chat History Table for WhatsApp Conversations
 
 ## Overview
-Create a WhatsApp-style chat page (`/whatsapp`) that connects directly to the n8n workflow webhook. All messages sent from this page will be visible in the n8n workflow execution logs, allowing you to see the complete conversation (user messages + AI responses) directly in n8n.
+Modify the WhatsApp interface to use the `Chat History` table instead of `website_chats`, displaying conversations based on the `Sender Number` column.
 
-## How It Works
+## Data Structure Mapping
 
-```text
-┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│   Web Page Chat     │     │   Edge Function     │     │   n8n Workflow      │
-│   /whatsapp         │────▶│  whatsapp-web-chat  │────▶│   Webhook Trigger   │
-│                     │◀────│                     │◀────│   + AI Agent        │
-└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
-                                                                   │
-                                                                   ▼
-                                                        ┌─────────────────────┐
-                                                        │  You can see the    │
-                                                        │  full conversation  │
-                                                        │  in n8n execution   │
-                                                        │  logs               │
-                                                        └─────────────────────┘
-```
+| Current (website_chats) | New (Chat History) |
+|------------------------|-------------------|
+| `session_id` | `Sender Number` |
+| `user_message` | `Sender Message` |
+| `ai_response` | `Ai Reply` |
+| `created_at` | `created_at` |
+| `is_archived` | `is_archived` |
 
-## Files to Create
-
-### 1. WhatsApp Landing Page
-**File:** `src/pages/WhatsAppLanding.tsx`
-
-A full-page WhatsApp Web-style interface with:
-- Green header with hotel logo and "Two Seasons Hotel Dubai" title
-- Chat area with WhatsApp-style message bubbles
-- Message input with send button
-- WhatsApp's signature design (green checkmarks, timestamps, etc.)
-
-### 2. WhatsApp Components
-
-**File:** `src/components/whatsapp/WhatsAppHeader.tsx`
-- Hotel avatar and name
-- Online status indicator
-- Back button to return to main chat
-
-**File:** `src/components/whatsapp/WhatsAppMessage.tsx`
-- Message bubbles styled like WhatsApp
-- Sent messages: green background, right-aligned
-- Received messages: white background, left-aligned
-- Timestamps and checkmarks
-
-**File:** `src/components/whatsapp/WhatsAppInput.tsx`
-- Input field with emoji button
-- Attachment button
-- Send button
-- Mic button (styling only)
-
-**File:** `src/components/whatsapp/WhatsAppChat.tsx`
-- Container for messages and input
-- Welcome message from the hotel
-
-### 3. Chat Hook
-**File:** `src/hooks/useWhatsAppChat.ts`
-
-Manages chat state:
-- Messages array (user + AI)
-- Sending messages to Edge Function
-- Receiving responses
-- Loading state
-
-### 4. Edge Function
-**File:** `supabase/functions/whatsapp-web-chat/index.ts`
-
-Bridge between web page and n8n:
-- Receives message from web page
-- Sends POST request to n8n webhook
-- Returns AI response to web page
-- Saves conversation to `website_chats` table
+## What Stays the Same
+- WhatsApp icon in header
+- All WhatsApp UI design (colors, bubbles, layout)
+- Edge Function for sending messages to n8n
+- n8n workflow integration
 
 ## Files to Modify
 
-### 1. App Router
-**File:** `src/App.tsx`
+### 1. useWhatsAppChat.ts
+**Changes:**
+- Replace `sessionId` with `senderNumber` (phone number identifier)
+- Change data source from `website_chats` to `Chat History`
+- Update column names:
+  - `user_message` to `Sender Message`
+  - `ai_response` to `Ai Reply`
+  - `session_id` to `Sender Number`
+- Update localStorage key from `whatsapp_session_id` to `whatsapp_sender_number`
 
-Add new route:
-```tsx
-<Route path="/whatsapp" element={<WhatsAppLanding />} />
+**Load History Query:**
+```typescript
+const { data, error } = await supabase
+  .from('Chat History')
+  .select('*')
+  .eq('Sender Number', senderNumber)
+  .eq('is_archived', false)
+  .order('created_at', { ascending: true });
 ```
 
-### 2. WhatsApp Icon Link
-**File:** `src/components/ChatHeader.tsx`
+**Message Mapping:**
+```typescript
+// User message
+content: chat['Sender Message']
 
-Change from:
-```tsx
-<a href="https://wa.me/" target="_blank" ...>
+// AI response  
+content: chat['Ai Reply']
 ```
 
-To internal navigation:
-```tsx
-<Link to="/whatsapp" ...>
+### 2. Edge Function (whatsapp-web-chat/index.ts)
+**Changes:**
+- Accept `senderNumber` instead of `sessionId`
+- Save to `Chat History` table instead of `website_chats`
+- Use correct column names with spaces
+
+**New Insert:**
+```typescript
+await supabase
+  .from('Chat History')
+  .insert({
+    'Sender Number': senderNumber,
+    'Sender Message': message,
+    'Ai Reply': aiResponse,
+    created_at: new Date().toISOString(),
+  });
 ```
 
-### 3. Supabase Config
-**File:** `supabase/config.toml`
-
-Add Edge Function configuration:
-```toml
-[functions.whatsapp-web-chat]
-verify_jwt = false
+**n8n Payload Update:**
+```typescript
+const n8nPayload = {
+  message,
+  senderNumber,  // Changed from sessionId
+  timestamp: new Date().toISOString(),
+  source: 'web',
+};
 ```
 
-## Webhook Configuration
+## User Experience
+1. User opens `/whatsapp` page
+2. System checks localStorage for saved phone number
+3. If exists: loads conversation history from `Chat History` table
+4. If not: generates a new web-based identifier (e.g., `web-971505913426`)
+5. User sends message, AI responds
+6. Conversation saved to `Chat History` table
+7. Full history visible on page reload
 
-The Edge Function will send requests to the n8n webhook you provided:
+## Technical Notes
+- The `Chat History` table uses column names with spaces (e.g., `Sender Number`)
+- TypeScript access requires bracket notation: `chat['Sender Message']`
+- The existing RLS policies allow reading by `Sender Number` match
 
-**Webhook URL:** `https://n8n.srv1095066.hstgr.cloud/webhook/d3728736-d495-40b2-9a05-a0ddc7480c69/webhook`
+## Summary of Changes
 
-This needs to be stored as a Supabase secret: `N8N_WHATSAPP_WEBHOOK_URL`
-
-## Technical Details
-
-### Message Flow
-1. User types message in WhatsApp-style input
-2. Frontend sends message to Edge Function
-3. Edge Function POSTs to n8n webhook with payload:
-   ```json
-   {
-     "message": "User's message text",
-     "sessionId": "unique-session-id",
-     "timestamp": "2026-01-25T12:00:00Z",
-     "source": "web"
-   }
-   ```
-4. n8n processes via AI Agent (you see this in n8n execution)
-5. n8n returns AI response
-6. Edge Function returns response to frontend
-7. Frontend displays AI response in WhatsApp-style bubble
-
-### What You'll See in n8n
-When a user sends a message from the web page:
-- The webhook trigger shows the incoming message
-- The AI Agent node shows the processing
-- The response node shows what's being sent back
-- Full conversation history is visible in execution data
-
-### Design Colors (WhatsApp Theme)
-- Header: `#128C7E` (WhatsApp dark green)
-- Sent messages: `#DCF8C6` (WhatsApp green bubble)
-- Chat background: `#E5DDD5` (WhatsApp pattern)
-- Input area: `#F0F0F0`
-
-## Secret Required
-
-**N8N_WHATSAPP_WEBHOOK_URL:** `https://n8n.srv1095066.hstgr.cloud/webhook/d3728736-d495-40b2-9a05-a0ddc7480c69/webhook`
-
-This secret needs to be added to Supabase before the Edge Function will work.
-
-## Summary
-
-| File | Type | Purpose |
-|------|------|---------|
-| `src/pages/WhatsAppLanding.tsx` | New | Main WhatsApp-style page |
-| `src/components/whatsapp/WhatsAppHeader.tsx` | New | Header component |
-| `src/components/whatsapp/WhatsAppMessage.tsx` | New | Message bubble component |
-| `src/components/whatsapp/WhatsAppInput.tsx` | New | Input area component |
-| `src/components/whatsapp/WhatsAppChat.tsx` | New | Chat container component |
-| `src/hooks/useWhatsAppChat.ts` | New | Chat state management |
-| `supabase/functions/whatsapp-web-chat/index.ts` | New | Edge Function for n8n |
-| `src/App.tsx` | Modify | Add /whatsapp route |
-| `src/components/ChatHeader.tsx` | Modify | Update icon link |
-| `supabase/config.toml` | Modify | Add function config |
+| File | Change |
+|------|--------|
+| `src/hooks/useWhatsAppChat.ts` | Switch to `Chat History` table, update column names |
+| `supabase/functions/whatsapp-web-chat/index.ts` | Save to `Chat History` instead of `website_chats` |
 
