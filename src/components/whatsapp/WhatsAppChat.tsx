@@ -1,102 +1,110 @@
-import React, { useEffect, useRef } from 'react';
-import WhatsAppMessage from './WhatsAppMessage';
-import WhatsAppInput from './WhatsAppInput';
-import { useWhatsAppChat, WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import WhatsAppSidebar from './WhatsAppSidebar';
+import WhatsAppChatPanel from './WhatsAppChatPanel';
+import { useWhatsAppChat, WhatsAppMessage } from '@/hooks/useWhatsAppChat';
+
+interface ChatPreview {
+  senderNumber: string;
+  lastMessage: string;
+  timestamp: string;
+  unreadCount?: number;
+}
 
 const WhatsAppChat: React.FC = () => {
+  const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const { 
     messages, 
     isLoading, 
     isLoadingHistory, 
     sendMessage, 
     senderNumber,
-    availableNumbers,
     changeSenderNumber 
   } = useWhatsAppChat();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // Load all chat previews
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const loadChatPreviews = async () => {
+      setIsLoadingChats(true);
+      try {
+        // Get distinct sender numbers with their latest message
+        const { data, error } = await supabase
+          .from('Chat History')
+          .select('*')
+          .eq('is_archived', false)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error loading chats:', error);
+          return;
+        }
+
+        // Group by sender number and get latest message
+        const chatMap = new Map<string, ChatPreview>();
+        
+        data?.forEach((chat) => {
+          const num = chat['Sender Number'];
+          if (num && !chatMap.has(num)) {
+            const date = new Date(chat.created_at);
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            const isYesterday = new Date(now.setDate(now.getDate() - 1)).toDateString() === date.toDateString();
+            
+            let timestamp: string;
+            if (isToday) {
+              timestamp = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            } else if (isYesterday) {
+              timestamp = 'Yesterday';
+            } else {
+              timestamp = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            }
+
+            chatMap.set(num, {
+              senderNumber: num,
+              lastMessage: chat['Ai Reply'] || chat['Sender Message'] || '',
+              timestamp,
+            });
+          }
+        });
+
+        setChatPreviews(Array.from(chatMap.values()));
+      } catch (err) {
+        console.error('Failed to load chat previews:', err);
+      } finally {
+        setIsLoadingChats(false);
+      }
+    };
+
+    loadChatPreviews();
+  }, []);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Sender selector */}
-      {availableNumbers.length > 0 && (
-        <div className="bg-[#F0F2F5] px-4 py-2 border-b border-gray-200">
-          <select
-            value={senderNumber}
-            onChange={(e) => changeSenderNumber(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#25D366]"
-          >
-            {availableNumbers.map((num) => (
-              <option key={num} value={num}>
-                +{num}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Chat area with WhatsApp background pattern */}
-      <div 
-        className="flex-1 overflow-y-auto px-4 py-2"
-        style={{
-          backgroundColor: '#E5DDD5',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C7BBA9' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}
-      >
-        {/* Loading history indicator */}
-        {isLoadingHistory && (
-          <div className="flex justify-center my-4">
-            <div className="bg-white text-gray-500 text-xs px-3 py-2 rounded-lg shadow-sm">
-              Loading conversation...
-            </div>
-          </div>
-        )}
-
-        {/* Welcome message */}
-        {!isLoadingHistory && messages.length === 0 && (
-          <div className="flex justify-center my-4">
-            <div className="bg-[#FCF4CB] text-[#54656F] text-xs px-3 py-2 rounded-lg shadow-sm text-center max-w-[280px]">
-              <p className="font-medium">Welcome to Two Seasons Hotel Dubai! 👋</p>
-              <p className="mt-1">How can we assist you today?</p>
-            </div>
-          </div>
-        )}
-
-        {/* Messages */}
-        {messages.map((msg) => (
-          <WhatsAppMessage
-            key={msg.id}
-            content={msg.content}
-            isUser={msg.isUser}
-            timestamp={msg.timestamp}
-          />
-        ))}
-
-        {/* Typing indicator */}
-        {isLoading && (
-          <div className="flex justify-start mb-2">
-            <div className="bg-white rounded-lg rounded-tl-none px-4 py-3 shadow-sm">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
+    <div className="flex h-full w-full bg-[#111B21]">
+      {/* Sidebar */}
+      <div className="w-[30%] min-w-[300px] max-w-[500px] h-full">
+        <WhatsAppSidebar
+          chats={chatPreviews}
+          selectedNumber={senderNumber}
+          onSelectChat={changeSenderNumber}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          isLoading={isLoadingChats}
+        />
       </div>
 
-      {/* Input area */}
-      <WhatsAppInput onSend={sendMessage} disabled={isLoading} />
+      {/* Chat Panel */}
+      <div className="flex-1 h-full">
+        <WhatsAppChatPanel
+          messages={messages}
+          senderNumber={senderNumber}
+          isLoading={isLoading}
+          isLoadingHistory={isLoadingHistory}
+          onSendMessage={sendMessage}
+        />
+      </div>
     </div>
   );
 };
