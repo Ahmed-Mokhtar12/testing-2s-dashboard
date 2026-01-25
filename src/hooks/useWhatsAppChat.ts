@@ -12,20 +12,41 @@ export interface WhatsAppMessage {
 const getSenderNumber = () => {
   const stored = localStorage.getItem('whatsapp_sender_number');
   if (stored) return stored;
-  const newId = `web-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  localStorage.setItem('whatsapp_sender_number', newId);
-  return newId;
+  // Default to first known number - user can change later
+  return '971505913426';
+};
+
+const saveSenderNumber = (number: string) => {
+  localStorage.setItem('whatsapp_sender_number', number);
 };
 
 export const useWhatsAppChat = () => {
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [senderNumber] = useState(getSenderNumber);
+  const [senderNumber, setSenderNumber] = useState(getSenderNumber);
+  const [availableNumbers, setAvailableNumbers] = useState<string[]>([]);
 
-  // Load conversation history on mount
+  // Load available sender numbers
+  useEffect(() => {
+    const loadNumbers = async () => {
+      const { data, error } = await supabase
+        .from('Chat History')
+        .select('"Sender Number"')
+        .not('Sender Number', 'is', null);
+      
+      if (data && !error) {
+        const uniqueNumbers = [...new Set(data.map(d => d['Sender Number']).filter(Boolean))] as string[];
+        setAvailableNumbers(uniqueNumbers);
+      }
+    };
+    loadNumbers();
+  }, []);
+
+  // Load conversation history on mount or when sender changes
   useEffect(() => {
     const loadHistory = async () => {
+      setIsLoadingHistory(true);
       try {
         const { data, error } = await supabase
           .from('Chat History')
@@ -60,6 +81,8 @@ export const useWhatsAppChat = () => {
             }
           });
           setMessages(historyMessages);
+        } else {
+          setMessages([]);
         }
       } catch (err) {
         console.error('Failed to load history:', err);
@@ -70,6 +93,11 @@ export const useWhatsAppChat = () => {
 
     loadHistory();
   }, [senderNumber]);
+
+  const changeSenderNumber = useCallback((number: string) => {
+    saveSenderNumber(number);
+    setSenderNumber(number);
+  }, []);
 
   const sendMessage = useCallback(async (content: string) => {
     // Add user message immediately
@@ -127,5 +155,7 @@ export const useWhatsAppChat = () => {
     isLoadingHistory,
     sendMessage,
     senderNumber,
+    availableNumbers,
+    changeSenderNumber,
   };
 };
