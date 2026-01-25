@@ -12,16 +12,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { message, sessionId } = await req.json();
+    const { message, senderNumber } = await req.json();
 
-    if (!message || !sessionId) {
+    if (!message || !senderNumber) {
       return new Response(
-        JSON.stringify({ error: 'Message and sessionId are required' }),
+        JSON.stringify({ error: 'Message and senderNumber are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('📨 Received message from web:', { message, sessionId });
+    console.log('📨 Received message from web:', { message, senderNumber });
 
     // Get the n8n webhook URL from secrets
     const webhookUrl = Deno.env.get('N8N_WHATSAPP_WEBHOOK_URL');
@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     
     const n8nPayload = {
       message,
-      sessionId,
+      senderNumber,
       timestamp: new Date().toISOString(),
       source: 'web',
     };
@@ -79,11 +79,12 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { error: insertError } = await supabase
-      .from('website_chats')
+      .from('Chat History')
       .insert({
-        session_id: sessionId,
-        user_message: message,
-        ai_response: aiResponse,
+        'Sender Number': senderNumber,
+        'Sender Message': message,
+        'Ai Reply': aiResponse,
+        created_at: new Date().toISOString(),
       });
 
     if (insertError) {
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         response: aiResponse,
-        sessionId 
+        senderNumber 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
