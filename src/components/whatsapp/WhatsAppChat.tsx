@@ -6,6 +6,7 @@ import { useWhatsAppChat, WhatsAppMessage } from '@/hooks/useWhatsAppChat';
 
 interface ChatPreview {
   senderNumber: string;
+  name?: string;
   lastMessage: string;
   timestamp: string;
   unreadCount?: number;
@@ -64,6 +65,7 @@ const WhatsAppChat: React.FC = () => {
 
             chatMap.set(num, {
               senderNumber: num,
+              name: chat['Name'] || undefined,
               lastMessage: chat['Ai Reply'] || chat['Sender Message'] || '',
               timestamp,
             });
