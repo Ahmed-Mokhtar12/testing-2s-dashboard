@@ -4,6 +4,23 @@ import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
 
+const getDateLabel = (date: Date): string => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+};
+
+const isSameDay = (d1: Date, d2: Date): boolean =>
+  d1.getFullYear() === d2.getFullYear() &&
+  d1.getMonth() === d2.getMonth() &&
+  d1.getDate() === d2.getDate();
+
 interface WhatsAppChatPanelProps {
   messages: MessageType[];
   senderNumber: string;
@@ -88,15 +105,27 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
         )}
 
         {/* Messages */}
-        {messages.map((msg) => (
-          <WhatsAppMessage
-            key={msg.id}
-            content={msg.content}
-            isUser={msg.isUser}
-            timestamp={msg.timestamp}
-            mediaUrl={msg.mediaUrl}
-          />
-        ))}
+        {messages.map((msg, index) => {
+          const prevMsg = index > 0 ? messages[index - 1] : null;
+          const showDateSeparator = !prevMsg || !isSameDay(msg.timestamp, prevMsg.timestamp);
+          return (
+            <React.Fragment key={msg.id}>
+              {showDateSeparator && (
+                <div className="flex justify-center my-3">
+                  <div className="bg-white/90 text-[#54656F] text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-sm">
+                    {getDateLabel(msg.timestamp)}
+                  </div>
+                </div>
+              )}
+              <WhatsAppMessage
+                content={msg.content}
+                isUser={msg.isUser}
+                timestamp={msg.timestamp}
+                mediaUrl={msg.mediaUrl}
+              />
+            </React.Fragment>
+          );
+        })}
 
         {/* Typing indicator */}
         {isLoading && (
