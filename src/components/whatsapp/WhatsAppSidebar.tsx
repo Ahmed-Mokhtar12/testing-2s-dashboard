@@ -30,10 +30,12 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   const [activeFilter, setActiveFilter] = useState('All');
   const filters = ['All', 'Unread', 'Favourites', 'Groups'];
 
-  const filteredChats = chats.filter(chat => 
-    chat.senderNumber.includes(searchQuery) || 
-    chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredChats = chats.filter(chat => {
+    const q = searchQuery.toLowerCase();
+    return chat.senderNumber.includes(searchQuery) || 
+      chat.lastMessage.toLowerCase().includes(q) ||
+      (chat.name && chat.name.toLowerCase().includes(q));
+  });
 
   const formatPhoneNumber = (number: string) => {
     if (number.startsWith('971')) {
