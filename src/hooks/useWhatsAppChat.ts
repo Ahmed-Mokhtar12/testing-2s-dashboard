@@ -6,6 +6,7 @@ export interface WhatsAppMessage {
   content: string;
   isUser: boolean;
   timestamp: Date;
+  mediaUrl?: string;
 }
 
 // Get or create persistent sender number
@@ -63,12 +64,25 @@ export const useWhatsAppChat = () => {
         if (data && data.length > 0) {
           const historyMessages: WhatsAppMessage[] = [];
           data.forEach((chat) => {
+            // Extract media URL from Media column
+            let mediaUrl: string | undefined;
+            if (chat['Media']) {
+              if (typeof chat['Media'] === 'string') {
+                mediaUrl = chat['Media'];
+              } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
+                // Handle JSON object - try common keys
+                const mediaObj = chat['Media'] as Record<string, unknown>;
+                mediaUrl = (mediaObj.url || mediaObj.link || mediaObj.src) as string | undefined;
+              }
+            }
+
             if (chat['Sender Message']) {
               historyMessages.push({
                 id: `user-${chat.id}`,
                 content: chat['Sender Message'],
                 isUser: true,
                 timestamp: new Date(chat.created_at),
+                mediaUrl,
               });
             }
             if (chat['Ai Reply']) {

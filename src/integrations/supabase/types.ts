@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           id: number
           is_archived: boolean
+          Media: Json | null
           "Sender Message": string | null
           "Sender Number": string | null
         }
@@ -28,6 +29,7 @@ export type Database = {
           created_at: string
           id?: number
           is_archived?: boolean
+          Media?: Json | null
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }
@@ -36,6 +38,7 @@ export type Database = {
           created_at?: string
           id?: number
           is_archived?: boolean
+          Media?: Json | null
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }

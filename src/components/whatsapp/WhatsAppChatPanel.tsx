@@ -94,6 +94,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
             content={msg.content}
             isUser={msg.isUser}
             timestamp={msg.timestamp}
+            mediaUrl={msg.mediaUrl}
           />
         ))}
 
