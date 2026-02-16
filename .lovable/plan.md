@@ -1,103 +1,58 @@
 
 
-# Switch to Chat History Table for WhatsApp Conversations
+# اضافة دعم عمود Media في واجهة WhatsApp
 
-## Overview
-Modify the WhatsApp interface to use the `Chat History` table instead of `website_chats`, displaying conversations based on the `Sender Number` column.
+## الوضع الحالي
+جدول `Chat History` يحتوي على عمود `Media` (نوع jsonb) يخزن روابط الوسائط (صور، ملفات) المرسلة في المحادثات. لكن الكود الحالي يتجاهل هذا العمود تماما ولا يعرض اي وسائط.
 
-## Data Structure Mapping
+## البيانات في عمود Media
+- يحتوي على روابط مباشرة (مثل روابط Google Drive)
+- بعض السجلات تحتوي على `null` (بدون وسائط)
+- بعضها يحتوي على نص رابط مباشر
 
-| Current (website_chats) | New (Chat History) |
-|------------------------|-------------------|
-| `session_id` | `Sender Number` |
-| `user_message` | `Sender Message` |
-| `ai_response` | `Ai Reply` |
-| `created_at` | `created_at` |
-| `is_archived` | `is_archived` |
+## التغييرات المطلوبة
 
-## What Stays the Same
-- WhatsApp icon in header
-- All WhatsApp UI design (colors, bubbles, layout)
-- Edge Function for sending messages to n8n
-- n8n workflow integration
+### 1. تحديث نوع الرسالة (`useWhatsAppChat.ts`)
+- اضافة حقل `mediaUrl` اختياري في واجهة `WhatsAppMessage`
+- عند تحميل السجلات من الجدول، قراءة عمود `Media` وتمريره مع كل رسالة
 
-## Files to Modify
+### 2. تحديث مكون الرسالة (`WhatsAppMessage.tsx`)
+- اضافة خاصية `mediaUrl` اختيارية
+- عرض الصورة/الرابط فوق نص الرسالة اذا كان `mediaUrl` موجودا
+- التصميم يتبع نمط WhatsApp (صورة بزوايا مستديرة داخل فقاعة الرسالة)
 
-### 1. useWhatsAppChat.ts
-**Changes:**
-- Replace `sessionId` with `senderNumber` (phone number identifier)
-- Change data source from `website_chats` to `Chat History`
-- Update column names:
-  - `user_message` to `Sender Message`
-  - `ai_response` to `Ai Reply`
-  - `session_id` to `Sender Number`
-- Update localStorage key from `whatsapp_session_id` to `whatsapp_sender_number`
+### 3. تحديث لوحة المحادثة (`WhatsAppChatPanel.tsx`)
+- تمرير `mediaUrl` الى مكون `WhatsAppMessage`
 
-**Load History Query:**
-```typescript
-const { data, error } = await supabase
-  .from('Chat History')
-  .select('*')
-  .eq('Sender Number', senderNumber)
-  .eq('is_archived', false)
-  .order('created_at', { ascending: true });
+## التفاصيل التقنية
+
+### تحديث واجهة WhatsAppMessage
+```text
+interface WhatsAppMessage {
+  id: string;
+  content: string;
+  isUser: boolean;
+  timestamp: Date;
+  mediaUrl?: string;  // جديد
+}
 ```
 
-**Message Mapping:**
-```typescript
-// User message
-content: chat['Sender Message']
+### قراءة Media من الجدول
+عند تحميل السجلات، يتم قراءة `chat['Media']` وتمريره كـ `mediaUrl`. القيمة قد تكون:
+- `null` -- بدون وسائط
+- نص رابط مباشر (string)
+- كائن JSON
 
-// AI response  
-content: chat['Ai Reply']
-```
+### عرض الوسائط في WhatsAppMessage
+- اذا كان الرابط صورة: عرضها كـ `<img>` قابلة للنقر
+- اذا كان رابط عادي: عرضه كرابط قابل للنقر
+- التصميم داخل فقاعة الرسالة بنمط WhatsApp
 
-### 2. Edge Function (whatsapp-web-chat/index.ts)
-**Changes:**
-- Accept `senderNumber` instead of `sessionId`
-- Save to `Chat History` table instead of `website_chats`
-- Use correct column names with spaces
+## الملفات المتأثرة
 
-**New Insert:**
-```typescript
-await supabase
-  .from('Chat History')
-  .insert({
-    'Sender Number': senderNumber,
-    'Sender Message': message,
-    'Ai Reply': aiResponse,
-    created_at: new Date().toISOString(),
-  });
-```
-
-**n8n Payload Update:**
-```typescript
-const n8nPayload = {
-  message,
-  senderNumber,  // Changed from sessionId
-  timestamp: new Date().toISOString(),
-  source: 'web',
-};
-```
-
-## User Experience
-1. User opens `/whatsapp` page
-2. System checks localStorage for saved phone number
-3. If exists: loads conversation history from `Chat History` table
-4. If not: generates a new web-based identifier (e.g., `web-971505913426`)
-5. User sends message, AI responds
-6. Conversation saved to `Chat History` table
-7. Full history visible on page reload
-
-## Technical Notes
-- The `Chat History` table uses column names with spaces (e.g., `Sender Number`)
-- TypeScript access requires bracket notation: `chat['Sender Message']`
-- The existing RLS policies allow reading by `Sender Number` match
-
-## Summary of Changes
-
-| File | Change |
-|------|--------|
-| `src/hooks/useWhatsAppChat.ts` | Switch to `Chat History` table, update column names |
-| `supabase/functions/whatsapp-web-chat/index.ts` | Save to `Chat History` instead of `website_chats` |
+| الملف | التغيير |
+|-------|---------|
+| `src/hooks/useWhatsAppChat.ts` | اضافة `mediaUrl` للواجهة وقراءة عمود `Media` |
+| `src/components/whatsapp/WhatsAppMessage.tsx` | عرض الوسائط (صور/روابط) |
+| `src/components/whatsapp/WhatsAppChatPanel.tsx` | تمرير `mediaUrl` للمكون |
 
