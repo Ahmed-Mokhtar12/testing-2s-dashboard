@@ -3,6 +3,7 @@ import { Search, MessageSquarePlus, MoreVertical, Lock } from 'lucide-react';
 
 interface ChatPreview {
   senderNumber: string;
+  name?: string;
   lastMessage: string;
   timestamp: string;
   unreadCount?: number;
@@ -128,7 +129,7 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
               <div className="flex-1 min-w-0 border-b border-gray-100 py-1">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-[#111B21] truncate">
-                    {formatPhoneNumber(chat.senderNumber)}
+                    {chat.name || formatPhoneNumber(chat.senderNumber)}
                   </span>
                   <span className={`text-xs ${chat.unreadCount ? 'text-[#25D366]' : 'text-[#667781]'}`}>
                     {chat.timestamp}
