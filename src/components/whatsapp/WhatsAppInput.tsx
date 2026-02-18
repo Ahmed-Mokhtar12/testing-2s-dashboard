@@ -4,9 +4,10 @@ import { Send, Smile, Paperclip, Mic } from 'lucide-react';
 interface WhatsAppInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  isHumanMode?: boolean;
 }
 
-const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled }) => {
+const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHumanMode }) => {
   const [message, setMessage] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -48,7 +49,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled }) => {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message"
+          placeholder={isHumanMode ? "Type a message to the customer..." : "Type a message"}
           disabled={disabled}
           className="flex-1 bg-white rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#128C7E]/20 disabled:opacity-50"
         />

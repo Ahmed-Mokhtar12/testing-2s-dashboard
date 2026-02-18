@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Search, MoreVertical } from 'lucide-react';
+import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
@@ -26,7 +26,10 @@ interface WhatsAppChatPanelProps {
   senderNumber: string;
   isLoading: boolean;
   isLoadingHistory: boolean;
+  isHumanControlled: boolean;
+  isTogglingControl: boolean;
   onSendMessage: (message: string) => void;
+  onToggleHumanControl: () => void;
 }
 
 const formatPhoneNumber = (number: string) => {
@@ -41,7 +44,10 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   senderNumber,
   isLoading,
   isLoadingHistory,
+  isHumanControlled,
+  isTogglingControl,
   onSendMessage,
+  onToggleHumanControl,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -69,13 +75,61 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
             <h2 className="font-medium text-[#111B21]">
               {formatPhoneNumber(senderNumber)}
             </h2>
+            {/* Control mode indicator */}
+            <div className="flex items-center gap-1 mt-0.5">
+              {isHumanControlled ? (
+                <>
+                  <UserCheck size={10} className="text-orange-500" />
+                  <span className="text-[10px] text-orange-500 font-medium">Human Agent Active</span>
+                </>
+              ) : (
+                <>
+                  <Bot size={10} className="text-[#128C7E]" />
+                  <span className="text-[10px] text-[#128C7E] font-medium">AI Responding</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-5 text-[#54656F]">
+        <div className="flex items-center gap-3 text-[#54656F]">
+          {/* Takeover / Release button */}
+          <button
+            onClick={onToggleHumanControl}
+            disabled={isTogglingControl}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              isHumanControlled
+                ? 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-300'
+                : 'bg-[#128C7E]/10 text-[#128C7E] hover:bg-[#128C7E]/20 border border-[#128C7E]/30'
+            } disabled:opacity-60`}
+          >
+            {isTogglingControl ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : isHumanControlled ? (
+              <Bot size={12} />
+            ) : (
+              <UserCheck size={12} />
+            )}
+            {isTogglingControl
+              ? '...'
+              : isHumanControlled
+              ? 'Release to AI'
+              : 'Take Over'}
+          </button>
+
           <Search className="w-5 h-5 cursor-pointer hover:text-[#128C7E]" />
           <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#128C7E]" />
         </div>
       </div>
+
+      {/* Human control banner */}
+      {isHumanControlled && (
+        <div className="bg-orange-50 border-b border-orange-200 px-4 py-2 flex items-center gap-2">
+          <UserCheck size={14} className="text-orange-500 flex-shrink-0" />
+          <p className="text-xs text-orange-700">
+            <span className="font-semibold">Human Agent Mode:</span> AI has been paused. Your messages will be sent directly to the customer on WhatsApp.
+          </p>
+        </div>
+      )}
 
       {/* Chat area */}
       <div 
@@ -120,6 +174,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
               <WhatsAppMessage
                 content={msg.content}
                 isUser={msg.isUser}
+                isHumanReply={msg.isHumanReply}
                 timestamp={msg.timestamp}
                 mediaUrl={msg.mediaUrl}
               />
@@ -127,8 +182,8 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           );
         })}
 
-        {/* Typing indicator */}
-        {isLoading && (
+        {/* Typing indicator - only show in AI mode */}
+        {isLoading && !isHumanControlled && (
           <div className="flex justify-start mb-2">
             <div className="bg-white rounded-lg rounded-tl-none px-4 py-3 shadow-sm">
               <div className="flex gap-1">
@@ -140,11 +195,25 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           </div>
         )}
 
+        {/* Sending indicator in human mode */}
+        {isLoading && isHumanControlled && (
+          <div className="flex justify-end mb-2">
+            <div className="bg-[#DCF8C6] rounded-lg rounded-tr-none px-3 py-2 shadow-sm flex items-center gap-2">
+              <Loader2 size={12} className="animate-spin text-gray-500" />
+              <span className="text-xs text-gray-500">Sending...</span>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input area */}
-      <WhatsAppInput onSend={onSendMessage} disabled={isLoading} />
+      <WhatsAppInput 
+        onSend={onSendMessage} 
+        disabled={isLoading}
+        isHumanMode={isHumanControlled}
+      />
     </div>
   );
 };
