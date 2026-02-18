@@ -18,8 +18,10 @@ export type Database = {
         Row: {
           "Ai Reply": string | null
           created_at: string
+          human_reply: string | null
           id: number
           is_archived: boolean
+          is_human_controlled: boolean
           Media: Json | null
           Name: string | null
           "Sender Message": string | null
@@ -28,8 +30,10 @@ export type Database = {
         Insert: {
           "Ai Reply"?: string | null
           created_at: string
+          human_reply?: string | null
           id?: number
           is_archived?: boolean
+          is_human_controlled?: boolean
           Media?: Json | null
           Name?: string | null
           "Sender Message"?: string | null
@@ -38,8 +42,10 @@ export type Database = {
         Update: {
           "Ai Reply"?: string | null
           created_at?: string
+          human_reply?: string | null
           id?: number
           is_archived?: boolean
+          is_human_controlled?: boolean
           Media?: Json | null
           Name?: string | null
           "Sender Message"?: string | null
