@@ -15,7 +15,6 @@ interface ActionRequest {
   messageId: string;
 }
 
-// n8n Webhook configuration - loaded from environment variables for security
 const N8N_BASE_URL = Deno.env.get('N8N_BASE_URL');
 const N8N_WEBHOOK_ID = Deno.env.get('N8N_WEBHOOK_ID');
 
@@ -23,16 +22,25 @@ if (!N8N_BASE_URL || !N8N_WEBHOOK_ID) {
   console.error('🚨 Missing N8N configuration: N8N_BASE_URL or N8N_WEBHOOK_ID not set');
 }
 
-console.log('🔧 N8N Webhook configured:', N8N_WEBHOOK_ID ? 'Set' : 'Not Set');
+// Generate HMAC-SHA256 signature for webhook request authentication
+async function generateHmacSignature(payload: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
-// Function to execute action using n8n webhook
 async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
-  console.log('🔧 Executing action via n8n webhook:', actionRequest);
-  
-  // Build the webhook URL
   const webhookUrl = `${N8N_BASE_URL}/webhook/${N8N_WEBHOOK_ID}`;
-  
-  // Prepare workflow input data
+
   const workflowData = {
     actionType: actionRequest.type,
     recipient: actionRequest.recipient,
@@ -43,14 +51,21 @@ async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
     timestamp: new Date().toISOString()
   };
 
-  console.log('📤 Sending webhook request:', { webhookUrl, workflowData });
+  const payload = JSON.stringify(workflowData);
+  const requestHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  // Add HMAC signature if secret is configured
+  const webhookSecret = Deno.env.get('N8N_WEBHOOK_SECRET');
+  if (webhookSecret) {
+    const signature = await generateHmacSignature(payload, webhookSecret);
+    requestHeaders['X-Webhook-Signature'] = `sha256=${signature}`;
+    requestHeaders['X-Timestamp'] = new Date().toISOString();
+  }
 
   const response = await fetch(webhookUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(workflowData),
+    headers: requestHeaders,
+    body: payload,
   });
 
   if (!response.ok) {
@@ -58,20 +73,17 @@ async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
     throw new Error(`n8n webhook execution failed with status ${response.status}: ${errorText}`);
   }
 
-  // Webhooks might return different response formats
   const responseText = await response.text();
-  console.log('📥 Received n8n webhook response:', responseText);
-  
-  // Try to parse as JSON, fallback to text response
-  let responseData;
   try {
-    responseData = JSON.parse(responseText);
+    return JSON.parse(responseText);
   } catch {
-    responseData = { message: responseText, status: 'success' };
+    return { message: responseText, status: 'success' };
   }
-  
-  return responseData;
 }
+
+// Email regex for validation
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[0-9+\-\s]{7,20}$/;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -79,71 +91,82 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🚀 N8N Workflow Action Executor starting...');
-    console.log('🔧 Request method:', req.method);
-    console.log('🔧 Request headers:', Object.fromEntries(req.headers.entries()));
-    
     const actionRequest: ActionRequest = await req.json();
-    console.log('📩 Received action request:', actionRequest);
 
-    // Validate action request
-    if (!actionRequest.type || !actionRequest.message || !actionRequest.messageId) {
-      throw new Error('Invalid action request: missing required fields (type, message, messageId)');
+    // Input validation
+    if (!actionRequest.type || !['email', 'sms', 'whatsapp'].includes(actionRequest.type)) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'type must be one of: email, sms, whatsapp' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!actionRequest.message || typeof actionRequest.message !== 'string' || actionRequest.message.trim().length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'message is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (actionRequest.message.length > 4096) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'message must not exceed 4096 characters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!actionRequest.messageId || typeof actionRequest.messageId !== 'string') {
+      return new Response(
+        JSON.stringify({ success: false, error: 'messageId is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (actionRequest.type === 'email' && actionRequest.recipient && !EMAIL_REGEX.test(actionRequest.recipient)) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'recipient must be a valid email address' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if ((actionRequest.type === 'sms' || actionRequest.type === 'whatsapp') && actionRequest.phoneNumber && !PHONE_REGEX.test(actionRequest.phoneNumber)) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'phoneNumber format is invalid' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Execute action via n8n workflow with retry mechanism
+    // Execute with retry
     const maxRetries = 3;
     let workflowResult: any;
-    let lastError: any;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`🔄 n8n workflow attempt ${attempt}/${maxRetries}`);
-      
       try {
         workflowResult = await executeActionViaN8N(actionRequest);
-        console.log('✅ n8n workflow execution successful:', workflowResult);
         break;
-        
       } catch (workflowError) {
-        lastError = workflowError;
         console.error(`❌ n8n workflow error (attempt ${attempt}):`, workflowError);
-        
         if (attempt === maxRetries) {
           throw new Error(`Failed to execute n8n workflow after ${maxRetries} attempts: ${workflowError.message}`);
         }
-        
-        // Exponential backoff delay
-        const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
-        console.log(`⏳ Retrying in ${delay}ms...`);
+        const delay = Math.pow(2, attempt - 1) * 1000;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    const response = {
+    return new Response(JSON.stringify({
       success: true,
       actionType: actionRequest.type,
       messageId: actionRequest.messageId,
       timestamp: new Date().toISOString(),
-      workflowResult: workflowResult,
+      workflowResult,
       message: `${actionRequest.type} action executed successfully via n8n workflow`
-    };
-
-    console.log('✅ Action executed successfully via n8n workflow');
-    return new Response(JSON.stringify(response), {
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('🚨 Error in N8N workflow action executor:', error);
-    
-    const errorResponse = {
+    return new Response(JSON.stringify({
       success: false,
-      error: error.message,
+      error: 'Internal server error',
       timestamp: new Date().toISOString(),
-      message: 'Failed to execute n8n workflow action'
-    };
-    
-    return new Response(JSON.stringify(errorResponse), {
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
