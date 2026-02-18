@@ -19,6 +19,10 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+    // Log the phone number ID being used (masked for security)
+    console.log('Using Phone Number ID:', WHATSAPP_PHONE_NUMBER_ID ? `${WHATSAPP_PHONE_NUMBER_ID.slice(0, 6)}...` : 'NOT SET');
+    console.log('Access Token set:', !!WHATSAPP_ACCESS_TOKEN);
+
     if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
       throw new Error('WhatsApp credentials not configured');
     }
