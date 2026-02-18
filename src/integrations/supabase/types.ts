@@ -236,6 +236,60 @@ export type Database = {
         }
         Relationships: []
       }
+      uploaded_documents: {
+        Row: {
+          chunk_count: number | null
+          created_at: string
+          document_category: string | null
+          file_path: string
+          file_size: number
+          id: string
+          last_accessed: string | null
+          mime_type: string
+          original_filename: string
+          processed_at: string | null
+          processing_error: string | null
+          relevance_reason: string | null
+          relevance_score: number | null
+          session_id: string
+          upload_status: string
+        }
+        Insert: {
+          chunk_count?: number | null
+          created_at?: string
+          document_category?: string | null
+          file_path: string
+          file_size: number
+          id?: string
+          last_accessed?: string | null
+          mime_type: string
+          original_filename: string
+          processed_at?: string | null
+          processing_error?: string | null
+          relevance_reason?: string | null
+          relevance_score?: number | null
+          session_id: string
+          upload_status?: string
+        }
+        Update: {
+          chunk_count?: number | null
+          created_at?: string
+          document_category?: string | null
+          file_path?: string
+          file_size?: number
+          id?: string
+          last_accessed?: string | null
+          mime_type?: string
+          original_filename?: string
+          processed_at?: string | null
+          processing_error?: string | null
+          relevance_reason?: string | null
+          relevance_score?: number | null
+          session_id?: string
+          upload_status?: string
+        }
+        Relationships: []
+      }
       website_chats: {
         Row: {
           ai_response: string | null
