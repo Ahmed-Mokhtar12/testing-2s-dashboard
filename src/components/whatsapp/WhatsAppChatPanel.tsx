@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
@@ -163,7 +163,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           const prevMsg = index > 0 ? messages[index - 1] : null;
           const showDateSeparator = !prevMsg || !isSameDay(msg.timestamp, prevMsg.timestamp);
           return (
-            <React.Fragment key={msg.id}>
+            <div key={msg.id}>
               {showDateSeparator && (
                 <div className="flex justify-center my-3">
                   <div className="bg-white/90 text-[#54656F] text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-sm">
@@ -178,7 +178,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
                 timestamp={msg.timestamp}
                 mediaUrl={msg.mediaUrl}
               />
-            </React.Fragment>
+            </div>
           );
         })}
 
