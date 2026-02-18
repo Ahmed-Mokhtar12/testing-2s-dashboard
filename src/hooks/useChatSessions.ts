@@ -107,9 +107,9 @@ export const useChatSessions = () => {
     }
   };
 
-  // Create a new session ID
+  // Create a cryptographically secure session ID using UUID v4
   const createNewSessionId = () => {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `session_${crypto.randomUUID()}`;
   };
 
   // Create a new chat session
