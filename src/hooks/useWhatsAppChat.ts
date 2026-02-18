@@ -5,6 +5,7 @@ export interface WhatsAppMessage {
   id: string;
   content: string;
   isUser: boolean;
+  isHumanReply?: boolean;
   timestamp: Date;
   mediaUrl?: string;
 }
@@ -13,7 +14,6 @@ export interface WhatsAppMessage {
 const getSenderNumber = () => {
   const stored = localStorage.getItem('whatsapp_sender_number');
   if (stored) return stored;
-  // Default to first known number - user can change later
   return '971505913426';
 };
 
@@ -27,6 +27,8 @@ export const useWhatsAppChat = () => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [senderNumber, setSenderNumber] = useState(getSenderNumber);
   const [availableNumbers, setAvailableNumbers] = useState<string[]>([]);
+  const [isHumanControlled, setIsHumanControlled] = useState(false);
+  const [isTogglingControl, setIsTogglingControl] = useState(false);
 
   // Load available sender numbers
   useEffect(() => {
@@ -63,6 +65,11 @@ export const useWhatsAppChat = () => {
 
         if (data && data.length > 0) {
           const historyMessages: WhatsAppMessage[] = [];
+          
+          // Check if the latest record has human_controlled true
+          const latestRecord = data[data.length - 1];
+          setIsHumanControlled(latestRecord.is_human_controlled ?? false);
+
           data.forEach((chat) => {
             // Extract media URL from Media column
             let mediaUrl: string | undefined;
@@ -70,7 +77,6 @@ export const useWhatsAppChat = () => {
               if (typeof chat['Media'] === 'string') {
                 mediaUrl = chat['Media'];
               } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
-                // Handle JSON object - try common keys
                 const mediaObj = chat['Media'] as Record<string, unknown>;
                 mediaUrl = (mediaObj.url || mediaObj.link || mediaObj.src) as string | undefined;
               }
@@ -85,11 +91,22 @@ export const useWhatsAppChat = () => {
                 mediaUrl,
               });
             }
-            if (chat['Ai Reply']) {
+
+            // Show human_reply if it exists
+            if (chat['human_reply']) {
+              historyMessages.push({
+                id: `human-${chat.id}`,
+                content: chat['human_reply'],
+                isUser: false,
+                isHumanReply: true,
+                timestamp: new Date(chat.created_at),
+              });
+            } else if (chat['Ai Reply']) {
               historyMessages.push({
                 id: `ai-${chat.id}`,
                 content: chat['Ai Reply'],
                 isUser: false,
+                isHumanReply: false,
                 timestamp: new Date(chat.created_at),
               });
             }
@@ -97,6 +114,7 @@ export const useWhatsAppChat = () => {
           setMessages(historyMessages);
         } else {
           setMessages([]);
+          setIsHumanControlled(false);
         }
       } catch (err) {
         console.error('Failed to load history:', err);
@@ -113,55 +131,91 @@ export const useWhatsAppChat = () => {
     setSenderNumber(number);
   }, []);
 
-  const sendMessage = useCallback(async (content: string) => {
-    // Add user message immediately
-    const userMessage: WhatsAppMessage = {
-      id: `user-${Date.now()}`,
-      content,
-      isUser: true,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
-
+  // Toggle human takeover mode
+  const toggleHumanControl = useCallback(async () => {
+    setIsTogglingControl(true);
+    const newState = !isHumanControlled;
+    
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-web-chat', {
+      const { error } = await supabase.functions.invoke('whatsapp-send-message', {
         body: {
-          message: content,
-          senderNumber,
+          action: newState ? 'takeover' : 'release',
+          recipientNumber: senderNumber,
         },
       });
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+      setIsHumanControlled(newState);
+    } catch (err) {
+      console.error('Error toggling human control:', err);
+    } finally {
+      setIsTogglingControl(false);
+    }
+  }, [isHumanControlled, senderNumber]);
+
+  const sendMessage = useCallback(async (content: string) => {
+    // Add outgoing message immediately to UI
+    const outgoingMessage: WhatsAppMessage = {
+      id: `out-${Date.now()}`,
+      content,
+      isUser: false,
+      isHumanReply: isHumanControlled,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, outgoingMessage]);
+    setIsLoading(true);
+
+    try {
+      if (isHumanControlled) {
+        // Human mode: send directly to WhatsApp Cloud API
+        const { data, error } = await supabase.functions.invoke('whatsapp-send-message', {
+          body: {
+            message: content,
+            recipientNumber: senderNumber,
+          },
+        });
+
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Failed to send');
+
+      } else {
+        // AI mode: send to n8n webhook as usual
+        const { data, error } = await supabase.functions.invoke('whatsapp-web-chat', {
+          body: {
+            message: content,
+            senderNumber,
+          },
+        });
+
+        if (error) throw error;
+
+        // Add AI response
+        const aiMessage: WhatsAppMessage = {
+          id: `ai-${Date.now()}`,
+          content: data?.response || 'Sorry, I could not process your request.',
+          isUser: false,
+          isHumanReply: false,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
       }
-
-      // Add AI response
-      const aiMessage: WhatsAppMessage = {
-        id: `ai-${Date.now()}`,
-        content: data?.response || 'Sorry, I could not process your request.',
-        isUser: false,
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
       
-      // Add error message
       const errorMessage: WhatsAppMessage = {
         id: `error-${Date.now()}`,
-        content: 'Sorry, there was an error processing your message. Please try again.',
+        content: isHumanControlled 
+          ? 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.'
+          : 'Sorry, there was an error processing your message. Please try again.',
         isUser: false,
         timestamp: new Date(),
       };
-
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
-  }, [senderNumber]);
+  }, [senderNumber, isHumanControlled]);
 
   return {
     messages,
@@ -171,5 +225,8 @@ export const useWhatsAppChat = () => {
     senderNumber,
     availableNumbers,
     changeSenderNumber,
+    isHumanControlled,
+    isTogglingControl,
+    toggleHumanControl,
   };
 };

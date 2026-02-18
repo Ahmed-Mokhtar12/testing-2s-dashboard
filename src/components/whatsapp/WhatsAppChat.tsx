@@ -23,7 +23,10 @@ const WhatsAppChat: React.FC = () => {
     isLoadingHistory, 
     sendMessage, 
     senderNumber,
-    changeSenderNumber 
+    changeSenderNumber,
+    isHumanControlled,
+    isTogglingControl,
+    toggleHumanControl,
   } = useWhatsAppChat();
 
   // Load all chat previews
@@ -104,7 +107,10 @@ const WhatsAppChat: React.FC = () => {
           senderNumber={senderNumber}
           isLoading={isLoading}
           isLoadingHistory={isLoadingHistory}
+          isHumanControlled={isHumanControlled}
+          isTogglingControl={isTogglingControl}
           onSendMessage={sendMessage}
+          onToggleHumanControl={toggleHumanControl}
         />
       </div>
     </div>

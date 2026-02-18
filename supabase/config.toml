@@ -46,3 +46,6 @@ port = 54332
 
 [functions.whatsapp-web-chat]
 verify_jwt = false
+
+[functions.whatsapp-send-message]
+verify_jwt = false
