@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export interface WhatsAppMessage {
   id: string;
@@ -29,6 +30,7 @@ export const useWhatsAppChat = () => {
   const [availableNumbers, setAvailableNumbers] = useState<string[]>([]);
   const [isHumanControlled, setIsHumanControlled] = useState(false);
   const [isTogglingControl, setIsTogglingControl] = useState(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   // Load available sender numbers
   useEffect(() => {
@@ -124,6 +126,95 @@ export const useWhatsAppChat = () => {
     };
 
     loadHistory();
+  }, [senderNumber]);
+
+  // Realtime subscription for the active conversation
+  useEffect(() => {
+    // Unsubscribe previous channel if it exists
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`whatsapp-chat-${senderNumber}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'Chat History',
+          filter: `Sender Number=eq.${senderNumber}`,
+        },
+        (payload) => {
+          const chat = payload.new as Record<string, unknown>;
+
+          // Extract media URL
+          let mediaUrl: string | undefined;
+          if (chat['Media']) {
+            if (typeof chat['Media'] === 'string') {
+              mediaUrl = chat['Media'] as string;
+            } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
+              const mediaObj = chat['Media'] as Record<string, unknown>;
+              mediaUrl = (mediaObj.url || mediaObj.link || mediaObj.src) as string | undefined;
+            }
+          }
+
+          const newMessages: WhatsAppMessage[] = [];
+          const timestamp = new Date(chat['created_at'] as string);
+          const id = chat['id'] as number;
+
+          if (chat['Sender Message']) {
+            newMessages.push({
+              id: `user-${id}`,
+              content: chat['Sender Message'] as string,
+              isUser: true,
+              timestamp,
+              mediaUrl,
+            });
+          }
+
+          if (chat['human_reply']) {
+            newMessages.push({
+              id: `human-${id}`,
+              content: chat['human_reply'] as string,
+              isUser: false,
+              isHumanReply: true,
+              timestamp,
+            });
+          } else if (chat['Ai Reply']) {
+            newMessages.push({
+              id: `ai-${id}`,
+              content: chat['Ai Reply'] as string,
+              isUser: false,
+              isHumanReply: false,
+              timestamp,
+            });
+          }
+
+          if (newMessages.length > 0) {
+            setMessages((prev) => {
+              // Deduplicate by id
+              const existingIds = new Set(prev.map((m) => m.id));
+              const fresh = newMessages.filter((m) => !existingIds.has(m.id));
+              return fresh.length > 0 ? [...prev, ...fresh] : prev;
+            });
+          }
+
+          // Update human control state if changed
+          if (typeof chat['is_human_controlled'] === 'boolean') {
+            setIsHumanControlled(chat['is_human_controlled'] as boolean);
+          }
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
   }, [senderNumber]);
 
   const changeSenderNumber = useCallback((number: string) => {
