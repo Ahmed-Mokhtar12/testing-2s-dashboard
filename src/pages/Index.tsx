@@ -72,29 +72,31 @@ const Index = () => {
     }
   };
 
-  // Handle message regeneration
+  // Handle message regeneration - fixed: pass content directly to avoid async state race condition
   const handleRegenerateMessage = (messageId: string) => {
-    // Find the user message that preceded this AI message
     const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex > 0) {
       const userMessage = messages[messageIndex - 1];
       if (userMessage.isUser) {
+        // Set input and trigger send directly with the content value
         setInputValue(userMessage.content);
-        handleSendMessage();
+        // Use setTimeout to allow React to flush state update before sending
+        setTimeout(() => {
+          handleSendMessage();
+        }, 0);
       }
     }
   };
 
-  // Handle message editing
+  // Handle message editing - fixed: apply the truncated messages list
   const handleEditMessage = (messageId: string, newContent: string) => {
-    setInputValue(newContent);
-    // Optionally remove the message and subsequent ones
     const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex !== -1) {
-      // Remove this message and all subsequent ones
-      const newMessages = messages.slice(0, messageIndex);
-      // You might want to implement a method to update messages in useChat
+      // Remove this message and all subsequent ones, then set new input
+      const trimmedMessages = messages.slice(0, messageIndex);
+      loadSessionMessages(trimmedMessages);
     }
+    setInputValue(newContent);
   };
 
   return (

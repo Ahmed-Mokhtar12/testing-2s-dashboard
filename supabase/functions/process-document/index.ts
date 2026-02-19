@@ -1,93 +1,6 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
-
-// Enhanced text extraction for different file types
-async function extractTextFromFile(buffer: ArrayBuffer, mimeType: string, filename: string): Promise<string> {
-  try {
-    console.log(`🔍 Extracting text from ${filename} (${mimeType})`);
-    
-    // Handle Word documents (.doc, .docx)
-    if (mimeType.includes('word') || mimeType.includes('officedocument.wordprocessingml') || filename.endsWith('.docx') || filename.endsWith('.doc')) {
-      return await extractTextFromWord(buffer);
-    }
-    
-    // Handle PDF documents
-    if (mimeType.includes('pdf') || filename.endsWith('.pdf')) {
-      return await extractTextFromPDF(buffer);
-    }
-    
-    // Handle text files
-    if (mimeType.includes('text') || filename.endsWith('.txt')) {
-      const decoder = new TextDecoder();
-      return decoder.decode(buffer);
-    }
-    
-    // Handle other formats
-    console.log(`⚠️ Unsupported file type: ${mimeType}, attempting text extraction...`);
-    const decoder = new TextDecoder();
-    return decoder.decode(buffer);
-    
-  } catch (error) {
-    console.error('❌ Text extraction failed:', error);
-    throw new Error(`Failed to extract text from ${filename}: ${error.message}`);
-  }
-}
-
-// Extract text from Word documents
-async function extractTextFromWord(buffer: ArrayBuffer): Promise<string> {
-  try {
-    // For .docx files (Office Open XML)
-    const uint8Array = new Uint8Array(buffer);
-    
-    // Convert to text - basic extraction for demonstration
-    // In a real implementation, you'd use a proper Word parsing library
-    const decoder = new TextDecoder();
-    let content = decoder.decode(uint8Array);
-    
-    // Try to extract readable text (basic approach)
-    // Remove binary content and extract text between XML tags
-    content = content.replace(/[\x00-\x1F\x7F-\x9F]/g, ' '); // Remove control characters
-    content = content.replace(/<[^>]*>/g, ' '); // Remove XML tags
-    content = content.replace(/\s+/g, ' '); // Normalize whitespace
-    content = content.trim();
-    
-    if (content.length < 50) {
-      throw new Error('Insufficient text content extracted from Word document');
-    }
-    
-    console.log(`✅ Extracted ${content.length} characters from Word document`);
-    return content;
-  } catch (error) {
-    console.error('❌ Word extraction error:', error);
-    throw new Error(`Word document processing failed: ${error.message}`);
-  }
-}
-
-// Extract text from PDF documents  
-async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
-  try {
-    // Basic PDF text extraction
-    const decoder = new TextDecoder();
-    let content = decoder.decode(buffer);
-    
-    // Extract text from PDF streams (basic approach)
-    content = content.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
-    content = content.replace(/\s+/g, ' ');
-    content = content.trim();
-    
-    if (content.length < 50) {
-      throw new Error('Insufficient text content extracted from PDF');
-    }
-    
-    console.log(`✅ Extracted ${content.length} characters from PDF`);
-    return content;
-  } catch (error) {
-    console.error('❌ PDF extraction error:', error);
-    throw new Error(`PDF processing failed: ${error.message}`);
-  }
-}
 import pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
@@ -115,6 +28,12 @@ serve(async (req) => {
     body = {};
   }
 
+  // Initialize supabase outside try block so it's accessible in the catch block
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
   try {
     
     // Health check endpoint
@@ -128,11 +47,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
     const { documentId, sessionId }: DocumentProcessingRequest = body;
     console.log('🔄 Processing document:', documentId);
