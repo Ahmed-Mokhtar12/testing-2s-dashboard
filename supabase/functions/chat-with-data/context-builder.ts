@@ -19,7 +19,7 @@ export async function buildIntelligentContext(supabase: any, queryAnalysis: Smar
   
   let context = `${behaviorInsights}
 
-🏨 You are Marcus Chen, Senior Hotel Management Consultant for Two Seasons Hotel with comprehensive access to hotel data and intelligent retrieval capabilities.
+🏨 You are Sera, Senior Hotel Management Consultant for Two Seasons Hotel with comprehensive access to hotel data and intelligent retrieval capabilities.
 
 🔧 RETRIEVAL PRIORITY STRUCTURE:
 🥇 PRIMARY SOURCE: Hotel Database (Use extensive hotel reviews, analytics, and operational data as your main information source)
