@@ -2,7 +2,7 @@ import { OpenAIClient, OpenAIMessage } from './openai-client.ts';
 import { SearchDecisionEngine } from './search-decision-engine.ts';
 import { FunctionCallHandler } from './function-call-handler.ts';
 
-export async function callOpenAI(context: string, message: string, consultantPrompt?: string): Promise<any> {
+export async function callOpenAI(context: string, message: string, consultantPrompt?: string, conversationHistory?: Array<{user_message: string; ai_response: string}>): Promise<any> {
   console.log('🤖 Calling OpenAI with intelligent context and function calling...');
   console.log(`📏 Context length: ${context.length} characters`);
   console.log('🔧 Context length:', { context: context.length, prompt: consultantPrompt?.length || 0 });
@@ -19,10 +19,10 @@ export async function callOpenAI(context: string, message: string, consultantPro
     reason: searchDecision.searchReason
   });
 
-  // Prepare tools and messages
+  // Prepare tools and messages — inject conversation history for real memory
   const tools = functionHandler.getAvailableTools();
   const toolChoice = SearchDecisionEngine.determineToolChoice(searchDecision);
-  const messages = client.createMessages(context, message, consultantPrompt);
+  const messages = client.createMessages(context, message, consultantPrompt, conversationHistory);
 
   // Make initial API call
   const initialResponse = await client.makeRequest(messages, tools, toolChoice);
