@@ -27,10 +27,18 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let message = '';
+  let messageId = 'unknown';
+  let sessionId: string | undefined;
+  let userHistory: any[] = [];
+
   try {
     PerformanceMonitor.startTimer('total_request');
     console.log('🚀 Enhanced chat-with-data function starting...');
-    const { message, messageId, sessionId } = await req.json();
+    const parsed = await req.json();
+    message = parsed.message;
+    messageId = parsed.messageId || 'unknown';
+    sessionId = parsed.sessionId;
     
     console.log('📩 Received message:', { message, messageId, sessionId });
 
@@ -46,7 +54,7 @@ serve(async (req) => {
 
     // Enhanced conversation context retrieval with session support
     console.log('📚 Retrieving conversation history for session:', sessionId);
-    const { data: userHistory, error: historyError } = await supabase
+    const { data: fetchedHistory, error: historyError } = await supabase
       .from('website_chats')
       .select('*')
       .eq('session_id', sessionId || 'guest')
@@ -54,6 +62,7 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(10); // Last 5 exchanges (user + AI pairs)
 
+    userHistory = fetchedHistory || [];
     if (historyError) {
       console.warn('⚠️ Error retrieving conversation history:', historyError);
     }
