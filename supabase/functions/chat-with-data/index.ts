@@ -83,11 +83,11 @@ serve(async (req) => {
     console.log('📚 Building enhanced context with document integration...');
     
     // Get all available data for context building
-    const [hotelReviews, chatHistory, conductedTraining, infoSummary, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
-      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(100),
-      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(20),
+    const [hotelReviews, chatHistory, conductedTraining, sopData, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
+      supabase.from('reviews').select('*').order('Date', { ascending: false }).limit(500),
+      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(50),
       supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(10),
-      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(10),
+      supabase.from('Sop').select('*').limit(100),
       supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.rpc('get_recent_document_context', { limit_count: 10 }),
       supabase.from('uploaded_documents').select('*').eq('upload_status', 'processed').order('last_accessed', { ascending: false }).limit(5)
@@ -97,7 +97,7 @@ serve(async (req) => {
       hotelReviews,
       chatHistory,
       conductedTraining,
-      infoSummary,
+      sopData,
       longTermMemory,
       documentContext,
       recentDocuments

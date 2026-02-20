@@ -2,7 +2,7 @@ export async function queryReviewsByDateRange(supabase: any, startDate: string, 
   console.log(`📊 Querying reviews from ${startDate} to ${endDate}`);
   
   const { data: reviews, error } = await supabase
-    .from('Hotel Reviews')
+    .from('reviews')
     .select('*')
     .gte('Date', startDate)
     .lte('Date', endDate)
@@ -14,9 +14,9 @@ export async function queryReviewsByDateRange(supabase: any, startDate: string, 
 export async function getAnalyticsData(supabase: any) {
   console.log('📈 Fetching analytics data...');
   
-  // Get all reviews for comprehensive analytics
+  // Get all reviews for comprehensive analytics from correct table
   const { data: allReviews, error } = await supabase
-    .from('Hotel Reviews')
+    .from('reviews')
     .select('*')
     .order('Date', { ascending: false });
     
@@ -45,13 +45,13 @@ export async function getAnalyticsData(supabase: any) {
     analytics.sourceBreakdown[source] = (analytics.sourceBreakdown[source] || 0) + 1;
   });
   
-  // Monthly breakdown (last 6 months)
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  // Monthly breakdown (last 12 months)
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
   
   allReviews.forEach(review => {
-    if (review.Date && new Date(review.Date) >= sixMonthsAgo) {
-      const monthKey = review.Date.substring(0, 7); // YYYY-MM
+    if (review.Date) {
+      const monthKey = review.Date.toString().substring(0, 7); // YYYY-MM
       analytics.monthlyBreakdown[monthKey] = (analytics.monthlyBreakdown[monthKey] || 0) + 1;
     }
   });

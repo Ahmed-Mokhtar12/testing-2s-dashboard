@@ -57,7 +57,7 @@ export class EnhancedContextBuilder {
     
     // Analyze all reviews comprehensively
     const reviewsWithContent = allReviews.filter((review: any) => 
-      review['Reviews Summary'] || review['Text'] || review['Title']
+      review['Text'] || review['Title']
     );
     
     const reviewsWithScores = allReviews.filter((review: any) => review.Score);
@@ -124,9 +124,7 @@ export class EnhancedContextBuilder {
           contextSections.push(`   📝 Title: ${review.Title}`);
         }
         
-        if (review['Reviews Summary']) {
-          contextSections.push(`   📄 Summary: ${review['Reviews Summary'].substring(0, 200)}${review['Reviews Summary'].length > 200 ? '...' : ''}`);
-        } else if (review['Text']) {
+        if (review['Text']) {
           contextSections.push(`   📄 Review: ${review['Text'].substring(0, 200)}${review['Text'].length > 200 ? '...' : ''}`);
         }
         
@@ -136,6 +134,10 @@ export class EnhancedContextBuilder {
         
         if (review.Date) {
           contextSections.push(`   📅 Date: ${review.Date}`);
+        }
+        
+        if (review['Hotel Name']) {
+          contextSections.push(`   🏨 Hotel: ${review['Hotel Name']}`);
         }
         
         contextSections.push('');
