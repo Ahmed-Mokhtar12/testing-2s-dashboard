@@ -84,7 +84,7 @@ serve(async (req) => {
     
     // Get all available data for context building
     const [hotelReviews, chatHistory, conductedTraining, sopData, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
-      supabase.from('reviews').select('*').order('Date', { ascending: false }).limit(500),
+      supabase.from('reviews').select('*').order('Date', { ascending: false }).limit(2000),
       supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(50),
       supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('Sop').select('*').limit(100),
