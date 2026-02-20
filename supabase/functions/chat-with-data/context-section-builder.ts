@@ -84,10 +84,34 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
   static buildOtherDataSections(data: any): string[] {
     const sections: string[] = [];
 
+    // SOPs and Procedures
+    if (data.sopData?.status === 'fulfilled' && data.sopData.value.data?.length > 0) {
+      const sops = data.sopData.value.data;
+      sections.push('📋 HOTEL SOPs AND PROCEDURES:');
+      sections.push(`📊 Total SOPs in database: ${sops.length}`);
+      
+      // Group by department
+      const byDepartment: Record<string, any[]> = {};
+      sops.forEach((sop: any) => {
+        const dept = sop.department_name || 'General';
+        if (!byDepartment[dept]) byDepartment[dept] = [];
+        byDepartment[dept].push(sop);
+      });
+      
+      Object.entries(byDepartment).forEach(([dept, deptSops]) => {
+        sections.push(`\n🏢 Department: ${dept} (${deptSops.length} SOPs)`);
+        deptSops.slice(0, 5).forEach((sop: any) => {
+          if (sop.title) sections.push(`  • [${sop.section || 'General'}] ${sop.title}`);
+          if (sop.sop) sections.push(`    Content: ${sop.sop.substring(0, 300)}${sop.sop.length > 300 ? '...' : ''}`);
+        });
+      });
+      sections.push('');
+    }
+
     // Recent Chat History
     if (data.chatHistory?.status === 'fulfilled' && data.chatHistory.value.data?.length > 0) {
       sections.push('💬 RECENT GUEST INTERACTIONS:');
-      data.chatHistory.value.data.slice(0, 3).forEach((chat: any) => {
+      data.chatHistory.value.data.slice(0, 5).forEach((chat: any) => {
         if (chat['Sender Message'] && chat['Ai Reply']) {
           sections.push(`Guest: ${chat['Sender Message'].substring(0, 150)}...`);
           sections.push(`Hotel: ${chat['Ai Reply'].substring(0, 150)}...`);
@@ -99,20 +123,9 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
     // Training Records
     if (data.conductedTraining?.status === 'fulfilled' && data.conductedTraining.value.data?.length > 0) {
       sections.push('🎓 STAFF TRAINING RECORDS:');
-      data.conductedTraining.value.data.slice(0, 3).forEach((training: any) => {
+      data.conductedTraining.value.data.slice(0, 5).forEach((training: any) => {
         if (training['Summary of the training']) {
-          sections.push(`• ${training['Summary of the training'].substring(0, 200)}...`);
-        }
-      });
-      sections.push('');
-    }
-
-    // Email Communications
-    if (data.infoSummary?.status === 'fulfilled' && data.infoSummary.value.data?.length > 0) {
-      sections.push('📧 EMAIL COMMUNICATIONS:');
-      data.infoSummary.value.data.slice(0, 3).forEach((info: any) => {
-        if (info['Email Summary']) {
-          sections.push(`• From: ${info['From'] || 'Unknown'} | ${info['Email Summary'].substring(0, 150)}...`);
+          sections.push(`• ${training['Summary of the training'].substring(0, 300)}...`);
         }
       });
       sections.push('');

@@ -117,23 +117,23 @@ export class EnhancedDataService {
 
   private async fetchHotelReviews() {
     try {
-      console.log('🔍 Fetching Hotel Reviews...');
+      console.log('🔍 Fetching reviews from correct table...');
       
-      // First, let's check total count
+      // Check total count from correct table
       const { count } = await this.supabase
-        .from('Hotel Reviews')
+        .from('reviews')
         .select('*', { count: 'exact', head: true });
       
-      console.log('📊 Total Hotel Reviews count:', count);
+      console.log('📊 Total reviews count:', count);
       
-      // Fetch all reviews without any filtering
+      // Fetch reviews from correct table name
       const allReviews = await this.supabase
-        .from('Hotel Reviews')
+        .from('reviews')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('Date', { ascending: false });
       
-      console.log('📋 All Hotel Reviews raw result:', allReviews);
-      console.log('📋 Hotel Reviews data length:', allReviews.data?.length);
+      console.log('📋 reviews raw result:', allReviews);
+      console.log('📋 reviews data length:', allReviews.data?.length);
       
       if (allReviews.data && allReviews.data.length > 0) {
         console.log('📝 Sample review data:', JSON.stringify(allReviews.data[0], null, 2));
@@ -152,14 +152,14 @@ export class EnhancedDataService {
 
   private analyzeReviewData(reviews: any[]) {
     // Analyze review data for debugging
-    const reviewsWithSummary = reviews.filter(review => 
-      review['Reviews Summary'] && review['Reviews Summary'].trim() !== ''
+    const reviewsWithText = reviews.filter(review => 
+      review['Text'] && review['Text'].trim() !== ''
     );
-    console.log('📊 Reviews with Summary count:', reviewsWithSummary.length);
+    console.log('📊 Reviews with Text count:', reviewsWithText.length);
     
     // Check which reviews have any content
     const reviewsWithContent = reviews.filter(review => 
-      review['Reviews Summary'] || review['Text'] || review['Title']
+      review['Text'] || review['Title']
     );
     console.log('📊 Reviews with any content count:', reviewsWithContent.length);
     
@@ -274,18 +274,17 @@ export class EnhancedDataService {
     }
   }
 
-  private async fetchInfoSummary() {
+  private async fetchSop() {
     try {
       const result = await this.supabase
-        .from('Info Summary')
+        .from('Sop')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(100);
       
-      console.log('📧 Info Summary result:', result);
+      console.log('📋 Sop result:', result);
       return result;
     } catch (error) {
-      console.error('❌ Error fetching Info Summary:', error);
+      console.error('❌ Error fetching Sop:', error);
       throw error;
     }
   }
