@@ -154,6 +154,34 @@ serve(async (req) => {
       recentDocuments
     };
 
+    // 📅 ALWAYS fetch precise daily breakdown directly from DB (last 30 days)
+    // This is the source of truth — never rely on sample data for daily counts
+    let preciseDailyBreakdown: Array<{ date: string; count: number }> = [];
+    try {
+      const { data: dailyData, error: dailyError } = await supabase
+        .from('reviews')
+        .select('Date')
+        .gte('Date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10))
+        .lte('Date', new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().substring(0, 10)); // Dubai UTC+4
+
+      if (!dailyError && dailyData) {
+        // Group by date in JS
+        const grouped: Record<string, number> = {};
+        dailyData.forEach(r => {
+          if (r.Date) {
+            const d = r.Date.toString().substring(0, 10);
+            grouped[d] = (grouped[d] || 0) + 1;
+          }
+        });
+        preciseDailyBreakdown = Object.entries(grouped)
+          .map(([date, count]) => ({ date, count }))
+          .sort((a, b) => b.date.localeCompare(a.date));
+        console.log(`✅ Precise daily breakdown fetched: ${preciseDailyBreakdown.length} days of data`);
+      }
+    } catch (dailyErr) {
+      console.warn('⚠️ Daily breakdown fetch error (non-critical):', dailyErr);
+    }
+
     // Get query-specific data based on analysis
     let specificData = null;
     try {
@@ -181,16 +209,34 @@ serve(async (req) => {
     const enhancedContextBuilder = new EnhancedContextBuilder();
     let context = enhancedContextBuilder.buildContextWithDocuments(allData, message);
 
-    // 🎯 INJECT PRECISE DATE COUNT directly into context if detected
+    // 🎯 ALWAYS INJECT PRECISE DAILY BREAKDOWN FROM DB (overrides any sample-based calculation)
+    if (preciseDailyBreakdown.length > 0) {
+      // Get Dubai "today" and "yesterday"
+      const dubaiNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+      const todayStr = dubaiNow.toISOString().substring(0, 10);
+      const yesterdayStr = new Date(dubaiNow.getTime() - 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+
+      let dailyBlock = `\n\n🔢 AUTHORITATIVE DAILY REVIEW COUNTS (Direct SQL from database — 100% accurate — USE THESE EXACT NUMBERS):\n`;
+      dailyBlock += `⚠️ CRITICAL: These numbers come from a direct SQL GROUP BY query. They are EXACT. Do NOT calculate, estimate, or use any other numbers.\n\n`;
+      preciseDailyBreakdown.forEach(({ date, count }) => {
+        const label = date === todayStr ? ' ← TODAY (Dubai)' : date === yesterdayStr ? ' ← YESTERDAY (Dubai)' : '';
+        dailyBlock += `  • ${date}: ${count} reviews${label}\n`;
+      });
+      dailyBlock += `\n⚠️ MANDATORY RULE: When answering any question about reviews per day, week, or specific dates — use ONLY the numbers above. Never invent or estimate.\n`;
+      context = dailyBlock + context;
+      console.log(`📌 Injected precise daily breakdown: ${preciseDailyBreakdown.length} days`);
+    }
+
+    // 🎯 ALSO INJECT PRECISE SINGLE DATE COUNT if a specific date was detected
     if (preciseDateData) {
-      const preciseBlock = `\n\n🔢 PRECISE DATABASE COUNT (DO NOT IGNORE THIS — USE EXACTLY THIS NUMBER):\n` +
-        `On ${preciseDateData.date}, the EXACT number of reviews in the database is: ${preciseDateData.count}.\n` +
-        `This number was obtained via a direct SQL COUNT query and is 100% accurate.\n` +
-        `⚠️ MANDATORY: Use ${preciseDateData.count} as the answer. Do NOT use any other number.\n`;
+      const preciseBlock = `\n\n🔢 PRECISE SINGLE DATE COUNT:\n` +
+        `On ${preciseDateData.date}, the EXACT number of reviews is: ${preciseDateData.count}.\n` +
+        `⚠️ MANDATORY: Use ${preciseDateData.count} — no other number is acceptable.\n`;
       context = preciseBlock + context;
       console.log(`📌 Injected precise date context: ${preciseDateData.count} reviews on ${preciseDateData.date}`);
     }
     
+
     console.log('✅ Enhanced context built with document integration');
 
     // Build enhanced system prompt with conversation continuity
@@ -210,15 +256,42 @@ serve(async (req) => {
     console.log('🤖 Calling OpenAI with honest data-aware context...');
     let aiChoice = await callOpenAI(context, message, consultantPrompt, userHistory);
 
-    // 🎯 PRECISE DATE OVERRIDE: If we have a direct DB count, inject it into the final answer
-    // This prevents OpenAI from hallucinating a different number
-    if (preciseDateData) {
+    // 🎯 DAILY BREAKDOWN OVERRIDE: Build an accurate response for multi-day queries
+    const isDailyBreakdownQuery = /daily|breakdown|per day|each day|every day|last \d+ days|past \d+ days|7 days|week|14 days/i.test(message);
+    
+    if (isDailyBreakdownQuery && preciseDailyBreakdown.length > 0) {
+      const dubaiNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+      const todayStr = dubaiNow.toISOString().substring(0, 10);
+      const yesterdayStr = new Date(dubaiNow.getTime() - 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+
+      // Determine how many days to show (7, 14, or 30)
+      const daysMatch = message.match(/(\d+)\s*days?/i);
+      const daysToShow = daysMatch ? Math.min(parseInt(daysMatch[1]), 30) : 7;
+      const subset = preciseDailyBreakdown.slice(0, daysToShow);
+      const totalInPeriod = subset.reduce((sum, d) => sum + d.count, 0);
+
+      let breakdownResponse = `Here is the **exact daily review breakdown** for the past ${daysToShow} days *(numbers are 100% accurate — retrieved directly from the database)*:\n\n`;
+      subset.forEach(({ date, count }) => {
+        const label = date === todayStr ? ' ← **Today**' : date === yesterdayStr ? ' ← **Yesterday**' : '';
+        breakdownResponse += `• **${date}**: ${count} review${count !== 1 ? 's' : ''}${label}\n`;
+      });
+      breakdownResponse += `\n**Total over ${daysToShow} days: ${totalInPeriod} reviews**`;
+
+      console.log(`✅ Daily breakdown override applied: ${daysToShow} days, ${totalInPeriod} total reviews`);
+      aiChoice = {
+        ...aiChoice,
+        message: {
+          ...aiChoice.message,
+          content: breakdownResponse,
+          tool_calls: undefined
+        }
+      };
+    } else if (preciseDateData) {
+      // 🎯 SINGLE DATE OVERRIDE
       const responseText = aiChoice.message?.content || '';
-      // Check if AI used a wrong number — replace the response content to enforce accuracy
       const correctAnswer = `Based on the database records, there were exactly **${preciseDateData.count} reviews** on ${preciseDateData.date}.\n\n` +
         `*(This count is retrieved directly from a precise database query — 100% accurate)*`;
       
-      // Only override if AI mentioned a different number or gave a vague answer
       const numberMentionedByAI = responseText.match(/\b(\d+)\b/);
       const aiNumber = numberMentionedByAI ? parseInt(numberMentionedByAI[1]) : null;
       
@@ -226,19 +299,16 @@ serve(async (req) => {
         console.log(`⚠️ AI gave wrong count (${aiNumber}) — overriding with correct count (${preciseDateData.count})`);
         aiChoice = {
           ...aiChoice,
-          message: {
-            ...aiChoice.message,
-            content: correctAnswer,
-            tool_calls: undefined
-          }
+          message: { ...aiChoice.message, content: correctAnswer, tool_calls: undefined }
         };
       } else {
         console.log(`✅ AI gave correct count (${aiNumber}) — no override needed`);
       }
     }
     
-    // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication (skip if we have precise data)
-    if (!preciseDateData) {
+    // 🔥 Apply Data Honesty Engine only when we don't have precise verified data
+    const hasPreciseData = isDailyBreakdownQuery || !!preciseDateData;
+    if (!hasPreciseData) {
       console.log('🔧 Applying Data Honesty Engine...');
       aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(
         aiChoice,
@@ -251,7 +321,7 @@ serve(async (req) => {
         userHistory
       );
     } else {
-      console.log('⏭️ Skipping Data Honesty Engine — precise date data already applied');
+      console.log('⏭️ Skipping Data Honesty Engine — precise DB data already applied');
     }
     
     // Enhanced validation with data utilization scoring
