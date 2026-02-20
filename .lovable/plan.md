@@ -1,62 +1,147 @@
 
-## Refactor `execute-n8n-action` to Use `N8N_WHATSAPP_WEBHOOK_URL`
+# خطة شاملة: تمكين سيرا من قراءة وفهم جميع جداول Supabase بدقة تامة
 
-### Problem
-The `execute-n8n-action` Edge Function currently tries to build the webhook URL from two separate environment variables:
-- `N8N_BASE_URL` — **missing from secrets**
-- `N8N_WEBHOOK_ID` — **missing from secrets**
+## تشخيص المشكلة الحالية
 
-This means the constructed URL is always `undefined/webhook/undefined`, so **every email, SMS, and WhatsApp action fails**.
+بعد فحص الكود وقاعدة البيانات، اكتشفت عدة مشاكل جوهرية تمنع سيرا من الوصول للبيانات الحقيقية:
 
-### Solution
-Replace the two missing variables with the single `N8N_WHATSAPP_WEBHOOK_URL` secret that **already exists** in the project. This is a minimal, clean refactor with no new secrets needed.
+### المشكلة الأولى — الأكثر خطورة: اسم جدول المراجعات خاطئ
+- الكود يستعلم من: `'Hotel Reviews'` — **هذا الجدول لا يوجد**
+- الجدول الحقيقي اسمه: `reviews` — يحتوي على **7,655 مراجعة**
+- النتيجة: سيرا لا ترى أي مراجعة على الإطلاق
 
----
+### المشكلة الثانية: أعمدة جدول المراجعات خاطئة في الكود
+الكود يبحث عن `review['Reviews Summary']` لكن الجدول الحقيقي يحتوي على هذه الأعمدة:
+- `id`, `Date`, `Hotel Name`, `Source`, `Language`, `Score`, `URL`, `Author`, `Title`, `Text`, `Response Text`
+- العمود الصحيح للنص هو `Text` وليس `Reviews Summary`
 
-### Changes Required
+### المشكلة الثالثة: جدول SOPs لا يُقرأ إطلاقًا
+- جدول `Sop` موجود في قاعدة البيانات (أعمدة: id, sop, title, department_name, section, file_id)
+- لا يوجد أي كود يستعلم منه أو يرسل محتواه لسيرا
 
-#### File: `supabase/functions/execute-n8n-action/index.ts`
+### المشكلة الرابعة: معلومات خاطئة في System Prompt
+- يقول الـ prompt "~1,719 مراجعة" — الرقم الحقيقي هو **7,655 مراجعة**
+- يقول "لا يوجد بيانات تشغيلية" لكن Chat History يحتوي على **27,119 سجل**
 
-**Change 1 — Replace the broken URL construction (lines 18–23):**
+### المشكلة الخامسة: Info Summary غير موجود
+- الكود يستعلم من جدول `Info Summary` لكنه غير موجود في قاعدة البيانات
 
-Remove:
-```ts
-const N8N_BASE_URL = Deno.env.get('N8N_BASE_URL');
-const N8N_WEBHOOK_ID = Deno.env.get('N8N_WEBHOOK_ID');
+### الحالة الحقيقية لقاعدة البيانات
 
-if (!N8N_BASE_URL || !N8N_WEBHOOK_ID) {
-  console.error('🚨 Missing N8N configuration: N8N_BASE_URL or N8N_WEBHOOK_ID not set');
-}
-```
-
-Replace with:
-```ts
-const N8N_WEBHOOK_URL = Deno.env.get('N8N_WHATSAPP_WEBHOOK_URL');
-
-if (!N8N_WEBHOOK_URL) {
-  console.error('🚨 Missing N8N configuration: N8N_WHATSAPP_WEBHOOK_URL not set');
-}
-```
-
-**Change 2 — Fix the webhook URL inside `executeActionViaN8N` (line 42):**
-
-Remove:
-```ts
-const webhookUrl = `${N8N_BASE_URL}/webhook/${N8N_WEBHOOK_ID}`;
-```
-
-Replace with:
-```ts
-const webhookUrl = N8N_WEBHOOK_URL!;
-```
+| الجدول | السجلات | الحالة في الكود |
+|---|---|---|
+| `reviews` | 7,655 | ❌ يُقرأ باسم خاطئ `Hotel Reviews` |
+| `Chat History` | 27,119 | ⚠️ يُقرأ لكن بحد 20 فقط |
+| `Conducted Training` | 9 | ✅ يُقرأ بشكل صحيح |
+| `LongTermMemory` | 5 | ✅ يُقرأ بشكل صحيح |
+| `Sop` | 0 (فارغ حاليًا) | ❌ لا يُقرأ إطلاقًا |
+| `website_chats` | 94 | ✅ يُقرأ لمحادثات الجلسة |
+| `N8N_2S` | يحتوي بيانات | ✅ يُقرأ |
+| `uploaded_documents` | 0 | ✅ يُقرأ |
+| `Info Summary` | غير موجود | ❌ استعلام لجدول وهمي |
+| `conducted_training` (lowercase) | بيانات | ❌ لا يُقرأ |
 
 ---
 
-### Why This Works
-- `N8N_WHATSAPP_WEBHOOK_URL` already holds the complete webhook URL (`https://n8n.srv1095066.hstgr.cloud/webhook/...`) used for sending messages to n8n
-- No new secrets need to be added
-- All existing functionality (HMAC signing, retry logic, validation, CORS) remains untouched
-- The Edge Function will be automatically redeployed after the code change
+## الحل الشامل — التعديلات المطلوبة
 
-### Note on Action Types
-The current setup uses a single webhook URL for all action types (email, SMS, WhatsApp). The `actionType` field in the payload sent to n8n (`email`, `sms`, or `whatsapp`) allows the n8n workflow to route the action to the correct node internally. Make sure your n8n workflow has routing logic based on this `actionType` field.
+### 1. إصلاح `index.ts` — تصحيح أسماء الجداول والأعمدة
+
+**الملف:** `supabase/functions/chat-with-data/index.ts`
+
+تغيير استعلامات `Promise.allSettled` من:
+```ts
+supabase.from('Hotel Reviews').select('*')...
+supabase.from('Info Summary').select('*')...
+```
+إلى:
+```ts
+supabase.from('reviews').select('*').order('Date', { ascending: false }).limit(200),
+supabase.from('Sop').select('*').limit(50),
+```
+وإضافة استعلام `Sop` كمصدر بيانات جديد.
+
+### 2. إصلاح `enhanced-data-service.ts` — تصحيح اسم الجدول
+
+**الملف:** `supabase/functions/chat-with-data/enhanced-data-service.ts`
+
+تغيير:
+```ts
+this.supabase.from('Hotel Reviews').select('*')...
+this.supabase.from('Info Summary').select('*')...
+```
+إلى:
+```ts
+this.supabase.from('reviews').select('*').order('Date', { ascending: false })
+this.supabase.from('Sop').select('*').limit(50)
+```
+
+### 3. إصلاح `enhanced-context-builder.ts` — الأعمدة الصحيحة لجدول `reviews`
+
+**الملف:** `supabase/functions/chat-with-data/enhanced-context-builder.ts`
+
+تغيير الأعمدة المستخدمة في بناء السياق:
+```ts
+// قديم (خاطئ)
+review['Reviews Summary']
+// جديد (صحيح)
+review['Text']
+```
+
+### 4. إصلاح `context-section-builder.ts` — إضافة قسم SOPs + تصحيح الأعمدة
+
+**الملف:** `supabase/functions/chat-with-data/context-section-builder.ts`
+
+- تصحيح مرجع `review['Reviews Summary']` إلى `review['Text']`
+- إضافة دالة `buildSopSection()` جديدة تعرض بيانات جدول `Sop`
+- تحديث `buildOtherDataSections()` لتشمل SOPs
+
+### 5. تحديث `system-prompt-builder.ts` — تصحيح المعلومات
+
+**الملف:** `supabase/functions/chat-with-data/system-prompt-builder.ts`
+
+تحديث الـ System Prompt ليعكس الواقع الحقيقي:
+```
+- AVAILABLE: Guest reviews (7,655 reviews, Nov 2024 - Feb 2026)
+- AVAILABLE: WhatsApp Chat History (27,119 messages)
+- AVAILABLE: Staff Training Records (9 records)
+- AVAILABLE: SOPs and Procedures (Sop table)
+- AVAILABLE: Long-term conversation memory
+- AVAILABLE: Uploaded documents (via N8N_2S)
+- Sources: Google Maps, Booking.com, TripAdvisor, Agoda, Expedia, TrustYou, etc.
+- Average Score: 4.46/5
+```
+
+### 6. إضافة معرفة شاملة بهيكل البيانات في System Prompt
+
+إضافة قسم جديد في الـ prompt يصف بدقة هيكل كل جدول وطبيعة بياناته:
+
+```
+DATABASE SCHEMA KNOWLEDGE:
+- reviews: Date, Hotel Name, Source, Language, Score(0-5), Author, Title, Text, Response Text
+- Chat History: Sender Number, Sender Message, Ai Reply, Name, is_human_controlled
+- Conducted Training: Summary of the training, created_at
+- Sop: title, department_name, section, sop (full content)
+- LongTermMemory: sender, recipient, message
+- website_chats: user_message, ai_response, session_id
+```
+
+---
+
+## ترتيب التنفيذ
+
+1. تصحيح `index.ts` — إصلاح أسماء الجداول (أعلى أولوية)
+2. تصحيح `enhanced-data-service.ts` — نفس الإصلاح في الخدمة
+3. تصحيح `enhanced-context-builder.ts` — استخدام الأعمدة الصحيحة
+4. تحديث `context-section-builder.ts` — إضافة SOPs وتصحيح الأعمدة
+5. تحديث `system-prompt-builder.ts` — معلومات دقيقة وهيكل البيانات
+6. نشر الـ Edge Function
+
+## النتيجة المتوقعة
+
+بعد هذه التعديلات، ستتمكن سيرا من:
+- قراءة **7,655 مراجعة** حقيقية بدلًا من صفر
+- الوصول لـ **27,119 رسالة** من Chat History
+- قراءة محتوى **SOPs** وإجراءات الفندق
+- فهم أعمدة كل جدول وطبيعة بياناته بدقة
+- تقديم تحليلات دقيقة بأرقام حقيقية
