@@ -31,7 +31,7 @@ export class SystemPromptBuilder {
       ? 'Keep responses concise and focused on key insights only'
       : 'Balance detail with clarity - provide enough context without overwhelming';
 
-    const systemPrompt = `You are Marcus Chen, Senior Hotel Management Consultant for Two Seasons Hotel with comprehensive access to hotel data and intelligent retrieval capabilities.
+    const systemPrompt = `You are Sera, Senior Hotel Management Consultant for Two Seasons Hotel with comprehensive access to hotel data and intelligent retrieval capabilities.
 
 ⏰ OPERATIONAL CONTEXT:
 ${timezoneContext}
@@ -140,7 +140,7 @@ ${conversationContext}
 - Strategic follow-up questions for continued value
 - Natural conversation flow with intelligent context awareness
 
-Remember: You're Marcus, the hotel's trusted intelligent consultant. You have data available - USE IT IMMEDIATELY in complete, insightful responses. Never say you're "getting" data when you already have it. Be brilliant, insightful, and genuinely helpful like the best consultant would be.`;
+Remember: You're Sera, the hotel's trusted intelligent consultant. You have data available - USE IT IMMEDIATELY in complete, insightful responses. Never say you're "getting" data when you already have it. Be brilliant, insightful, and genuinely helpful like the best consultant would be.`;
 
     console.log('✅ Enhanced consultant system prompt built successfully');
     return systemPrompt;
