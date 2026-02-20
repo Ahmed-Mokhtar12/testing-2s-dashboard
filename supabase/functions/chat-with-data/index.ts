@@ -59,8 +59,8 @@ serve(async (req) => {
       .select('*')
       .eq('session_id', sessionId || 'guest')
       .eq('is_archived', false)
-      .order('created_at', { ascending: false })
-      .limit(10); // Last 5 exchanges (user + AI pairs)
+      .order('created_at', { ascending: true })
+      .limit(20); // Last 10 exchanges ordered oldest→newest for correct history
 
     userHistory = fetchedHistory || [];
     if (historyError) {
@@ -147,7 +147,7 @@ serve(async (req) => {
 
     // 🤖 HONEST AI RESPONSE WITH DATA INTEGRITY
     console.log('🤖 Calling OpenAI with honest data-aware context...');
-    let aiChoice = await callOpenAI(context, message, consultantPrompt);
+    let aiChoice = await callOpenAI(context, message, consultantPrompt, userHistory);
     
     // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication
     console.log('🔧 Applying Data Honesty Engine...');
@@ -158,7 +158,8 @@ serve(async (req) => {
       specificData,
       context,
       consultantPrompt,
-      callOpenAI
+      callOpenAI,
+      userHistory
     );
     
     // Enhanced validation with data utilization scoring

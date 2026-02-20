@@ -8,7 +8,8 @@ export class ResponseCompletenessEngine {
     availableData: any,
     context: string,
     consultantPrompt: string,
-    callOpenAI: Function
+    callOpenAI: Function,
+    conversationHistory?: Array<{user_message: string; ai_response: string}>
   ): Promise<any> {
     console.log('🎯 Response Honesty Engine: Checking for data integrity...');
     
@@ -41,7 +42,7 @@ export class ResponseCompletenessEngine {
       
       try {
         // Regenerate response with honesty enforcement
-        const regeneratedResponse = await callOpenAI(context, userMessage, honestyPrompt);
+        const regeneratedResponse = await callOpenAI(context, userMessage, honestyPrompt, conversationHistory);
         
         // Validate the regenerated response
         const revalidationResult = SmartResponseValidator.validateAIResponse(
