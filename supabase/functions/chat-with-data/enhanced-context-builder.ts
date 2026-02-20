@@ -51,23 +51,37 @@ export class EnhancedContextBuilder {
 
   private buildHotelReviewsSection(allReviews: any[]): string[] {
     const contextSections: string[] = [];
-    
+
+    // Get real Dubai dates
+    const { today, yesterday } = ReviewAnalysisUtils.getDubaiDates();
+
     contextSections.push('⭐ COMPLETE HOTEL REVIEWS DATABASE:');
     contextSections.push(`📊 TOTAL REVIEWS IN DATABASE: ${allReviews.length}`);
-    
-    // Analyze all reviews comprehensively
-    const reviewsWithContent = allReviews.filter((review: any) => 
+    contextSections.push(`📅 TODAY (Dubai time): ${today}`);
+    contextSections.push(`📅 YESTERDAY (Dubai time): ${yesterday}`);
+
+    const reviewsWithContent = allReviews.filter((review: any) =>
       review['Text'] || review['Title']
     );
-    
+
     const reviewsWithScores = allReviews.filter((review: any) => review.Score);
     const reviewsBySource = ReviewAnalysisUtils.analyzeReviewsBySource(allReviews);
     const reviewsByDate = ReviewAnalysisUtils.analyzeReviewsByDate(allReviews);
     const monthlyBreakdown = ReviewAnalysisUtils.analyzeReviewsByMonth(allReviews);
-    
+    const dailyBreakdown = ReviewAnalysisUtils.analyzeReviewsByDay(allReviews, 14);
+
     contextSections.push(`📊 REVIEWS WITH CONTENT: ${reviewsWithContent.length}`);
     contextSections.push(`📊 REVIEWS WITH SCORES: ${reviewsWithScores.length}`);
-    
+
+    // ✅ DAILY BREAKDOWN — exact counts for last 14 days (critical for "yesterday" questions)
+    contextSections.push('📅 EXACT DAILY REVIEW COUNTS (last 14 days, Dubai time):');
+    Object.entries(dailyBreakdown).forEach(([date, count]) => {
+      const label = date === today ? ' ← TODAY' : date === yesterday ? ' ← YESTERDAY' : '';
+      contextSections.push(`   • ${date}: ${count} reviews${label}`);
+    });
+    contextSections.push('⚠️ IMPORTANT: Use the EXACT daily counts above to answer questions about "today", "yesterday", or specific dates. Do NOT estimate.');
+    contextSections.push('');
+
     // Add source breakdown
     if (Object.keys(reviewsBySource).length > 0) {
       contextSections.push('📍 REVIEWS BY SOURCE:');
@@ -75,71 +89,48 @@ export class EnhancedContextBuilder {
         contextSections.push(`   • ${source}: ${count} reviews`);
       });
     }
-    
-    // Add comprehensive monthly breakdown
+
+    // Monthly breakdown
     if (Object.keys(monthlyBreakdown).length > 0) {
-      contextSections.push('📅 REVIEWS BY MONTH (EXACT BREAKDOWN):');
+      contextSections.push('📅 REVIEWS BY MONTH:');
       const monthNames = [
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
       ];
-      
-      console.log('🗓️ Context Builder - Monthly breakdown being added to context:', monthlyBreakdown);
-      
+
       Object.entries(monthlyBreakdown).forEach(([monthKey, count]) => {
         const [year, month] = monthKey.split('-');
-        const monthIndex = parseInt(month) - 1; // Convert to 0-based index
+        const monthIndex = parseInt(month) - 1;
         const monthName = monthNames[monthIndex] || `Month-${month}`;
-        const reviewText = `   • ${monthName} ${year}: ${count} reviews`;
-        contextSections.push(reviewText);
-        console.log(`📊 Context Builder - Added month entry: ${reviewText}`);
+        contextSections.push(`   • ${monthName} ${year}: ${count} reviews`);
       });
     }
-    
-    // Add date analysis
-    if (reviewsByDate.recentReviews > 0) {
+
+    // Date range analysis using real current date
+    if (reviewsByDate.recentReviews >= 0) {
       contextSections.push('📅 REVIEW TIMELINE ANALYSIS:');
       contextSections.push(`   • Reviews in last 30 days: ${reviewsByDate.recentReviews}`);
       contextSections.push(`   • Reviews in last 90 days: ${reviewsByDate.last90Days}`);
       contextSections.push(`   • Total historical reviews: ${allReviews.length}`);
     }
-    
-    // Enhanced scoring analysis with normalization
+
+    // Enhanced scoring analysis
     if (reviewsWithScores.length > 0) {
       const scoringContext = ScoreNormalizationUtils.generateScoringContext(allReviews);
       contextSections.push(scoringContext);
     }
-    
+
     // Show sample reviews
     if (reviewsWithContent.length > 0) {
       contextSections.push('📋 SAMPLE RECENT REVIEWS:');
       reviewsWithContent.slice(0, 8).forEach((review: any, index: number) => {
         contextSections.push(`${index + 1}. Review from ${review.Source || 'Unknown Source'}:`);
-        
-        if (review.Score) {
-          contextSections.push(`   ⭐ Score: ${review.Score}/5`);
-        }
-        
-        if (review.Title) {
-          contextSections.push(`   📝 Title: ${review.Title}`);
-        }
-        
-        if (review['Text']) {
-          contextSections.push(`   📄 Review: ${review['Text'].substring(0, 200)}${review['Text'].length > 200 ? '...' : ''}`);
-        }
-        
-        if (review.Author) {
-          contextSections.push(`   👤 Author: ${review.Author}`);
-        }
-        
-        if (review.Date) {
-          contextSections.push(`   📅 Date: ${review.Date}`);
-        }
-        
-        if (review['Hotel Name']) {
-          contextSections.push(`   🏨 Hotel: ${review['Hotel Name']}`);
-        }
-        
+        if (review.Score) contextSections.push(`   ⭐ Score: ${review.Score}/5`);
+        if (review.Title) contextSections.push(`   📝 Title: ${review.Title}`);
+        if (review['Text']) contextSections.push(`   📄 Review: ${review['Text'].substring(0, 200)}${review['Text'].length > 200 ? '...' : ''}`);
+        if (review.Author) contextSections.push(`   👤 Author: ${review.Author}`);
+        if (review.Date) contextSections.push(`   📅 Date: ${review.Date}`);
+        if (review['Hotel Name']) contextSections.push(`   🏨 Hotel: ${review['Hotel Name']}`);
         contextSections.push('');
       });
     }
