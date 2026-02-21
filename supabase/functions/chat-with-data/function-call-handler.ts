@@ -25,12 +25,13 @@ export class FunctionCallHandler {
   
   getAvailableTools(): any[] {
     const searchFunctions = this.searchService.getAvailableFunctions();
+    const dataFunctions = this.getDataFunctions();
     const actionFunctions = this.getActionFunctions();
     
-    return [...searchFunctions, ...actionFunctions];
+    return [...searchFunctions, ...dataFunctions, ...actionFunctions];
   }
   
-  getActionFunctions(): any[] {
+  getDataFunctions(): any[] {
     return [
       {
         name: 'get_hotel_rates',
@@ -44,7 +45,12 @@ export class FunctionCallHandler {
           },
           required: ['check_in_date', 'nights']
         }
-      },
+      }
+    ];
+  }
+  
+  getActionFunctions(): any[] {
+    return [
       {
         name: 'send_email',
         description: 'Send an email to a specified recipient',
