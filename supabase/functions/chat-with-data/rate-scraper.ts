@@ -268,6 +268,11 @@ export class RateScraper {
       const separator = baseUrl.includes('?') ? '&' : '?';
       return `${baseUrl}${separator}dateIn=${checkIn}&dateOut=${checkOut}&compositions=1&nights=${nights}`;
     }
+    // Millennium uses checkin/checkout params with existing query params
+    if (baseUrl.includes('millenniumhotels.com')) {
+      const separator = baseUrl.includes('?') ? '&' : '?';
+      return `${baseUrl}${separator}checkin=${checkIn}&checkout=${checkOut}`;
+    }
     // Default: checkin/checkout params
     const separator = baseUrl.includes('?') ? '&' : '?';
     return `${baseUrl}${separator}checkin=${checkIn}&checkout=${checkOut}`;
@@ -392,10 +397,10 @@ export class RateScraper {
       const hostname = new URL(url).hostname;
       if (hostname.includes('2seasonshotels')) return 'Two Seasons Hotel';
       if (hostname.includes('accor.com')) {
-        // Extract hotel code from URL path like /hotel/A8V6
         const codeMatch = url.match(/hotel\/([A-Z0-9]+)/i);
         return codeMatch ? `Accor Hotel (${codeMatch[1]})` : 'Accor Hotel';
       }
+      if (hostname.includes('millenniumhotels.com')) return 'Millennium Place Barsha Heights';
       return hostname.replace('www.', '').split('.')[0];
     } catch {
       return 'Hotel';

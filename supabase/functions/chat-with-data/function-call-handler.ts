@@ -39,7 +39,8 @@ export class FunctionCallHandler {
 Known hotels and their booking URLs:
 - Two Seasons Hotel (default): https://www.2seasonshotels.com/book/accommodations
 - Mercure Dubai Barsha Heights: https://all.accor.com/booking/en/accor/hotel/A8V6
-When the user asks about competitor hotel prices (e.g. Mercure, Accor), use the appropriate hotel_url.`,
+- Millennium Place Barsha Heights: https://www.millenniumhotels.com/en/bookings/?hotelcode=16228&viewrates=rooms
+When the user asks about competitor hotel prices (e.g. Mercure, Accor, Millennium), use the appropriate hotel_url.`,
         parameters: {
           type: 'object',
           properties: {
