@@ -1,5 +1,6 @@
 import { SearchService } from './search-service.ts';
 import { OpenAIMessage } from './openai-client.ts';
+import { RateScraper, RateResult } from './rate-scraper.ts';
 
 export interface ToolCall {
   id: string;
@@ -31,6 +32,19 @@ export class FunctionCallHandler {
   
   getActionFunctions(): any[] {
     return [
+      {
+        name: 'get_hotel_rates',
+        description: 'Get live hotel room rates/prices for specific dates. Use this when the user asks about room prices, rates, tariffs, or accommodation costs for specific dates. Supports per-night breakdown.',
+        parameters: {
+          type: 'object',
+          properties: {
+            check_in_date: { type: 'string', description: 'Check-in date in YYYY-MM-DD format' },
+            nights: { type: 'integer', description: 'Number of nights (1-30)', default: 1 },
+            hotel_url: { type: 'string', description: 'Optional booking page URL. Defaults to Two Seasons Hotel.' }
+          },
+          required: ['check_in_date', 'nights']
+        }
+      },
       {
         name: 'send_email',
         description: 'Send an email to a specified recipient',
@@ -85,7 +99,11 @@ export class FunctionCallHandler {
       
       console.log(`🎯 Processing function: ${functionName}`);
       
-      if (this.isSearchFunction(functionName)) {
+    if (functionName === 'get_hotel_rates') {
+        console.log('💰 Hotel rates function detected, executing...');
+        const result = await this.executeRateScraping(functionArgs, toolCall.id);
+        messages.push(...result);
+      } else if (this.isSearchFunction(functionName)) {
         const result = await this.executeSearchFunction(functionName, functionArgs, toolCall.id);
         messages.push(...result);
       } else if (this.isActionFunction(functionName)) {
@@ -114,6 +132,33 @@ export class FunctionCallHandler {
   private isActionFunction(functionName: string): boolean {
     const actionFunctions = ['send_email', 'send_sms', 'send_whatsapp'];
     return actionFunctions.includes(functionName);
+  }
+  
+  private async executeRateScraping(args: any, toolCallId: string): Promise<OpenAIMessage[]> {
+    try {
+      console.log('💰 Executing rate scraping:', args);
+      const scraper = new RateScraper();
+      const result: RateResult = await scraper.scrapeRates(
+        args.check_in_date,
+        Math.min(args.nights || 1, 30),
+        args.hotel_url
+      );
+      const formatted = RateScraper.formatRateResults(result);
+      console.log('✅ Rate scraping completed:', { success: result.success, nights: result.nights });
+      
+      return [{
+        role: 'tool',
+        tool_call_id: toolCallId,
+        content: formatted
+      }];
+    } catch (error) {
+      console.error('❌ Rate scraping failed:', error);
+      return [{
+        role: 'tool',
+        tool_call_id: toolCallId,
+        content: `⚠️ لم أتمكن من سحب الأسعار حالياً: ${error.message}`
+      }];
+    }
   }
   
   private async executeSearchFunction(

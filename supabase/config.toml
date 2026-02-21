@@ -49,3 +49,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-message]
 verify_jwt = false
+
+[functions.firecrawl-scrape]
+verify_jwt = false
