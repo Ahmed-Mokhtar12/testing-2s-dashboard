@@ -428,8 +428,25 @@ serve(async (req) => {
         actionStatus: 'pending_confirmation'
       };
     } else {
-      // Regular text response
-      response.response = aiChoice.message?.content || "I'm here to help! How can I assist you today?";
+      // Regular text response — smart fallback if content is empty
+      let finalContent = aiChoice.message?.content;
+      
+      if (!finalContent || finalContent.trim() === '' || finalContent === "I'm here to help!") {
+        console.log('⚠️ Empty response detected — attempting text-only fallback call...');
+        try {
+          const { OpenAIClient } = await import('./openai-client.ts');
+          const fallbackClient = new OpenAIClient();
+          const fallbackMessages = fallbackClient.createMessages(context, message, consultantPrompt, userHistory);
+          const fallbackResponse = await fallbackClient.makeRequest(fallbackMessages, [], 'none');
+          finalContent = fallbackResponse.choices?.[0]?.message?.content || "I apologize, I couldn't generate a proper response. Please try rephrasing your question.";
+          console.log('✅ Fallback text-only call succeeded');
+        } catch (fallbackErr) {
+          console.error('❌ Fallback call failed:', fallbackErr);
+          finalContent = "I apologize, I couldn't generate a proper response. Please try rephrasing your question.";
+        }
+      }
+      
+      response.response = finalContent;
     }
 
     // Enhanced conversation saving with full context

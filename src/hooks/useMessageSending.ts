@@ -45,7 +45,7 @@ export const useMessageSending = ({
     }
 
     try {
-      const aiResponseData = await sendMessageToAI(userMessageContent, userMessage.id);
+      const aiResponseData = await sendMessageToAI(userMessageContent, userMessage.id, sessionId || undefined);
       
       // Handle both old string responses and new structured responses
       let aiMessage;

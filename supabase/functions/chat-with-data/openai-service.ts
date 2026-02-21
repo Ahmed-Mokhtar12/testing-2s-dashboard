@@ -46,7 +46,7 @@ export async function callOpenAI(context: string, message: string, consultantPro
     const finalResponse = await client.makeRequest(
       executionResult.messages,
       secondCallTools,
-      'auto'
+      'none'
     );
 
     return finalResponse.choices[0];
