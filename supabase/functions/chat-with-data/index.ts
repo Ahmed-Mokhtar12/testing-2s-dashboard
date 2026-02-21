@@ -93,9 +93,11 @@ serve(async (req) => {
       supabase.from('uploaded_documents').select('*').eq('upload_status', 'processed').order('last_accessed', { ascending: false }).limit(5)
     ]);
 
-    // 🎯 PRECISE DATE QUERY: If user asks about a specific date, query it directly from DB
+    // 🎯 PRECISE DATE QUERY: If user asks about a specific date (for reviews, not rates), query it directly from DB
+    const isRateQuery = /rate|price|tariff|cost|سعر|أسعار|تكلفة|night|ليلة|ليالي|accommodation|غرف|room/i.test(message);
     let preciseDateData: { date: string; count: number } | null = null;
     try {
+      if (!isRateQuery) {
       // Detect date patterns in the message (e.g. "February 18", "18th", "2026-02-18")
       const datePatterns = [
         /(\d{4}-\d{2}-\d{2})/,
@@ -140,6 +142,7 @@ serve(async (req) => {
           console.log(`✅ Precise date count: ${count} reviews on ${detectedDate}`);
         }
       }
+      } // end if (!isRateQuery)
     } catch (dateErr) {
       console.warn('⚠️ Date detection error (non-critical):', dateErr);
     }
