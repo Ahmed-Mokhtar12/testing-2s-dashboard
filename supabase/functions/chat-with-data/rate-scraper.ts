@@ -114,12 +114,12 @@ export class RateScraper {
         const url = this.buildBookingUrl(hotelUrl, ciStr, coStr);
         const markdown = await this.callFirecrawl(apiKey, url);
         const rates = this.extractRatesFromMarkdown(markdown);
-        // Convert all prices to AED
-        const aedRates = rates.map(r => ({
+        // Convert non-AED prices to AED (Firecrawl may get EUR based on server location)
+        const aedRates = rates.map(r => r.currency === 'AED' ? r : {
           ...r,
           price: convertToAED(r.price, r.currency),
           currency: 'AED'
-        }));
+        });
 
         nightlyBreakdown.push({
           date: ciStr,
@@ -262,7 +262,8 @@ export class RateScraper {
         url,
         formats: ['markdown'],
         onlyMainContent: true,
-        waitFor: 8000, // Wait for JS-rendered prices
+        waitFor: 8000,
+        location: { country: 'AE', languages: ['en'] }, // Force UAE locale for AED prices
       }),
     });
 
