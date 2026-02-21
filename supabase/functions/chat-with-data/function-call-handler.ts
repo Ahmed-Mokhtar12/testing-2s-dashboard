@@ -35,13 +35,17 @@ export class FunctionCallHandler {
     return [
       {
         name: 'get_hotel_rates',
-        description: 'Get live hotel room rates/prices for specific dates. Use this when the user asks about room prices, rates, tariffs, or accommodation costs for specific dates. Supports per-night breakdown.',
+        description: `Get live hotel room rates/prices for specific dates. Returns the LOWEST available price per night.
+Known hotels and their booking URLs:
+- Two Seasons Hotel (default): https://www.2seasonshotels.com/book/accommodations
+- Mercure Dubai Barsha Heights: https://all.accor.com/booking/en/accor/hotel/A8V6
+When the user asks about competitor hotel prices (e.g. Mercure, Accor), use the appropriate hotel_url.`,
         parameters: {
           type: 'object',
           properties: {
             check_in_date: { type: 'string', description: 'Check-in date in YYYY-MM-DD format' },
             nights: { type: 'integer', description: 'Number of nights (1-30)', default: 1 },
-            hotel_url: { type: 'string', description: 'Optional booking page URL. Defaults to Two Seasons Hotel.' }
+            hotel_url: { type: 'string', description: 'Booking page URL. Use the appropriate URL from the known hotels list above.' }
           },
           required: ['check_in_date', 'nights']
         }
