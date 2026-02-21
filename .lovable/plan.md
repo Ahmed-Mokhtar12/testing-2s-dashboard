@@ -1,147 +1,84 @@
 
-# خطة شاملة: تمكين سيرا من قراءة وفهم جميع جداول Supabase بدقة تامة
 
-## تشخيص المشكلة الحالية
+# نظام سحب الأسعار الديناميكي (Dynamic Rate Retrieval)
 
-بعد فحص الكود وقاعدة البيانات، اكتشفت عدة مشاكل جوهرية تمنع سيرا من الوصول للبيانات الحقيقية:
+## الهدف
+عندما تسأل سيرا "ما هي أسعار الغرف من الغد لمدة 4 ليالي؟"، يقوم النظام بـ:
+1. سحب أسعار كل ليلة بشكل منفصل من موقع الفندق الرسمي عبر Firecrawl
+2. عرض سعر كل ليلة على حدة (ليلة 1: XX درهم، ليلة 2: YY درهم...)
+3. لاحقاً: سحب أسعار المنافسين بنفس الطريقة للمقارنة
 
-### المشكلة الأولى — الأكثر خطورة: اسم جدول المراجعات خاطئ
-- الكود يستعلم من: `'Hotel Reviews'` — **هذا الجدول لا يوجد**
-- الجدول الحقيقي اسمه: `reviews` — يحتوي على **7,655 مراجعة**
-- النتيجة: سيرا لا ترى أي مراجعة على الإطلاق
+## كيف سيعمل النظام
 
-### المشكلة الثانية: أعمدة جدول المراجعات خاطئة في الكود
-الكود يبحث عن `review['Reviews Summary']` لكن الجدول الحقيقي يحتوي على هذه الأعمدة:
-- `id`, `Date`, `Hotel Name`, `Source`, `Language`, `Score`, `URL`, `Author`, `Title`, `Text`, `Response Text`
-- العمود الصحيح للنص هو `Text` وليس `Reviews Summary`
+عندما تسأل عن الأسعار:
+1. سيرا تحلل السؤال وتستخرج: تاريخ الوصول، عدد الليالي
+2. تستدعي Firecrawl API لسحب صفحة الحجز مع التواريخ المطلوبة
+3. تستخرج أسعار كل ليلة من المحتوى المسحوب
+4. تعرض النتائج بشكل مرتب
 
-### المشكلة الثالثة: جدول SOPs لا يُقرأ إطلاقًا
-- جدول `Sop` موجود في قاعدة البيانات (أعمدة: id, sop, title, department_name, section, file_id)
-- لا يوجد أي كود يستعلم منه أو يرسل محتواه لسيرا
+## مثال على النتيجة المتوقعة
 
-### المشكلة الرابعة: معلومات خاطئة في System Prompt
-- يقول الـ prompt "~1,719 مراجعة" — الرقم الحقيقي هو **7,655 مراجعة**
-- يقول "لا يوجد بيانات تشغيلية" لكن Chat History يحتوي على **27,119 سجل**
+```text
+اسعار الغرف من 22 فبراير لمدة 3 ليالي:
 
-### المشكلة الخامسة: Info Summary غير موجود
-- الكود يستعلم من جدول `Info Summary` لكنه غير موجود في قاعدة البيانات
+Standard Room:
+  - ليلة 1 (22 فبراير): 350 AED
+  - ليلة 2 (23 فبراير): 350 AED
+  - ليلة 3 (24 فبراير): 420 AED (عطلة نهاية الأسبوع)
+  الإجمالي: 1,120 AED
 
-### الحالة الحقيقية لقاعدة البيانات
-
-| الجدول | السجلات | الحالة في الكود |
-|---|---|---|
-| `reviews` | 7,655 | ❌ يُقرأ باسم خاطئ `Hotel Reviews` |
-| `Chat History` | 27,119 | ⚠️ يُقرأ لكن بحد 20 فقط |
-| `Conducted Training` | 9 | ✅ يُقرأ بشكل صحيح |
-| `LongTermMemory` | 5 | ✅ يُقرأ بشكل صحيح |
-| `Sop` | 0 (فارغ حاليًا) | ❌ لا يُقرأ إطلاقًا |
-| `website_chats` | 94 | ✅ يُقرأ لمحادثات الجلسة |
-| `N8N_2S` | يحتوي بيانات | ✅ يُقرأ |
-| `uploaded_documents` | 0 | ✅ يُقرأ |
-| `Info Summary` | غير موجود | ❌ استعلام لجدول وهمي |
-| `conducted_training` (lowercase) | بيانات | ❌ لا يُقرأ |
-
----
-
-## الحل الشامل — التعديلات المطلوبة
-
-### 1. إصلاح `index.ts` — تصحيح أسماء الجداول والأعمدة
-
-**الملف:** `supabase/functions/chat-with-data/index.ts`
-
-تغيير استعلامات `Promise.allSettled` من:
-```ts
-supabase.from('Hotel Reviews').select('*')...
-supabase.from('Info Summary').select('*')...
-```
-إلى:
-```ts
-supabase.from('reviews').select('*').order('Date', { ascending: false }).limit(200),
-supabase.from('Sop').select('*').limit(50),
-```
-وإضافة استعلام `Sop` كمصدر بيانات جديد.
-
-### 2. إصلاح `enhanced-data-service.ts` — تصحيح اسم الجدول
-
-**الملف:** `supabase/functions/chat-with-data/enhanced-data-service.ts`
-
-تغيير:
-```ts
-this.supabase.from('Hotel Reviews').select('*')...
-this.supabase.from('Info Summary').select('*')...
-```
-إلى:
-```ts
-this.supabase.from('reviews').select('*').order('Date', { ascending: false })
-this.supabase.from('Sop').select('*').limit(50)
+Deluxe Room:
+  - ليلة 1 (22 فبراير): 500 AED
+  ...
 ```
 
-### 3. إصلاح `enhanced-context-builder.ts` — الأعمدة الصحيحة لجدول `reviews`
+## الخطوات التقنية
 
-**الملف:** `supabase/functions/chat-with-data/enhanced-context-builder.ts`
+### 1. إنشاء Edge Function: `firecrawl-scrape`
+- وظيفة عامة تستدعي Firecrawl API لسحب محتوى أي صفحة
+- تدعم `waitFor` للانتظار حتى يتم تحميل المحتوى الديناميكي (JavaScript)
+- تدعم استخراج البيانات بتنسيق markdown أو JSON منظم
 
-تغيير الأعمدة المستخدمة في بناء السياق:
-```ts
-// قديم (خاطئ)
-review['Reviews Summary']
-// جديد (صحيح)
-review['Text']
-```
+### 2. تحديث `web-scraper.ts`
+- إضافة method جديد: `scrapeHotelRates(checkIn, checkOut)`
+- يبني URL صفحة الحجز مع التواريخ المطلوبة
+- يستدعي Firecrawl مع `waitFor: 5000` لانتظار تحميل الأسعار
+- يحلل المحتوى ويستخرج أسعار كل نوع غرفة لكل ليلة
 
-### 4. إصلاح `context-section-builder.ts` — إضافة قسم SOPs + تصحيح الأعمدة
+### 3. تحديث `function-call-handler.ts`
+- إضافة أداة جديدة `get_hotel_rates` مع parameters:
+  - `check_in_date` (تاريخ الوصول)
+  - `nights` (عدد الليالي)
+  - `hotel_url` (اختياري - للمنافسين لاحقاً)
 
-**الملف:** `supabase/functions/chat-with-data/context-section-builder.ts`
+### 4. تحديث `search-service.ts`
+- إضافة function جديد `getHotelRates()` ينفذ السحب الفعلي
+- يحسب تاريخ المغادرة من عدد الليالي
+- يستدعي Firecrawl ويعالج النتائج
+- يرجع الأسعار بتنسيق منظم لكل ليلة
 
-- تصحيح مرجع `review['Reviews Summary']` إلى `review['Text']`
-- إضافة دالة `buildSopSection()` جديدة تعرض بيانات جدول `Sop`
-- تحديث `buildOtherDataSections()` لتشمل SOPs
+### 5. تحديث `supabase/config.toml`
+- تسجيل Edge Functions الجديدة:
+  - `firecrawl-scrape`
 
-### 5. تحديث `system-prompt-builder.ts` — تصحيح المعلومات
+### 6. تحديث `index.ts` (chat-with-data)
+- إضافة كشف ذكي لأسئلة الأسعار (rate/price/tariff/سعر)
+- عند كشف سؤال عن الأسعار، يتم تفعيل أداة `get_hotel_rates` تلقائياً
 
-**الملف:** `supabase/functions/chat-with-data/system-prompt-builder.ts`
+## الملفات المتأثرة
 
-تحديث الـ System Prompt ليعكس الواقع الحقيقي:
-```
-- AVAILABLE: Guest reviews (7,655 reviews, Nov 2024 - Feb 2026)
-- AVAILABLE: WhatsApp Chat History (27,119 messages)
-- AVAILABLE: Staff Training Records (9 records)
-- AVAILABLE: SOPs and Procedures (Sop table)
-- AVAILABLE: Long-term conversation memory
-- AVAILABLE: Uploaded documents (via N8N_2S)
-- Sources: Google Maps, Booking.com, TripAdvisor, Agoda, Expedia, TrustYou, etc.
-- Average Score: 4.46/5
-```
+| الملف | العملية |
+|-------|---------|
+| `supabase/functions/firecrawl-scrape/index.ts` | جديد |
+| `supabase/functions/chat-with-data/web-scraper.ts` | تحديث |
+| `supabase/functions/chat-with-data/function-call-handler.ts` | تحديث |
+| `supabase/functions/chat-with-data/search-service.ts` | تحديث |
+| `supabase/functions/chat-with-data/index.ts` | تحديث |
+| `supabase/config.toml` | تحديث |
 
-### 6. إضافة معرفة شاملة بهيكل البيانات في System Prompt
+## ملاحظات مهمة
+- صفحة الحجز (`/book/accommodations`) تعتمد على JavaScript بالكامل، لذلك Firecrawl مع `waitFor` ضروري لتحميل الأسعار
+- سيتم تجربة السحب أولاً من موقع الفندق الرسمي كاختبار
+- بعد نجاح الاختبار، يمكن إضافة URLs المنافسين بنفس الآلية
+- الأسعار تتغير حسب التاريخ، لذلك كل طلب يسحب بيانات حية من الموقع
 
-إضافة قسم جديد في الـ prompt يصف بدقة هيكل كل جدول وطبيعة بياناته:
-
-```
-DATABASE SCHEMA KNOWLEDGE:
-- reviews: Date, Hotel Name, Source, Language, Score(0-5), Author, Title, Text, Response Text
-- Chat History: Sender Number, Sender Message, Ai Reply, Name, is_human_controlled
-- Conducted Training: Summary of the training, created_at
-- Sop: title, department_name, section, sop (full content)
-- LongTermMemory: sender, recipient, message
-- website_chats: user_message, ai_response, session_id
-```
-
----
-
-## ترتيب التنفيذ
-
-1. تصحيح `index.ts` — إصلاح أسماء الجداول (أعلى أولوية)
-2. تصحيح `enhanced-data-service.ts` — نفس الإصلاح في الخدمة
-3. تصحيح `enhanced-context-builder.ts` — استخدام الأعمدة الصحيحة
-4. تحديث `context-section-builder.ts` — إضافة SOPs وتصحيح الأعمدة
-5. تحديث `system-prompt-builder.ts` — معلومات دقيقة وهيكل البيانات
-6. نشر الـ Edge Function
-
-## النتيجة المتوقعة
-
-بعد هذه التعديلات، ستتمكن سيرا من:
-- قراءة **7,655 مراجعة** حقيقية بدلًا من صفر
-- الوصول لـ **27,119 رسالة** من Chat History
-- قراءة محتوى **SOPs** وإجراءات الفندق
-- فهم أعمدة كل جدول وطبيعة بياناته بدقة
-- تقديم تحليلات دقيقة بأرقام حقيقية
