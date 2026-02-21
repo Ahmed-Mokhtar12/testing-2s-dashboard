@@ -41,10 +41,11 @@ export async function callOpenAI(context: string, message: string, consultantPro
       return executionResult.earlyReturnChoice;
     }
 
-    // Make final API call with tool results
+    // Make final API call with tool results (include data + action functions)
+    const secondCallTools = [...functionHandler.getDataFunctions(), ...functionHandler.getActionFunctions()];
     const finalResponse = await client.makeRequest(
       executionResult.messages,
-      functionHandler.getActionFunctions(), // Only action functions for second call
+      secondCallTools,
       'auto'
     );
 

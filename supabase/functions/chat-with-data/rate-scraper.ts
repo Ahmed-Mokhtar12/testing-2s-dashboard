@@ -45,58 +45,96 @@ export class RateScraper {
       return { success: false, checkIn: checkInDate, checkOut: '', nights, hotelName: '', nightlyBreakdown: [], error: 'FIRECRAWL_API_KEY not configured' };
     }
 
+    const isTwoSeasons = hotelUrl.includes('2seasonshotels');
     const checkIn = new Date(checkInDate);
     const checkOut = new Date(checkIn);
     checkOut.setDate(checkIn.getDate() + nights);
 
-    // Scrape the booking page calendar — it shows per-day rates in the calendar view
+    if (isTwoSeasons) {
+      // Two Seasons: scrape calendar view once (shows per-day rates)
+      return this.scrapeTwoSeasonsRates(firecrawlKey, checkInDate, nights, hotelUrl, checkIn, checkOut);
+    } else {
+      // Competitor sites: scrape each night individually for per-night breakdown
+      return this.scrapeCompetitorRates(firecrawlKey, checkInDate, nights, hotelUrl, checkIn, checkOut);
+    }
+  }
+
+  private async scrapeTwoSeasonsRates(
+    apiKey: string, checkInDate: string, nights: number, hotelUrl: string, checkIn: Date, checkOut: Date
+  ): Promise<RateResult> {
     const url = this.buildBookingUrl(hotelUrl, checkInDate, this.formatDate(checkOut));
-    
     try {
-      const markdown = await this.callFirecrawl(firecrawlKey, url);
-      
-      // Extract calendar-based rates (the calendar shows daily rates for each day)
+      const markdown = await this.callFirecrawl(apiKey, url);
       const calendarRates = this.extractCalendarRates(markdown, checkIn, nights);
       
       if (calendarRates.length > 0) {
-        return {
-          success: true,
-          checkIn: checkInDate,
-          checkOut: this.formatDate(checkOut),
-          nights,
-          hotelName: this.extractHotelName(hotelUrl),
-          nightlyBreakdown: calendarRates
-        };
+        return { success: true, checkIn: checkInDate, checkOut: this.formatDate(checkOut), nights, hotelName: 'Two Seasons Hotel', nightlyBreakdown: calendarRates };
       }
 
-      // Fallback: try extracting from room listing
-      const nightlyBreakdown: NightlyRate[] = [];
+      // Fallback
       const rates = this.extractRatesFromMarkdown(markdown);
-      
-      for (let i = 0; i < nights; i++) {
-        const nightDate = new Date(checkIn);
-        nightDate.setDate(checkIn.getDate() + i);
-        const dayName = DAY_NAMES_EN[nightDate.getDay()];
-        
+      const nightlyBreakdown = this.buildNightlyFromFlat(checkIn, nights, rates);
+      return { success: true, checkIn: checkInDate, checkOut: this.formatDate(checkOut), nights, hotelName: 'Two Seasons Hotel', nightlyBreakdown };
+    } catch (err) {
+      console.error('❌ Two Seasons rate scraping failed:', err.message);
+      return { success: false, checkIn: checkInDate, checkOut: this.formatDate(checkOut), nights, hotelName: 'Two Seasons Hotel', nightlyBreakdown: [], error: err.message };
+    }
+  }
+
+  private async scrapeCompetitorRates(
+    apiKey: string, checkInDate: string, nights: number, hotelUrl: string, checkIn: Date, checkOut: Date
+  ): Promise<RateResult> {
+    const hotelName = this.extractHotelName(hotelUrl);
+    const nightlyBreakdown: NightlyRate[] = [];
+
+    // Scrape each night individually for per-night pricing
+    for (let i = 0; i < nights; i++) {
+      const nightCheckIn = new Date(checkIn);
+      nightCheckIn.setDate(checkIn.getDate() + i);
+      const nightCheckOut = new Date(nightCheckIn);
+      nightCheckOut.setDate(nightCheckIn.getDate() + 1);
+
+      const ciStr = this.formatDate(nightCheckIn);
+      const coStr = this.formatDate(nightCheckOut);
+      const dayName = DAY_NAMES_EN[nightCheckIn.getDay()];
+
+      console.log(`  📅 Night ${i + 1}: ${ciStr} → ${coStr} (${dayName})`);
+
+      try {
+        const url = this.buildBookingUrl(hotelUrl, ciStr, coStr);
+        const markdown = await this.callFirecrawl(apiKey, url);
+        const rates = this.extractRatesFromMarkdown(markdown);
+
         nightlyBreakdown.push({
-          date: this.formatDate(nightDate),
+          date: ciStr,
           dayOfWeek: dayName,
-          rates: rates.length > 0 ? rates : [{ roomType: 'Lowest Available Rate', price: 0, currency: 'AED', originalText: 'Price not found' }]
+          rates: rates.length > 0 ? rates : [{ roomType: 'Room', price: 0, currency: 'EUR', originalText: 'Price not found' }]
+        });
+      } catch (err) {
+        console.error(`  ❌ Failed night ${i + 1}:`, err.message);
+        nightlyBreakdown.push({
+          date: ciStr,
+          dayOfWeek: dayName,
+          rates: [{ roomType: 'Room', price: 0, currency: 'EUR', originalText: `Error: ${err.message}` }]
         });
       }
-
-      return {
-        success: true,
-        checkIn: checkInDate,
-        checkOut: this.formatDate(checkOut),
-        nights,
-        hotelName: this.extractHotelName(hotelUrl),
-        nightlyBreakdown
-      };
-    } catch (err) {
-      console.error('❌ Rate scraping failed:', err.message);
-      return { success: false, checkIn: checkInDate, checkOut: this.formatDate(checkOut), nights, hotelName: this.extractHotelName(hotelUrl), nightlyBreakdown: [], error: err.message };
     }
+
+    return { success: true, checkIn: checkInDate, checkOut: this.formatDate(checkOut), nights, hotelName, nightlyBreakdown };
+  }
+
+  private buildNightlyFromFlat(checkIn: Date, nights: number, rates: RoomRate[]): NightlyRate[] {
+    const breakdown: NightlyRate[] = [];
+    for (let i = 0; i < nights; i++) {
+      const nightDate = new Date(checkIn);
+      nightDate.setDate(checkIn.getDate() + i);
+      breakdown.push({
+        date: this.formatDate(nightDate),
+        dayOfWeek: DAY_NAMES_EN[nightDate.getDay()],
+        rates: rates.length > 0 ? rates : [{ roomType: 'Lowest Available Rate', price: 0, currency: 'AED', originalText: 'Price not found' }]
+      });
+    }
+    return breakdown;
   }
 
   /**
@@ -184,7 +222,13 @@ export class RateScraper {
   }
 
   private buildBookingUrl(baseUrl: string, checkIn: string, checkOut: string): string {
-    // Most booking engines accept check-in/check-out as query params
+    // Accor uses dateIn/dateOut, compositions, and nights params
+    if (baseUrl.includes('accor.com')) {
+      const nights = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000);
+      const separator = baseUrl.includes('?') ? '&' : '?';
+      return `${baseUrl}${separator}dateIn=${checkIn}&dateOut=${checkOut}&compositions=1&nights=${nights}`;
+    }
+    // Default: checkin/checkout params
     const separator = baseUrl.includes('?') ? '&' : '?';
     return `${baseUrl}${separator}checkin=${checkIn}&checkout=${checkOut}`;
   }
@@ -225,15 +269,40 @@ export class RateScraper {
   private extractRatesFromMarkdown(markdown: string): RoomRate[] {
     const rates: RoomRate[] = [];
 
-    // Common patterns for hotel rate pages:
-    // \"Standard Room ... AED 350\" or \"350 AED\" or \"$350\" or \"AED350\"
+    // Strategy 1: Accor-style "From €XX.XX" with ### Room Name headers
+    const accorPattern = /###\s*(.+?)[\n\r][\s\S]*?From\s+[€$£]([\d,.]+)/g;
+    let accorMatch;
+    while ((accorMatch = accorPattern.exec(markdown)) !== null) {
+      const roomType = accorMatch[1].trim();
+      const price = parseFloat(accorMatch[2].replace(/,/g, ''));
+      if (price > 0 && price < 100000) {
+        // Detect currency symbol
+        const currSymbol = markdown.substring(accorMatch.index, accorMatch.index + accorMatch[0].length).match(/[€$£]/)?.[0];
+        const currency = currSymbol === '€' ? 'EUR' : currSymbol === '$' ? 'USD' : currSymbol === '£' ? 'GBP' : 'EUR';
+        rates.push({ roomType, price, currency, originalText: accorMatch[0].substring(0, 100) });
+        console.log(`  💰 [Accor] ${roomType}: ${price} ${currency}`);
+      }
+    }
+
+    if (rates.length > 0) {
+      // Deduplicate: Accor repeats room names (once as title, once as description)
+      const uniqueRates = new Map<string, RoomRate>();
+      for (const rate of rates) {
+        const key = rate.roomType.toLowerCase();
+        if (!uniqueRates.has(key) || uniqueRates.get(key)!.price > rate.price) {
+          uniqueRates.set(key, rate);
+        }
+      }
+      return Array.from(uniqueRates.values());
+    }
+
+    // Strategy 2: Generic patterns (AED/USD/EUR price patterns)
     const pricePatterns = [
       /(?:AED|USD|EUR|SAR|QAR|BHD|OMR|KWD)\s*(\d[\d,]*(?:\.\d{2})?)/gi,
       /(\d[\d,]*(?:\.\d{2})?)\s*(?:AED|USD|EUR|SAR|QAR|BHD|OMR|KWD)/gi,
-      /(?:price|rate|from|starting)\s*:?\s*(?:AED|USD|EUR)?\s*(\d[\d,]*(?:\.\d{2})?)/gi,
+      /(?:from|starting)\s*:?\s*(?:AED|USD|EUR)?\s*(\d[\d,]*(?:\.\d{2})?)/gi,
     ];
 
-    // Try to find room type + price pairs
     const lines = markdown.split('\n');
     let currentRoomType = '';
 
@@ -242,29 +311,21 @@ export class RateScraper {
       if (!trimmed) continue;
 
       // Detect room type headers
-      const roomTypeMatch = trimmed.match(/^#+\s*(.+)|^\*\*(.+?)\*\*|^((?:Standard|Deluxe|Superior|Executive|Suite|Premium|Classic|Family|Twin|Double|Single|King|Queen|Studio|Junior|Presidential|Royal|Club|Business|Economy|Luxury).+)/i);
+      const roomTypeMatch = trimmed.match(/^#+\s*(.+)|^\*\*(.+?)\*\*|^((?:Standard|Deluxe|Superior|Executive|Suite|Premium|Classic|Family|Twin|Double|Single|King|Queen|Studio|Junior|Presidential|Royal|Club|Business|Economy|Luxury|Prestige|Apartment).+)/i);
       if (roomTypeMatch) {
         currentRoomType = (roomTypeMatch[1] || roomTypeMatch[2] || roomTypeMatch[3]).trim();
       }
 
-      // Extract prices from current line
       for (const pattern of pricePatterns) {
         pattern.lastIndex = 0;
         let match;
         while ((match = pattern.exec(trimmed)) !== null) {
           const priceStr = match[1].replace(/,/g, '');
           const price = parseFloat(priceStr);
-          if (price > 0 && price < 100000) {
-            // Detect currency
+          if (price > 10 && price < 100000) {
             const currMatch = trimmed.match(/AED|USD|EUR|SAR|QAR|BHD|OMR|KWD/i);
             const currency = currMatch ? currMatch[0].toUpperCase() : 'AED';
-
-            rates.push({
-              roomType: currentRoomType || 'Room',
-              price,
-              currency,
-              originalText: trimmed.substring(0, 100)
-            });
+            rates.push({ roomType: currentRoomType || 'Room', price, currency, originalText: trimmed.substring(0, 100) });
           }
         }
       }
@@ -290,6 +351,11 @@ export class RateScraper {
     try {
       const hostname = new URL(url).hostname;
       if (hostname.includes('2seasonshotels')) return 'Two Seasons Hotel';
+      if (hostname.includes('accor.com')) {
+        // Extract hotel code from URL path like /hotel/A8V6
+        const codeMatch = url.match(/hotel\/([A-Z0-9]+)/i);
+        return codeMatch ? `Accor Hotel (${codeMatch[1]})` : 'Accor Hotel';
+      }
       return hostname.replace('www.', '').split('.')[0];
     } catch {
       return 'Hotel';
