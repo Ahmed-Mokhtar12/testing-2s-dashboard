@@ -27,6 +27,16 @@ const DAY_NAMES_AR: Record<string, string> = {
   Wednesday: 'الأربعاء', Thursday: 'الخميس', Friday: 'الجمعة', Saturday: 'السبت'
 };
 
+// Approximate exchange rates to AED
+const TO_AED: Record<string, number> = {
+  AED: 1, USD: 3.67, EUR: 4.0, GBP: 4.65, SAR: 0.98, QAR: 1.01, BHD: 9.74, OMR: 9.54, KWD: 11.95
+};
+
+function convertToAED(price: number, currency: string): number {
+  const rate = TO_AED[currency] || 1;
+  return Math.round(price * rate * 100) / 100;
+}
+
 export class RateScraper {
 
   /**
@@ -104,18 +114,24 @@ export class RateScraper {
         const url = this.buildBookingUrl(hotelUrl, ciStr, coStr);
         const markdown = await this.callFirecrawl(apiKey, url);
         const rates = this.extractRatesFromMarkdown(markdown);
+        // Convert all prices to AED
+        const aedRates = rates.map(r => ({
+          ...r,
+          price: convertToAED(r.price, r.currency),
+          currency: 'AED'
+        }));
 
         nightlyBreakdown.push({
           date: ciStr,
           dayOfWeek: dayName,
-          rates: rates.length > 0 ? rates : [{ roomType: 'Room', price: 0, currency: 'EUR', originalText: 'Price not found' }]
+          rates: aedRates.length > 0 ? aedRates : [{ roomType: 'Room', price: 0, currency: 'AED', originalText: 'Price not found' }]
         });
       } catch (err) {
         console.error(`  ❌ Failed night ${i + 1}:`, err.message);
         nightlyBreakdown.push({
           date: ciStr,
           dayOfWeek: dayName,
-          rates: [{ roomType: 'Room', price: 0, currency: 'EUR', originalText: `Error: ${err.message}` }]
+          rates: [{ roomType: 'Room', price: 0, currency: 'AED', originalText: `Error: ${err.message}` }]
         });
       }
     }
@@ -269,23 +285,26 @@ export class RateScraper {
   private extractRatesFromMarkdown(markdown: string): RoomRate[] {
     const rates: RoomRate[] = [];
 
-    // Strategy 1: Accor-style "From €XX.XX" with ### Room Name headers
-    const accorPattern = /###\s*(.+?)[\n\r][\s\S]*?From\s+[€$£]([\d,.]+)/g;
+    // Strategy 1: Accor-style "From AED XX.XX" or "From €XX.XX" with ### Room Name headers
+    const accorPattern = /###\s*(.+?)[\n\r][\s\S]*?From\s+(?:AED|USD|EUR|[€$£])\s*([\d,.]+)/g;
     let accorMatch;
     while ((accorMatch = accorPattern.exec(markdown)) !== null) {
       const roomType = accorMatch[1].trim();
       const price = parseFloat(accorMatch[2].replace(/,/g, ''));
       if (price > 0 && price < 100000) {
-        // Detect currency symbol
-        const currSymbol = markdown.substring(accorMatch.index, accorMatch.index + accorMatch[0].length).match(/[€$£]/)?.[0];
-        const currency = currSymbol === '€' ? 'EUR' : currSymbol === '$' ? 'USD' : currSymbol === '£' ? 'GBP' : 'EUR';
+        // Detect currency - check the matched text for currency
+        const matchedText = markdown.substring(accorMatch.index, accorMatch.index + accorMatch[0].length);
+        let currency = 'AED'; // Default to AED
+        if (matchedText.includes('EUR') || matchedText.includes('€')) currency = 'EUR';
+        else if (matchedText.includes('USD') || matchedText.includes('$')) currency = 'USD';
+        else if (matchedText.includes('GBP') || matchedText.includes('£')) currency = 'GBP';
+        else if (matchedText.includes('AED')) currency = 'AED';
         rates.push({ roomType, price, currency, originalText: accorMatch[0].substring(0, 100) });
-        console.log(`  💰 [Accor] ${roomType}: ${price} ${currency}`);
       }
     }
 
     if (rates.length > 0) {
-      // Deduplicate: Accor repeats room names (once as title, once as description)
+      // Deduplicate and keep cheapest per room type
       const uniqueRates = new Map<string, RoomRate>();
       for (const rate of rates) {
         const key = rate.roomType.toLowerCase();
@@ -293,7 +312,10 @@ export class RateScraper {
           uniqueRates.set(key, rate);
         }
       }
-      return Array.from(uniqueRates.values());
+      // Return only the lowest price across all room types
+      const allRates = Array.from(uniqueRates.values());
+      allRates.sort((a, b) => a.price - b.price);
+      return [allRates[0]]; // Lowest only
     }
 
     // Strategy 2: Generic patterns (AED/USD/EUR price patterns)
@@ -310,7 +332,6 @@ export class RateScraper {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      // Detect room type headers
       const roomTypeMatch = trimmed.match(/^#+\s*(.+)|^\*\*(.+?)\*\*|^((?:Standard|Deluxe|Superior|Executive|Suite|Premium|Classic|Family|Twin|Double|Single|King|Queen|Studio|Junior|Presidential|Royal|Club|Business|Economy|Luxury|Prestige|Apartment).+)/i);
       if (roomTypeMatch) {
         currentRoomType = (roomTypeMatch[1] || roomTypeMatch[2] || roomTypeMatch[3]).trim();
@@ -331,16 +352,10 @@ export class RateScraper {
       }
     }
 
-    // Deduplicate by room type (keep cheapest per type)
-    const uniqueRates = new Map<string, RoomRate>();
-    for (const rate of rates) {
-      const key = rate.roomType.toLowerCase();
-      if (!uniqueRates.has(key) || uniqueRates.get(key)!.price > rate.price) {
-        uniqueRates.set(key, rate);
-      }
-    }
-
-    return uniqueRates.size > 0 ? Array.from(uniqueRates.values()) : rates.slice(0, 10);
+    // Return only the single lowest price
+    if (rates.length === 0) return [];
+    rates.sort((a, b) => a.price - b.price);
+    return [rates[0]];
   }
 
   private formatDate(date: Date): string {
@@ -377,40 +392,30 @@ export class RateScraper {
     let output = `🏨 أسعار ${result.hotelName}\n`;
     output += `📅 من ${result.checkIn} إلى ${result.checkOut} (${result.nights} ${result.nights === 1 ? 'ليلة' : 'ليالي'})\n\n`;
 
-    // Collect all room types across nights
-    const allRoomTypes = new Set<string>();
-    result.nightlyBreakdown.forEach(n => n.rates.forEach(r => allRoomTypes.add(r.roomType)));
+    // Show lowest price per night only
+    output += `💰 **أقل سعر متاح:**\n`;
+    let total = 0;
+    let currency = 'AED';
 
-    if (allRoomTypes.size === 0) {
-      output += `⚠️ لم يتم العثور على أسعار محددة في صفحة الحجز.\n`;
-      output += `💡 يُنصح بزيارة الموقع مباشرة أو الاتصال بالفندق.\n`;
-      return output;
+    for (const night of result.nightlyBreakdown) {
+      const dayAr = DAY_NAMES_AR[night.dayOfWeek] || night.dayOfWeek;
+      // Get the lowest rate for this night
+      const lowestRate = night.rates.reduce((min, r) => (r.price > 0 && (min.price === 0 || r.price < min.price)) ? r : min, night.rates[0]);
+      
+      if (lowestRate && lowestRate.price > 0) {
+        output += `  • ليلة ${night.date} (${dayAr}): ${lowestRate.price} ${lowestRate.currency}\n`;
+        total += lowestRate.price;
+        currency = lowestRate.currency;
+      } else {
+        output += `  • ليلة ${night.date} (${dayAr}): غير متوفر\n`;
+      }
     }
 
-    for (const roomType of allRoomTypes) {
-      output += `🛏️ **${roomType}**:\n`;
-      let total = 0;
-      let currency = 'AED';
-
-      for (const night of result.nightlyBreakdown) {
-        const dayAr = DAY_NAMES_AR[night.dayOfWeek] || night.dayOfWeek;
-        const rate = night.rates.find(r => r.roomType === roomType);
-        if (rate && rate.price > 0) {
-          output += `  • ليلة ${night.date} (${dayAr}): ${rate.price} ${rate.currency}\n`;
-          total += rate.price;
-          currency = rate.currency;
-        } else {
-          output += `  • ليلة ${night.date} (${dayAr}): غير متوفر\n`;
-        }
-      }
-
-      if (total > 0) {
-        output += `  **الإجمالي: ${total.toLocaleString()} ${currency}**\n`;
-      }
-      output += `\n`;
+    if (total > 0) {
+      output += `\n  **الإجمالي: ${total.toLocaleString()} ${currency}**\n`;
     }
 
-    output += `📍 المصدر: الموقع الرسمي\n`;
+    output += `\n📍 المصدر: الموقع الرسمي\n`;
     output += `⏰ تم السحب: ${new Date().toISOString().substring(0, 19).replace('T', ' ')} UTC`;
 
     return output;
