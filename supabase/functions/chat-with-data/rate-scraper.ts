@@ -32,9 +32,28 @@ const TO_AED: Record<string, number> = {
   AED: 1, USD: 3.67, EUR: 4.0, GBP: 4.65, SAR: 0.98, QAR: 1.01, BHD: 9.74, OMR: 9.54, KWD: 11.95
 };
 
+// Dubai hotel taxes: ~10% municipality + 10% service + 5% VAT + tourism fee ≈ 21%
+const DUBAI_HOTEL_TAX_MULTIPLIER = 1.21;
+
 function convertToAED(price: number, currency: string): number {
   const rate = TO_AED[currency] || 1;
   return Math.round(price * rate * 100) / 100;
+}
+
+/** Remove estimated taxes and round to nearest 5 AED */
+function toBasePriceAED(taxInclusiveAED: number): number {
+  const base = taxInclusiveAED / DUBAI_HOTEL_TAX_MULTIPLIER;
+  return Math.round(base / 5) * 5;
+}
+
+/** Check if scraped markdown indicates taxes are included */
+function detectTaxesIncluded(markdown: string): boolean {
+  const lower = markdown.toLowerCase();
+  return lower.includes('taxes and fees included') ||
+    lower.includes('tax included') ||
+    lower.includes('includes taxes') ||
+    lower.includes('toutes taxes comprises') ||
+    lower.includes('ttc');
 }
 
 export class RateScraper {
@@ -113,12 +132,17 @@ export class RateScraper {
       try {
         const url = this.buildBookingUrl(hotelUrl, ciStr, coStr);
         const markdown = await this.callFirecrawl(apiKey, url);
+        const taxesIncluded = detectTaxesIncluded(markdown);
         const rates = this.extractRatesFromMarkdown(markdown);
         // Convert non-AED prices to AED (Firecrawl may get EUR based on server location)
-        const aedRates = rates.map(r => r.currency === 'AED' ? r : {
-          ...r,
-          price: convertToAED(r.price, r.currency),
-          currency: 'AED'
+        // Then remove estimated taxes if the scraped page indicates taxes are included
+        const aedRates = rates.map(r => {
+          let priceAED = r.currency === 'AED' ? r.price : convertToAED(r.price, r.currency);
+          if (taxesIncluded || r.currency !== 'AED') {
+            // Non-AED currencies from Firecrawl EU servers are almost always tax-inclusive
+            priceAED = toBasePriceAED(priceAED);
+          }
+          return { ...r, price: priceAED, currency: 'AED' };
         });
 
         nightlyBreakdown.push({
@@ -417,6 +441,7 @@ export class RateScraper {
     }
 
     output += `\n📍 المصدر: الموقع الرسمي\n`;
+    output += `💡 ملاحظة: السعر الأساسي تقريبي (بدون ضرائب ورسوم)\n`;
     output += `⏰ تم السحب: ${new Date().toISOString().substring(0, 19).replace('T', ' ')} UTC`;
 
     return output;
