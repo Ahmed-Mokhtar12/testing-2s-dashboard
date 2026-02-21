@@ -378,12 +378,17 @@ serve(async (req) => {
     };
 
     // Check if AI wants to perform an action
-    if (aiChoice.message.tool_calls && aiChoice.message.tool_calls.length > 0) {
-      console.log('🎯 AI detected action intent:', aiChoice.message.tool_calls[0]);
+    // Find action tool calls (send_email, send_sms, send_whatsapp) — skip data tool calls like get_hotel_rates
+    const actionFunctionNames = ['send_email', 'send_sms', 'send_whatsapp'];
+    const actionToolCall = aiChoice.message.tool_calls?.find(
+      (tc: any) => actionFunctionNames.includes(tc.function.name)
+    );
+    
+    if (actionToolCall) {
+      console.log('🎯 AI detected action intent:', actionToolCall);
       
-      const toolCall = aiChoice.message.tool_calls[0];
-      const functionName = toolCall.function.name;
-      const functionArgs = JSON.parse(toolCall.function.arguments);
+      const functionName = actionToolCall.function.name;
+      const functionArgs = JSON.parse(actionToolCall.function.arguments);
       
       // Create action data based on function call
       let actionData: any = {
