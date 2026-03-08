@@ -151,16 +151,19 @@ export type Database = {
       }
       n8n_chat_histories: {
         Row: {
+          Date: string | null
           id: number
           message: Json
           session_id: string
         }
         Insert: {
+          Date?: string | null
           id?: number
           message: Json
           session_id: string
         }
         Update: {
+          Date?: string | null
           id?: number
           message?: Json
           session_id?: string
