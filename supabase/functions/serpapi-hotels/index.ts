@@ -129,7 +129,8 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const apiKey = Deno.env.get('SERPAPI_API_KEY');
+  const apiKey = Deno.env.get('SERPAPI_API_KEY')?.trim();
+  console.log(`🔑 API key length: ${apiKey?.length}, starts with: ${apiKey?.substring(0, 4)}...`);
   if (!apiKey) {
     return new Response(
       JSON.stringify({ success: false, error: 'SERPAPI_API_KEY not configured' }),
