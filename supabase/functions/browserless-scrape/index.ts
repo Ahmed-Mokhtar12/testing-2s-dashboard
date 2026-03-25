@@ -4,8 +4,36 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+/** Extract price-relevant content from HTML, stripping scripts/styles but keeping price data */
+function extractPriceContent(html: string): string {
+  // First strip scripts and styles
+  let clean = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  
+  // Extract all lines/sections that contain price-related keywords
+  const priceKeywords = /AED|USD|EUR|GBP|SAR|price|rate|total|amount|per\s*night|room.*type|from\s+\d|₹|€|\$|£|درهم/i;
+  const sections: string[] = [];
+  
+  // Split by major HTML sections and keep price-relevant ones
+  const parts = clean.split(/<(?:div|section|tr|li|span|p|td|h[1-6])[^>]*>/i);
+  for (const part of parts) {
+    const text = part.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (text.length > 3 && text.length < 500 && priceKeywords.test(text)) {
+      sections.push(text);
+    }
+  }
+  
+  // Also do a full text extraction as backup
+  const fullText = clean.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  if (sections.length > 0) {
+    return sections.join('\n') + '\n---FULL---\n' + fullText;
+  }
+  return fullText;
+}
 
-serve(async (req) => {
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
