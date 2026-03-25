@@ -110,13 +110,20 @@ export class RateScraper {
     }
   }
 
+  /** Detect if a URL needs Browserless (SPA-heavy booking engines) */
+  private needsBrowserless(url: string): boolean {
+    return url.includes('rotana.com') || 
+           url.includes('marriott.com') || 
+           url.includes('hyatt.com');
+  }
+
   private async scrapeCompetitorRates(
     apiKey: string, checkInDate: string, nights: number, hotelUrl: string, checkIn: Date, checkOut: Date
   ): Promise<RateResult> {
     const hotelName = this.extractHotelName(hotelUrl);
     const nightlyBreakdown: NightlyRate[] = [];
+    const useBrowserless = this.needsBrowserless(hotelUrl);
 
-    // Scrape each night individually for per-night pricing
     for (let i = 0; i < nights; i++) {
       const nightCheckIn = new Date(checkIn);
       nightCheckIn.setDate(checkIn.getDate() + i);
@@ -127,19 +134,23 @@ export class RateScraper {
       const coStr = this.formatDate(nightCheckOut);
       const dayName = DAY_NAMES_EN[nightCheckIn.getDay()];
 
-      console.log(`  📅 Night ${i + 1}: ${ciStr} → ${coStr} (${dayName})`);
+      console.log(`  📅 Night ${i + 1}: ${ciStr} → ${coStr} (${dayName}) [${useBrowserless ? 'Browserless' : 'Firecrawl'}]`);
 
       try {
         const url = this.buildBookingUrl(hotelUrl, ciStr, coStr);
-        const markdown = await this.callFirecrawl(apiKey, url);
+        let markdown: string;
+
+        if (useBrowserless) {
+          markdown = await this.callBrowserless(url);
+        } else {
+          markdown = await this.callFirecrawl(apiKey, url);
+        }
+
         const taxesIncluded = detectTaxesIncluded(markdown);
         const rates = this.extractRatesFromMarkdown(markdown);
-        // Convert non-AED prices to AED (Firecrawl may get EUR based on server location)
-        // Then remove estimated taxes if the scraped page indicates taxes are included
         const aedRates = rates.map(r => {
           let priceAED = r.currency === 'AED' ? r.price : convertToAED(r.price, r.currency);
           if (taxesIncluded || r.currency !== 'AED') {
-            // Non-AED currencies from Firecrawl EU servers are almost always tax-inclusive
             priceAED = toBasePriceAED(priceAED);
           }
           return { ...r, price: priceAED, currency: 'AED' };
