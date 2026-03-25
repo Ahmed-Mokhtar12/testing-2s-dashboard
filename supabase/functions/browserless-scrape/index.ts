@@ -226,6 +226,20 @@ async function scrapeWithBrowserless(apiKey: string, url: string): Promise<strin
   const html = await response.text();
   console.log(`✅ Got ${html.length} chars of rendered HTML`);
 
+  // Deep debug: extract context around best-price and currency markers
+  const bestPriceIdx = html.indexOf('best-price');
+  if (bestPriceIdx !== -1) {
+    console.log(`🎯 best-price context: ${html.substring(bestPriceIdx, bestPriceIdx + 500)}`);
+  }
+  // Find all digit sequences near AED
+  const aedContexts: string[] = [];
+  for (const m of html.matchAll(/AED/g)) {
+    aedContexts.push(html.substring(Math.max(0, m.index! - 50), m.index! + 60));
+  }
+  if (aedContexts.length > 0) {
+    console.log(`💰 AED contexts (${aedContexts.length}): ${JSON.stringify(aedContexts.slice(0, 5))}`);
+  }
+
   const priceSnippets: string[] = [];
   const debugPatterns = [/price/gi, /AED/g, /EUR/g, /rate/gi, /amount/gi, /tarif/gi];
   const lines = html.split('\n');
