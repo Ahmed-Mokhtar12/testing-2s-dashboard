@@ -203,8 +203,8 @@ async function scrapeWithBrowserless(apiKey: string, url: string): Promise<strin
         timeout: 50000,
       },
       waitForTimeout: 15000,
-      userAgent: STEALTH_UA,
       setExtraHTTPHeaders: {
+        'User-Agent': STEALTH_UA,
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Sec-Fetch-Site': 'none',
