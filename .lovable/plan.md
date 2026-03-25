@@ -1,31 +1,76 @@
 
 
-## Plan: Improve `browserless-scrape` Edge Function
+## Plan: Add SerpApi Secret and Build Google Hotels Scraping Function
 
-### Changes to `supabase/functions/browserless-scrape/index.ts`
+### Step 1: Add SERPAPI_API_KEY secret
+Use the add_secret tool to request the SerpApi API key from the user.
 
-**1. Fix Gloria URL** (line 37)
-- Change `gloriahotels.co` → `gloriahotels.com`
+### Step 2: Create `serpapi-hotels` Edge Function
+New file: `supabase/functions/serpapi-hotels/index.ts`
 
-**2. Add stealth headers for Marriott WAF bypass** (lines 108-118)
-- Add `userAgent` with a real Chrome UA string
-- Add `setExtraHTTPHeaders` with realistic browser headers (`Accept-Language`, `Referer`, etc.)
-- These go inside the Browserless `/content` request body
+This function will use SerpApi's Google Hotels engine to fetch structured pricing data for all 6 hotels.
 
-**3. Improve Accor price extraction** (inside `extractPricesFromHTML`)
-- Add Accor-specific patterns: `best-price`, `data-price`, `"value":\s*[\d.]+`, and class-based selectors like `price--value`
-- Add pattern for prices shown as just digits near currency context (e.g., `class="price">\s*(\d+)`)
+**Request format:**
+```json
+{
+  "hotels": ["khalidiya-palace", "crowne-plaza-deira", ...],
+  "checkIn": "2026-03-25",
+  "checkOut": "2026-03-26"
+}
+```
+Or single hotel mode:
+```json
+{
+  "hotel": "khalidiya-palace",
+  "checkIn": "2026-03-25",
+  "checkOut": "2026-03-26"
+}
+```
 
-**4. Add hotel-specific extraction functions**
-- Create `extractAccorPrices(html)` that targets Accor's DOM patterns (`booking-engine-best-price`, `data-totalPrice`, JSON-LD pricing)
-- Create `extractMarriottPrices(html)` targeting Marriott's `t-price`, `rate-amount` patterns
-- Call the appropriate extractor based on the `hotel` parameter, falling back to the generic extractor
+**Hotel mapping** (name → SerpApi Google Hotels query):
 
-**5. Return raw HTML snippet count for debugging**
-- Add `htmlLength` and `priceSnippetCount` to the response for easier debugging
+| Key | SerpApi Query | Location |
+|:---|:---|:---|
+| `khalidiya-palace` | `Khalidiya Palace Rayhaan by Rotana Abu Dhabi` | Abu Dhabi |
+| `crowne-plaza-deira` | `Crowne Plaza Dubai Deira` | Dubai |
+| `al-bandar-rotana` | `Al Bandar Rotana Dubai` | Dubai |
+| `sheraton-creek` | `Sheraton Dubai Creek Hotel & Towers` | Dubai |
+| `hyatt-place-rigga` | `Hyatt Place Dubai Al Rigga` | Dubai |
+| `swissotel-ghurair` | `Swissotel Al Ghurair Dubai` | Dubai |
 
-### Technical Details
-- Stealth UA: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36`
-- Extra headers: `Accept-Language: en-US,en;q=0.9`, `Accept: text/html,...`, `Sec-Fetch-Site: none`, `Sec-Fetch-Mode: navigate`
-- The hotel-specific extractors will be tried first; if they return no results, the generic extractor runs as fallback
+**SerpApi call**: `GET https://serpapi.com/search.json?engine=google_hotels&q={query}&check_in_date={ci}&check_out_date={co}&currency=AED&adults=2&api_key={key}`
+
+**Response parsing**: Extract from SerpApi JSON response:
+- `properties[].name` — hotel name
+- `properties[].rate_per_night.lowest` — lowest nightly rate (string like "AED 350")
+- `properties[].total_rate.lowest` — total rate
+- `properties[].type` — room type
+
+**Batch mode**: When `hotels` array is provided, run all queries in parallel via `Promise.allSettled` and return combined results.
+
+**Output format:**
+```json
+{
+  "success": true,
+  "results": [
+    {
+      "hotel": "khalidiya-palace",
+      "hotelName": "Khalidiya Palace Rayhaan by Rotana",
+      "checkIn": "2026-03-25",
+      "checkOut": "2026-03-26",
+      "lowestPrice": 350,
+      "currency": "AED",
+      "allPrices": [...],
+      "source": "google_hotels"
+    }
+  ]
+}
+```
+
+### Step 3: Deploy and test
+Deploy the function and invoke it with a test request for all 6 hotels for March 25-26.
+
+### Files
+- **Create**: `supabase/functions/serpapi-hotels/index.ts`
+- **Secret**: `SERPAPI_API_KEY`
 
