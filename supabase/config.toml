@@ -55,3 +55,6 @@ verify_jwt = false
 
 [functions.browserless-scrape]
 verify_jwt = false
+
+[functions.serpapi-hotels]
+verify_jwt = false
