@@ -126,6 +126,24 @@ async function scrapeWithBrowserless(apiKey: string, url: string): Promise<strin
 
   const html = await response.text();
   console.log(`✅ Got ${html.length} chars of rendered HTML`);
+  
+  // Debug: log snippets containing price-related text
+  const priceSnippets: string[] = [];
+  const debugPatterns = [/price/gi, /AED/g, /EUR/g, /rate/gi, /amount/gi, /tarif/gi];
+  const lines = html.split('\n');
+  for (const line of lines) {
+    for (const pat of debugPatterns) {
+      if (pat.test(line) && line.length < 500) {
+        priceSnippets.push(line.trim().substring(0, 200));
+        break;
+      }
+    }
+    if (priceSnippets.length >= 20) break;
+  }
+  if (priceSnippets.length > 0) {
+    console.log(`🔍 Price-related HTML snippets: ${JSON.stringify(priceSnippets.slice(0, 10))}`);
+  }
+  
   return html;
 }
 
