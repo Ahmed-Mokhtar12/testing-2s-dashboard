@@ -33,7 +33,7 @@ function extractPriceContent(html: string): string {
   return fullText;
 }
 
-
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
