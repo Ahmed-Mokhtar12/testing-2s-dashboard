@@ -486,11 +486,16 @@ export class RateScraper {
     try {
       const hostname = new URL(url).hostname;
       if (hostname.includes('2seasonshotels')) return 'Two Seasons Hotel';
-      if (hostname.includes('accor.com')) {
+      if (hostname.includes('accor.com') || hostname.includes('swissotel')) {
         const codeMatch = url.match(/hotel\/([A-Z0-9]+)/i);
-        return codeMatch ? `Accor Hotel (${codeMatch[1]})` : 'Accor Hotel';
+        return codeMatch ? `Accor Hotel (${codeMatch[1]})` : 'Swissôtel Al Ghurair';
       }
       if (hostname.includes('millenniumhotels.com')) return 'Millennium Place Barsha Heights';
+      if (hostname.includes('rotana.com')) return 'Al Bandar Rotana';
+      if (hostname.includes('marriott.com')) return 'Sheraton Dubai Creek';
+      if (hostname.includes('hyatt.com')) return 'Hyatt Place Al Rigga';
+      if (hostname.includes('ihg.com')) return 'Crowne Plaza Dubai Deira';
+      if (hostname.includes('gloria-hotels.com')) return 'Khalidia Palace Hotel';
       return hostname.replace('www.', '').split('.')[0];
     } catch {
       return 'Hotel';
