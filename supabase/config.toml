@@ -52,6 +52,3 @@ verify_jwt = false
 
 [functions.firecrawl-scrape]
 verify_jwt = false
-
-[functions.browserless-scrape]
-verify_jwt = false

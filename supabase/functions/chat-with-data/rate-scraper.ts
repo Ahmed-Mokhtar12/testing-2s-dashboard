@@ -110,20 +110,13 @@ export class RateScraper {
     }
   }
 
-  /** Detect if a URL needs Browserless (SPA-heavy booking engines) */
-  private needsBrowserless(url: string): boolean {
-    return url.includes('rotana.com') || 
-           url.includes('marriott.com') || 
-           url.includes('hyatt.com');
-  }
-
   private async scrapeCompetitorRates(
     apiKey: string, checkInDate: string, nights: number, hotelUrl: string, checkIn: Date, checkOut: Date
   ): Promise<RateResult> {
     const hotelName = this.extractHotelName(hotelUrl);
     const nightlyBreakdown: NightlyRate[] = [];
-    const useBrowserless = this.needsBrowserless(hotelUrl);
 
+    // Scrape each night individually for per-night pricing
     for (let i = 0; i < nights; i++) {
       const nightCheckIn = new Date(checkIn);
       nightCheckIn.setDate(checkIn.getDate() + i);
@@ -134,23 +127,19 @@ export class RateScraper {
       const coStr = this.formatDate(nightCheckOut);
       const dayName = DAY_NAMES_EN[nightCheckIn.getDay()];
 
-      console.log(`  📅 Night ${i + 1}: ${ciStr} → ${coStr} (${dayName}) [${useBrowserless ? 'Browserless' : 'Firecrawl'}]`);
+      console.log(`  📅 Night ${i + 1}: ${ciStr} → ${coStr} (${dayName})`);
 
       try {
         const url = this.buildBookingUrl(hotelUrl, ciStr, coStr);
-        let markdown: string;
-
-        if (useBrowserless) {
-          markdown = await this.callBrowserless(url);
-        } else {
-          markdown = await this.callFirecrawl(apiKey, url);
-        }
-
+        const markdown = await this.callFirecrawl(apiKey, url);
         const taxesIncluded = detectTaxesIncluded(markdown);
         const rates = this.extractRatesFromMarkdown(markdown);
+        // Convert non-AED prices to AED (Firecrawl may get EUR based on server location)
+        // Then remove estimated taxes if the scraped page indicates taxes are included
         const aedRates = rates.map(r => {
           let priceAED = r.currency === 'AED' ? r.price : convertToAED(r.price, r.currency);
           if (taxesIncluded || r.currency !== 'AED') {
+            // Non-AED currencies from Firecrawl EU servers are almost always tax-inclusive
             priceAED = toBasePriceAED(priceAED);
           }
           return { ...r, price: priceAED, currency: 'AED' };
@@ -274,37 +263,12 @@ export class RateScraper {
 
   private buildBookingUrl(baseUrl: string, checkIn: string, checkOut: string): string {
     // Accor uses dateIn/dateOut, compositions, and nights params
-    if (baseUrl.includes('accor.com') || baseUrl.includes('swissotel')) {
+    if (baseUrl.includes('accor.com')) {
       const nights = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000);
       const separator = baseUrl.includes('?') ? '&' : '?';
       return `${baseUrl}${separator}dateIn=${checkIn}&dateOut=${checkOut}&compositions=1&nights=${nights}`;
     }
-    // Rotana uses YYYYMMDD format (no dashes)
-    if (baseUrl.includes('rotana.com')) {
-      const ciCompact = checkIn.replace(/-/g, '');
-      const coCompact = checkOut.replace(/-/g, '');
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      return `${baseUrl}${separator}checkin=${ciCompact}&checkout=${coCompact}&rooms=1&adults_1=2`;
-    }
-    // Marriott
-    if (baseUrl.includes('marriott.com')) {
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      return `${baseUrl}${separator}fromDate=${checkIn}&toDate=${checkOut}`;
-    }
-    // Hyatt
-    if (baseUrl.includes('hyatt.com')) {
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      return `${baseUrl}${separator}checkinDate=${checkIn}&checkoutDate=${checkOut}&adults=2&rooms=1`;
-    }
-    // IHG (Crowne Plaza etc.)
-    if (baseUrl.includes('ihg.com')) {
-      // IHG uses DD/MM/YYYY format
-      const [y1, m1, d1] = checkIn.split('-');
-      const [y2, m2, d2] = checkOut.split('-');
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      return `${baseUrl}${separator}qDateIn=${d1}/${m1}/${y1}&qDateOut=${d2}/${m2}/${y2}`;
-    }
-    // Millennium
+    // Millennium uses checkin/checkout params with existing query params
     if (baseUrl.includes('millenniumhotels.com')) {
       const separator = baseUrl.includes('?') ? '&' : '?';
       return `${baseUrl}${separator}checkin=${checkIn}&checkout=${checkOut}`;
@@ -347,50 +311,6 @@ export class RateScraper {
     console.log(`  ✅ Got ${markdown.length} chars of markdown`);
     return markdown;
   }
-
-  /** Call Browserless.io /unblock API with residential proxy for SPA-heavy sites */
-  private async callBrowserless(url: string): Promise<string> {
-    console.log(`  🌐 Browserless /unblock scraping: ${url}`);
-
-    const apiKey = Deno.env.get('BROWSERLESS_API_KEY');
-    if (!apiKey) throw new Error('BROWSERLESS_API_KEY not configured');
-
-    const unblockUrl = `https://production-sfo.browserless.io/unblock?token=${apiKey}&proxy=residential&timeout=90000`;
-
-    const response = await fetch(unblockUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url,
-        content: true,
-        cookies: true,
-        screenshot: false,
-        browserWSEndpoint: false,
-        ttl: 60000,
-        waitForTimeout: 15000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Browserless /unblock error ${response.status}: ${errText}`);
-    }
-
-    const data = await response.json();
-    const html = data.content || '';
-    console.log(`  ✅ Browserless /unblock got ${html.length} chars of HTML`);
-
-    // Convert HTML to text for rate extraction
-    const text = html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return text;
-  }
-
 
   private extractRatesFromMarkdown(markdown: string): RoomRate[] {
     const rates: RoomRate[] = [];
@@ -476,16 +396,11 @@ export class RateScraper {
     try {
       const hostname = new URL(url).hostname;
       if (hostname.includes('2seasonshotels')) return 'Two Seasons Hotel';
-      if (hostname.includes('accor.com') || hostname.includes('swissotel')) {
+      if (hostname.includes('accor.com')) {
         const codeMatch = url.match(/hotel\/([A-Z0-9]+)/i);
-        return codeMatch ? `Accor Hotel (${codeMatch[1]})` : 'Swissôtel Al Ghurair';
+        return codeMatch ? `Accor Hotel (${codeMatch[1]})` : 'Accor Hotel';
       }
       if (hostname.includes('millenniumhotels.com')) return 'Millennium Place Barsha Heights';
-      if (hostname.includes('rotana.com')) return 'Al Bandar Rotana';
-      if (hostname.includes('marriott.com')) return 'Sheraton Dubai Creek';
-      if (hostname.includes('hyatt.com')) return 'Hyatt Place Al Rigga';
-      if (hostname.includes('ihg.com')) return 'Crowne Plaza Dubai Deira';
-      if (hostname.includes('gloria-hotels.com')) return 'Khalidia Palace Hotel';
       return hostname.replace('www.', '').split('.')[0];
     } catch {
       return 'Hotel';
