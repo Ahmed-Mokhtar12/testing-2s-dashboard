@@ -114,14 +114,6 @@ async function scrapeWithBrowserless(apiKey: string, url: string): Promise<strin
         waitUntil: 'networkidle2',
         timeout: 50000,
       },
-      waitForSelector: {
-        selector: '[class*="price"], [class*="rate"], [data-price], [class*="amount"]',
-        timeout: 25000,
-      },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      setExtraHTTPHeaders: {
-        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-      },
     }),
   });
 
