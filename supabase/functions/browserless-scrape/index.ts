@@ -57,18 +57,13 @@ serve(async (req) => {
       const html = data.content || '';
       console.log(`✅ /unblock got ${html.length} chars of HTML`);
 
-      // Strip scripts/styles and extract text
-      const text = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      // Extract price-relevant text only (much smaller than full HTML)
+      const priceText = extractPriceContent(html);
 
       return new Response(JSON.stringify({
         success: true,
-        html: html.substring(0, 50000),
-        text: text.substring(0, 30000),
+        html: html.substring(0, 200000),
+        text: priceText.substring(0, 50000),
         length: html.length,
         cookies: data.cookies || [],
       }), {
@@ -107,17 +102,12 @@ serve(async (req) => {
       const html = await response.text();
       console.log(`✅ /content got ${html.length} chars of HTML`);
 
-      const text = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const priceText = extractPriceContent(html);
 
       return new Response(JSON.stringify({
         success: true,
-        html: html.substring(0, 50000),
-        text: text.substring(0, 30000),
+        html: html.substring(0, 200000),
+        text: priceText.substring(0, 50000),
         length: html.length,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
