@@ -1,53 +1,33 @@
 
 
-# Plan: Scrape Official Hotel Website Prices for 6 Competitors (3 Days)
+# Plan: Add Browserless.io for SPA Hotel Scraping
 
-## What You're Asking
-Scrape the **lowest published room rate** from the **official hotel websites** (not Booking.com) for 6 hotels for the coming 3 days (March 25, 26, 27, 2026).
+## Overview
+Add Browserless.io as a headless browser service to scrape prices from hotel websites that Firecrawl can't handle (Rotana, Marriott/Sheraton, Hyatt).
 
-## The Challenge
-Unlike Booking.com which has a consistent markdown structure, each hotel chain has a **different booking engine** (IHG, Marriott, Hyatt, Accor, Rotana, Gloria). These booking engines are heavily JavaScript-rendered SPAs that may not return pricing data even with Firecrawl's `waitFor`. This is fundamentally harder than Booking.com scraping.
+## Step 1: Get Your Browserless.io API Key
+1. Go to [browserless.io](https://www.browserless.io/)
+2. Sign up for an account (they have a free tier)
+3. Go to your dashboard and copy your **API Key**
+4. Come back here and I'll securely store it as `BROWSERLESS_API_KEY`
 
-## Hotels & URL Patterns
+## Step 2: Create `browserless-scrape` Edge Function
+A new Supabase Edge Function that uses Browserless.io's `/content` or `/scrape` API to:
+- Launch a headless Chrome browser
+- Navigate to the hotel booking page with dates
+- Wait for JavaScript rendering (prices to appear)
+- Extract the page content with prices visible
 
-| # | Hotel | Booking Engine | URL Pattern |
-|---|-------|---------------|-------------|
-| 1 | Khalidia Palace (Gloria) | Gloria Hotels | `gloria-hotels.com` — no dynamic date params in URL |
-| 2 | Al Bandar Rotana | Rotana Bookings | `bookings.rotana.com/en/reservation/roomdetails/140057?checkin=YYYYMMDD&checkout=YYYYMMDD&rooms=1&adults_1=2` |
-| 3 | Crowne Plaza Deira | IHG | `ihg.com/crowneplaza/.../DXBCP/hoteldetail` — dates via form/params |
-| 4 | Sheraton Dubai Creek | Marriott | `marriott.com/.../dxbsc-.../overview` — Book Now builds URL |
-| 5 | Hyatt Place Al Rigga | Hyatt | `hyatt.com/.../dxbal` — dates via search widget |
-| 6 | Swissôtel Al Ghurair | Accor | `all.accor.com/hotel/A5E2/index.en.shtml` — already supported in rate-scraper |
+## Step 3: Update `rate-scraper.ts`
+- Add Browserless as fallback when Firecrawl returns no prices
+- Use it specifically for Rotana, Marriott, and Hyatt domains
 
-## Implementation Plan
+## Step 4: Run the scrape for all 6 hotels
+- Gloria & IHG → Firecrawl (already working)
+- Rotana, Sheraton, Hyatt → Browserless
+- Accor/Swissôtel → Firecrawl (already supported)
 
-### Step 1: Update `buildBookingUrl` in `rate-scraper.ts`
-Add URL construction logic for each new booking engine:
-- **Rotana**: `checkin=YYYYMMDD` format (no dashes)
-- **IHG**: `qDateIn=DD/MM/YYYY&qDateOut=DD/MM/YYYY&qSlH=DXBCP`
-- **Marriott**: `fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD`
-- **Hyatt**: `checkinDate=YYYY-MM-DD&checkoutDate=YYYY-MM-DD`
-- **Gloria**: May need to scrape the booking widget page with dates injected
-- **Accor**: Already handled (dateIn/dateOut)
+---
 
-### Step 2: Update `extractRatesFromMarkdown` with provider-specific patterns
-Add extraction patterns for each booking engine's markdown output:
-- **Rotana**: Look for room type + price patterns specific to Rotana's layout
-- **IHG**: "From AED XXX" or rate card patterns
-- **Marriott**: "Starting from AED XXX" patterns
-- **Hyatt**: Rate display patterns
-- **Gloria**: Price display patterns
-
-### Step 3: Update `extractHotelName` for new domains
-
-### Step 4: Run the scrape
-Execute a script that calls `firecrawl-scrape` for each hotel × each date (18 requests total), extract the lowest price, and present results in a table.
-
-## Important Caveats
-- **Gloria Hotels** may not have URL-based date injection — the booking widget might be iframe-based, which Firecrawl cannot scrape into
-- **IHG, Marriott, Hyatt** booking engines are React/Angular SPAs that may block scrapers or require cookies/sessions
-- If official sites don't yield prices, we can fall back to **Booking.com URLs** (which we already know work)
-
-## Recommendation
-I'll update the `rate-scraper.ts` with the new URL patterns and extraction logic, then run the scrape. For any hotel where the official site doesn't return parseable prices, I'll note which ones failed and we can decide whether to fall back to Booking.com.
+**Next step**: Please get your API key from browserless.io and share it here so I can store it securely and build the Edge Function.
 
