@@ -111,9 +111,10 @@ async function scrapeWithBrowserless(apiKey: string, url: string): Promise<strin
     body: JSON.stringify({
       url,
       gotoOptions: {
-        waitUntil: 'networkidle2',
+        waitUntil: 'networkidle0',
         timeout: 50000,
       },
+      waitForTimeout: 15000, // Wait 15s for SPA to render prices
     }),
   });
 
