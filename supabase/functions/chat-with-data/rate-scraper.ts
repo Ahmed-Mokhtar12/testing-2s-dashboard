@@ -348,47 +348,37 @@ export class RateScraper {
     return markdown;
   }
 
-  /** Call Browserless.io /content API for SPA-heavy sites */
+  /** Call Browserless.io /unblock API with residential proxy for SPA-heavy sites */
   private async callBrowserless(url: string): Promise<string> {
-    console.log(`  🌐 Browserless scraping: ${url}`);
+    console.log(`  🌐 Browserless /unblock scraping: ${url}`);
 
     const apiKey = Deno.env.get('BROWSERLESS_API_KEY');
     if (!apiKey) throw new Error('BROWSERLESS_API_KEY not configured');
 
-    const browserlessUrl = `https://production-sfo.browserless.io/content?token=${apiKey}`;
+    const unblockUrl = `https://production-sfo.browserless.io/unblock?token=${apiKey}&proxy=residential&timeout=90000`;
 
-    const body: Record<string, unknown> = {
-      url,
-      waitForTimeout: 12000,
-      bestAttempt: true,
-      gotoOptions: {
-        waitUntil: 'networkidle2',
-        timeout: 30000,
-      },
-    };
-
-    // Add wait selectors for known booking engines
-    if (url.includes('rotana.com')) {
-      body.waitForSelector = { selector: '.room-rate, .price, [class*="rate"], [class*="price"]', timeout: 15000 };
-    } else if (url.includes('marriott.com')) {
-      body.waitForSelector = { selector: '[class*="rate"], [class*="price"], .t-price', timeout: 15000 };
-    } else if (url.includes('hyatt.com')) {
-      body.waitForSelector = { selector: '[class*="rate"], [class*="price"], .rate-amount', timeout: 15000 };
-    }
-
-    const response = await fetch(browserlessUrl, {
+    const response = await fetch(unblockUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        url,
+        content: true,
+        cookies: true,
+        screenshot: false,
+        browserWSEndpoint: false,
+        ttl: 60000,
+        waitForTimeout: 15000,
+      }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Browserless API error ${response.status}: ${errText}`);
+      throw new Error(`Browserless /unblock error ${response.status}: ${errText}`);
     }
 
-    const html = await response.text();
-    console.log(`  ✅ Browserless got ${html.length} chars of HTML`);
+    const data = await response.json();
+    const html = data.content || '';
+    console.log(`  ✅ Browserless /unblock got ${html.length} chars of HTML`);
 
     // Convert HTML to text for rate extraction
     const text = html
