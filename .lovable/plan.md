@@ -1,67 +1,53 @@
 
 
-# اصلاح شامل لنظام الشات - المشاكل والحلول
+# Plan: Scrape Official Hotel Website Prices for 6 Competitors (3 Days)
 
-## المشاكل المكتشفة
+## What You're Asking
+Scrape the **lowest published room rate** from the **official hotel websites** (not Booking.com) for 6 hotels for the coming 3 days (March 25, 26, 27, 2026).
 
-### المشكلة 1: لا يتم ارسال `sessionId` للـ Edge Function
-الفرونت اند يرسل فقط `message` و `messageId` عبر `sendMessageToAI()` في `src/utils/messageSender.ts`. الـ Edge Function يبحث عن تاريخ المحادثة بـ `session_id = 'guest'` فلا يجد شيء = لا ذاكرة محادثة.
+## The Challenge
+Unlike Booking.com which has a consistent markdown structure, each hotel chain has a **different booking engine** (IHG, Marriott, Hyatt, Accor, Rotana, Gloria). These booking engines are heavily JavaScript-rendered SPAs that may not return pricing data even with Firecrawl's `waitFor`. This is fundamentally harder than Booking.com scraping.
 
-### المشكلة 2: OpenAI يرجع tool_calls بدلا من نص
-في `openai-service.ts`، الاستدعاء الثاني لـ OpenAI يستخدم `tool_choice: 'auto'`. احياناً OpenAI يقرر يستدعي tools مرة ثانية بدلاً من كتابة رد نصي. النتيجة: `content = null` والفولباك يكون "I'm here to help!"
+## Hotels & URL Patterns
 
-### المشكلة 3: عدم معالجة tool_calls المتكررة
-لا يوجد كود يتعامل مع حالة ان الاستدعاء الثاني يرجع tool_calls ايضاً. يجب اجبار OpenAI على الرد بنص في المرحلة الاخيرة.
+| # | Hotel | Booking Engine | URL Pattern |
+|---|-------|---------------|-------------|
+| 1 | Khalidia Palace (Gloria) | Gloria Hotels | `gloria-hotels.com` — no dynamic date params in URL |
+| 2 | Al Bandar Rotana | Rotana Bookings | `bookings.rotana.com/en/reservation/roomdetails/140057?checkin=YYYYMMDD&checkout=YYYYMMDD&rooms=1&adults_1=2` |
+| 3 | Crowne Plaza Deira | IHG | `ihg.com/crowneplaza/.../DXBCP/hoteldetail` — dates via form/params |
+| 4 | Sheraton Dubai Creek | Marriott | `marriott.com/.../dxbsc-.../overview` — Book Now builds URL |
+| 5 | Hyatt Place Al Rigga | Hyatt | `hyatt.com/.../dxbal` — dates via search widget |
+| 6 | Swissôtel Al Ghurair | Accor | `all.accor.com/hotel/A5E2/index.en.shtml` — already supported in rate-scraper |
 
----
+## Implementation Plan
 
-## الحل المقترح
+### Step 1: Update `buildBookingUrl` in `rate-scraper.ts`
+Add URL construction logic for each new booking engine:
+- **Rotana**: `checkin=YYYYMMDD` format (no dashes)
+- **IHG**: `qDateIn=DD/MM/YYYY&qDateOut=DD/MM/YYYY&qSlH=DXBCP`
+- **Marriott**: `fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD`
+- **Hyatt**: `checkinDate=YYYY-MM-DD&checkoutDate=YYYY-MM-DD`
+- **Gloria**: May need to scrape the booking widget page with dates injected
+- **Accor**: Already handled (dateIn/dateOut)
 
-### 1. تمرير `sessionId` من الفرونت اند (ملف: `src/utils/messageSender.ts`)
-- تعديل `sendMessageToAI` لقبول `sessionId` كمعامل وارساله في body الطلب
+### Step 2: Update `extractRatesFromMarkdown` with provider-specific patterns
+Add extraction patterns for each booking engine's markdown output:
+- **Rotana**: Look for room type + price patterns specific to Rotana's layout
+- **IHG**: "From AED XXX" or rate card patterns
+- **Marriott**: "Starting from AED XXX" patterns
+- **Hyatt**: Rate display patterns
+- **Gloria**: Price display patterns
 
-### 2. تمرير `sessionId` من hook ارسال الرسائل (ملف: `src/hooks/useMessageSending.ts`)
-- تمرير `currentSessionId` عند استدعاء `sendMessageToAI`
+### Step 3: Update `extractHotelName` for new domains
 
-### 3. اجبار الرد النصي في الاستدعاء الثاني (ملف: `supabase/functions/chat-with-data/openai-service.ts`)
-- تغيير `tool_choice` في الاستدعاء الثاني من `'auto'` الى `'none'` لاجبار OpenAI على انتاج نص بدلاً من tool calls اضافية
+### Step 4: Run the scrape
+Execute a script that calls `firecrawl-scrape` for each hotel × each date (18 requests total), extract the lowest price, and present results in a table.
 
-### 4. تحسين الفولباك في index.ts (ملف: `supabase/functions/chat-with-data/index.ts`)
-- اذا لم يكن هناك content ولا action tool calls، يتم اعادة استدعاء OpenAI بدون tools كمحاولة اخيرة بدلاً من الرد الجنيريك
+## Important Caveats
+- **Gloria Hotels** may not have URL-based date injection — the booking widget might be iframe-based, which Firecrawl cannot scrape into
+- **IHG, Marriott, Hyatt** booking engines are React/Angular SPAs that may block scrapers or require cookies/sessions
+- If official sites don't yield prices, we can fall back to **Booking.com URLs** (which we already know work)
 
----
-
-## التفاصيل التقنية
-
-### `src/utils/messageSender.ts`
-```text
-sendMessageToAI(message, messageId, sessionId?)
-  → body: { message, messageId, sessionId }
-```
-
-### `src/hooks/useMessageSending.ts`
-```text
-sendMessageToAI(userMessageContent, userMessage.id, sessionId)
-```
-
-### `supabase/functions/chat-with-data/openai-service.ts`
-```text
-// الاستدعاء الثاني - اجبار نص
-const finalResponse = await client.makeRequest(
-  executionResult.messages,
-  secondCallTools,
-  'none'  // بدلاً من 'auto'
-);
-```
-
-### `supabase/functions/chat-with-data/index.ts`
-```text
-// فولباك ذكي بدل الجنيريك
-if (!response.response || response.response === "I'm here to help!...") {
-  // اعادة استدعاء بدون tools
-}
-```
-
-### نشر التحديث
-اعادة نشر Edge Function `chat-with-data` بعد التعديلات
+## Recommendation
+I'll update the `rate-scraper.ts` with the new URL patterns and extraction logic, then run the scrape. For any hotel where the official site doesn't return parseable prices, I'll note which ones failed and we can decide whether to fall back to Booking.com.
 
