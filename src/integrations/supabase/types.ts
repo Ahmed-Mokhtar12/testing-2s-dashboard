@@ -14,78 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      burst_email: {
-        Row: {
-          cc_recipients: string | null
-          created_at: string
-          file_link: string | null
-          guest_name: string | null
-          id: number
-          message: string
-          sender_number: string | null
-          subject: string
-          to: string
-        }
-        Insert: {
-          cc_recipients?: string | null
-          created_at?: string
-          file_link?: string | null
-          guest_name?: string | null
-          id?: number
-          message: string
-          sender_number?: string | null
-          subject: string
-          to: string
-        }
-        Update: {
-          cc_recipients?: string | null
-          created_at?: string
-          file_link?: string | null
-          guest_name?: string | null
-          id?: number
-          message?: string
-          sender_number?: string | null
-          subject?: string
-          to?: string
-        }
-        Relationships: []
-      }
-      burst_messaging: {
-        Row: {
-          attachment_url: string | null
-          created_at: string | null
-          guest_display_name: string | null
-          id: number
-          long_term_memory: string | null
-          message_caption: string | null
-          message_text: string | null
-          message_type: string | null
-          sender_number: string | null
-        }
-        Insert: {
-          attachment_url?: string | null
-          created_at?: string | null
-          guest_display_name?: string | null
-          id?: never
-          long_term_memory?: string | null
-          message_caption?: string | null
-          message_text?: string | null
-          message_type?: string | null
-          sender_number?: string | null
-        }
-        Update: {
-          attachment_url?: string | null
-          created_at?: string | null
-          guest_display_name?: string | null
-          id?: never
-          long_term_memory?: string | null
-          message_caption?: string | null
-          message_text?: string | null
-          message_type?: string | null
-          sender_number?: string | null
-        }
-        Relationships: []
-      }
       "Chat History": {
         Row: {
           "Ai Reply": string | null
@@ -223,19 +151,16 @@ export type Database = {
       }
       n8n_chat_histories: {
         Row: {
-          Date: string | null
           id: number
           message: Json
           session_id: string
         }
         Insert: {
-          Date?: string | null
           id?: number
           message: Json
           session_id: string
         }
         Update: {
-          Date?: string | null
           id?: number
           message?: Json
           session_id?: string

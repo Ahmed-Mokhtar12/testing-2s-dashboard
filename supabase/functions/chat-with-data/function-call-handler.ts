@@ -1,6 +1,5 @@
 import { SearchService } from './search-service.ts';
 import { OpenAIMessage } from './openai-client.ts';
-import { RateScraper, RateResult } from './rate-scraper.ts';
 
 export interface ToolCall {
   id: string;
@@ -25,33 +24,9 @@ export class FunctionCallHandler {
   
   getAvailableTools(): any[] {
     const searchFunctions = this.searchService.getAvailableFunctions();
-    const dataFunctions = this.getDataFunctions();
     const actionFunctions = this.getActionFunctions();
     
-    return [...searchFunctions, ...dataFunctions, ...actionFunctions];
-  }
-  
-  getDataFunctions(): any[] {
-    return [
-      {
-        name: 'get_hotel_rates',
-        description: `Get live hotel room rates/prices for specific dates. Returns the LOWEST available price per night.
-Known hotels and their booking URLs:
-- Two Seasons Hotel (default): https://www.2seasonshotels.com/book/accommodations
-- Mercure Dubai Barsha Heights: https://all.accor.com/booking/en/accor/hotel/A8V6
-- Millennium Place Barsha Heights: https://www.millenniumhotels.com/en/bookings/?hotelcode=16228&viewrates=rooms
-When the user asks about competitor hotel prices (e.g. Mercure, Accor, Millennium), use the appropriate hotel_url.`,
-        parameters: {
-          type: 'object',
-          properties: {
-            check_in_date: { type: 'string', description: 'Check-in date in YYYY-MM-DD format' },
-            nights: { type: 'integer', description: 'Number of nights (1-30)', default: 1 },
-            hotel_url: { type: 'string', description: 'Booking page URL. Use the appropriate URL from the known hotels list above.' }
-          },
-          required: ['check_in_date', 'nights']
-        }
-      }
-    ];
+    return [...searchFunctions, ...actionFunctions];
   }
   
   getActionFunctions(): any[] {
@@ -110,11 +85,7 @@ When the user asks about competitor hotel prices (e.g. Mercure, Accor, Millenniu
       
       console.log(`🎯 Processing function: ${functionName}`);
       
-    if (functionName === 'get_hotel_rates') {
-        console.log('💰 Hotel rates function detected, executing...');
-        const result = await this.executeRateScraping(functionArgs, toolCall.id);
-        messages.push(...result);
-      } else if (this.isSearchFunction(functionName)) {
+      if (this.isSearchFunction(functionName)) {
         const result = await this.executeSearchFunction(functionName, functionArgs, toolCall.id);
         messages.push(...result);
       } else if (this.isActionFunction(functionName)) {
@@ -143,33 +114,6 @@ When the user asks about competitor hotel prices (e.g. Mercure, Accor, Millenniu
   private isActionFunction(functionName: string): boolean {
     const actionFunctions = ['send_email', 'send_sms', 'send_whatsapp'];
     return actionFunctions.includes(functionName);
-  }
-  
-  private async executeRateScraping(args: any, toolCallId: string): Promise<OpenAIMessage[]> {
-    try {
-      console.log('💰 Executing rate scraping:', args);
-      const scraper = new RateScraper();
-      const result: RateResult = await scraper.scrapeRates(
-        args.check_in_date,
-        Math.min(args.nights || 1, 30),
-        args.hotel_url
-      );
-      const formatted = RateScraper.formatRateResults(result);
-      console.log('✅ Rate scraping completed:', { success: result.success, nights: result.nights });
-      
-      return [{
-        role: 'tool',
-        tool_call_id: toolCallId,
-        content: formatted
-      }];
-    } catch (error) {
-      console.error('❌ Rate scraping failed:', error);
-      return [{
-        role: 'tool',
-        tool_call_id: toolCallId,
-        content: `⚠️ لم أتمكن من سحب الأسعار حالياً: ${error.message}`
-      }];
-    }
   }
   
   private async executeSearchFunction(

@@ -1,7 +1,9 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Message, ActionData } from '@/types/chat';
 import ActionConfirmationMessage from './ActionConfirmationMessage';
+import { Button } from '@/components/ui/button';
+import { Copy, RotateCcw, Edit3, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatChatTimestamp } from '@/utils/timezone';
 
@@ -20,7 +22,34 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   onRegenerateMessage, 
   onEditMessage 
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
   const { toast } = useToast();
+
+  // Copy message content
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast({
+        title: "تم النسخ",
+        description: "تم نسخ الرسالة إلى الحافظة",
+      });
+    } catch (err) {
+      toast({
+        title: "خطأ",
+        description: "فشل في نسخ الرسالة",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle edit submit
+  const handleEditSubmit = () => {
+    if (editContent.trim() !== message.content) {
+      onEditMessage?.(message.id, editContent.trim());
+    }
+    setIsEditing(false);
+  };
 
   // Enhanced formatting for text content
   const formatContent = (content: string) => {

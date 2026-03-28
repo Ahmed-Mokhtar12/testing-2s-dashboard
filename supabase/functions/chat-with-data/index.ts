@@ -27,18 +27,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  let message = '';
-  let messageId = 'unknown';
-  let sessionId: string | undefined;
-  let userHistory: any[] = [];
-
   try {
     PerformanceMonitor.startTimer('total_request');
     console.log('🚀 Enhanced chat-with-data function starting...');
-    const parsed = await req.json();
-    message = parsed.message;
-    messageId = parsed.messageId || 'unknown';
-    sessionId = parsed.sessionId;
+    const { message, messageId, sessionId } = await req.json();
     
     console.log('📩 Received message:', { message, messageId, sessionId });
 
@@ -54,15 +46,14 @@ serve(async (req) => {
 
     // Enhanced conversation context retrieval with session support
     console.log('📚 Retrieving conversation history for session:', sessionId);
-    const { data: fetchedHistory, error: historyError } = await supabase
+    const { data: userHistory, error: historyError } = await supabase
       .from('website_chats')
       .select('*')
       .eq('session_id', sessionId || 'guest')
       .eq('is_archived', false)
-      .order('created_at', { ascending: true })
-      .limit(20); // Last 10 exchanges ordered oldest→newest for correct history
+      .order('created_at', { ascending: false })
+      .limit(10); // Last 5 exchanges (user + AI pairs)
 
-    userHistory = fetchedHistory || [];
     if (historyError) {
       console.warn('⚠️ Error retrieving conversation history:', historyError);
     }
@@ -83,107 +74,25 @@ serve(async (req) => {
     console.log('📚 Building enhanced context with document integration...');
     
     // Get all available data for context building
-    const [hotelReviews, chatHistory, conductedTraining, sopData, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
-      supabase.from('reviews').select('*').order('Date', { ascending: false }).limit(5000),
-      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(50),
+    const [hotelReviews, chatHistory, conductedTraining, infoSummary, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
+      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(10),
-      supabase.from('Sop').select('*').limit(100),
+      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.rpc('get_recent_document_context', { limit_count: 10 }),
       supabase.from('uploaded_documents').select('*').eq('upload_status', 'processed').order('last_accessed', { ascending: false }).limit(5)
     ]);
 
-    // 🎯 PRECISE DATE QUERY: If user asks about a specific date (for reviews, not rates), query it directly from DB
-    const isRateQuery = /rate|price|tariff|cost|سعر|أسعار|تكلفة|night|ليلة|ليالي|accommodation|غرف|room/i.test(message);
-    let preciseDateData: { date: string; count: number } | null = null;
-    try {
-      if (!isRateQuery) {
-      // Detect date patterns in the message (e.g. "February 18", "18th", "2026-02-18")
-      const datePatterns = [
-        /(\d{4}-\d{2}-\d{2})/,
-        /(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{4}))?/i,
-        /(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?/i,
-      ];
-      
-      const monthMap: Record<string, string> = {
-        january: '01', february: '02', march: '03', april: '04',
-        may: '05', june: '06', july: '07', august: '08',
-        september: '09', october: '10', november: '11', december: '12'
-      };
-
-      let detectedDate: string | null = null;
-      
-      // Try ISO format first
-      const isoMatch = message.match(/(\d{4}-\d{2}-\d{2})/);
-      if (isoMatch) {
-        detectedDate = isoMatch[1];
-      } else {
-        // Try "Month Day" pattern
-        const monthDayMatch = message.match(/(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{4}))?/i);
-        if (monthDayMatch) {
-          const fullMatch = monthDayMatch[0].toLowerCase();
-          const monthName = fullMatch.match(/[a-z]+/)?.[0] || '';
-          const day = monthDayMatch[1].padStart(2, '0');
-          const year = monthDayMatch[2] || new Date().getFullYear().toString();
-          const monthNum = monthMap[monthName];
-          if (monthNum) detectedDate = `${year}-${monthNum}-${day}`;
-        }
-      }
-
-      if (detectedDate) {
-        console.log(`📅 Detected date query for: ${detectedDate} — running precise DB count`);
-        const { count, error: countError } = await supabase
-          .from('reviews')
-          .select('*', { count: 'exact', head: true })
-          .eq('Date', detectedDate);
-        
-        if (!countError) {
-          preciseDateData = { date: detectedDate, count: count ?? 0 };
-          console.log(`✅ Precise date count: ${count} reviews on ${detectedDate}`);
-        }
-      }
-      } // end if (!isRateQuery)
-    } catch (dateErr) {
-      console.warn('⚠️ Date detection error (non-critical):', dateErr);
-    }
-
     const allData = {
       hotelReviews,
       chatHistory,
       conductedTraining,
-      sopData,
+      infoSummary,
       longTermMemory,
       documentContext,
       recentDocuments
     };
-
-    // 📅 ALWAYS fetch precise daily breakdown directly from DB (last 30 days)
-    // This is the source of truth — never rely on sample data for daily counts
-    let preciseDailyBreakdown: Array<{ date: string; count: number }> = [];
-    try {
-      const { data: dailyData, error: dailyError } = await supabase
-        .from('reviews')
-        .select('Date')
-        .gte('Date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10))
-        .lte('Date', new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().substring(0, 10)); // Dubai UTC+4
-
-      if (!dailyError && dailyData) {
-        // Group by date in JS
-        const grouped: Record<string, number> = {};
-        dailyData.forEach(r => {
-          if (r.Date) {
-            const d = r.Date.toString().substring(0, 10);
-            grouped[d] = (grouped[d] || 0) + 1;
-          }
-        });
-        preciseDailyBreakdown = Object.entries(grouped)
-          .map(([date, count]) => ({ date, count }))
-          .sort((a, b) => b.date.localeCompare(a.date));
-        console.log(`✅ Precise daily breakdown fetched: ${preciseDailyBreakdown.length} days of data`);
-      }
-    } catch (dailyErr) {
-      console.warn('⚠️ Daily breakdown fetch error (non-critical):', dailyErr);
-    }
 
     // Get query-specific data based on analysis
     let specificData = null;
@@ -210,36 +119,8 @@ serve(async (req) => {
 
     // Build enhanced context using the enhanced context builder
     const enhancedContextBuilder = new EnhancedContextBuilder();
-    let context = enhancedContextBuilder.buildContextWithDocuments(allData, message);
-
-    // 🎯 ALWAYS INJECT PRECISE DAILY BREAKDOWN FROM DB (overrides any sample-based calculation)
-    if (preciseDailyBreakdown.length > 0) {
-      // Get Dubai "today" and "yesterday"
-      const dubaiNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
-      const todayStr = dubaiNow.toISOString().substring(0, 10);
-      const yesterdayStr = new Date(dubaiNow.getTime() - 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
-
-      let dailyBlock = `\n\n🔢 AUTHORITATIVE DAILY REVIEW COUNTS (Direct SQL from database — 100% accurate — USE THESE EXACT NUMBERS):\n`;
-      dailyBlock += `⚠️ CRITICAL: These numbers come from a direct SQL GROUP BY query. They are EXACT. Do NOT calculate, estimate, or use any other numbers.\n\n`;
-      preciseDailyBreakdown.forEach(({ date, count }) => {
-        const label = date === todayStr ? ' ← TODAY (Dubai)' : date === yesterdayStr ? ' ← YESTERDAY (Dubai)' : '';
-        dailyBlock += `  • ${date}: ${count} reviews${label}\n`;
-      });
-      dailyBlock += `\n⚠️ MANDATORY RULE: When answering any question about reviews per day, week, or specific dates — use ONLY the numbers above. Never invent or estimate.\n`;
-      context = dailyBlock + context;
-      console.log(`📌 Injected precise daily breakdown: ${preciseDailyBreakdown.length} days`);
-    }
-
-    // 🎯 ALSO INJECT PRECISE SINGLE DATE COUNT if a specific date was detected
-    if (preciseDateData) {
-      const preciseBlock = `\n\n🔢 PRECISE SINGLE DATE COUNT:\n` +
-        `On ${preciseDateData.date}, the EXACT number of reviews is: ${preciseDateData.count}.\n` +
-        `⚠️ MANDATORY: Use ${preciseDateData.count} — no other number is acceptable.\n`;
-      context = preciseBlock + context;
-      console.log(`📌 Injected precise date context: ${preciseDateData.count} reviews on ${preciseDateData.date}`);
-    }
+    const context = enhancedContextBuilder.buildContextWithDocuments(allData, message);
     
-
     console.log('✅ Enhanced context built with document integration');
 
     // Build enhanced system prompt with conversation continuity
@@ -257,75 +138,19 @@ serve(async (req) => {
 
     // 🤖 HONEST AI RESPONSE WITH DATA INTEGRITY
     console.log('🤖 Calling OpenAI with honest data-aware context...');
-    let aiChoice = await callOpenAI(context, message, consultantPrompt, userHistory);
-
-    // 🎯 DAILY BREAKDOWN OVERRIDE: Build an accurate response for multi-day queries
-    const isDailyBreakdownQuery = /daily|breakdown|per day|each day|every day|last \d+ days|past \d+ days|7 days|week|14 days/i.test(message);
+    let aiChoice = await callOpenAI(context, message, consultantPrompt);
     
-    if (isDailyBreakdownQuery && preciseDailyBreakdown.length > 0) {
-      const dubaiNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
-      const todayStr = dubaiNow.toISOString().substring(0, 10);
-      const yesterdayStr = new Date(dubaiNow.getTime() - 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
-
-      // Determine how many days to show (7, 14, or 30)
-      const daysMatch = message.match(/(\d+)\s*days?/i);
-      const daysToShow = daysMatch ? Math.min(parseInt(daysMatch[1]), 30) : 7;
-      const subset = preciseDailyBreakdown.slice(0, daysToShow);
-      const totalInPeriod = subset.reduce((sum, d) => sum + d.count, 0);
-
-      let breakdownResponse = `Here is the **exact daily review breakdown** for the past ${daysToShow} days *(numbers are 100% accurate — retrieved directly from the database)*:\n\n`;
-      subset.forEach(({ date, count }) => {
-        const label = date === todayStr ? ' ← **Today**' : date === yesterdayStr ? ' ← **Yesterday**' : '';
-        breakdownResponse += `• **${date}**: ${count} review${count !== 1 ? 's' : ''}${label}\n`;
-      });
-      breakdownResponse += `\n**Total over ${daysToShow} days: ${totalInPeriod} reviews**`;
-
-      console.log(`✅ Daily breakdown override applied: ${daysToShow} days, ${totalInPeriod} total reviews`);
-      aiChoice = {
-        ...aiChoice,
-        message: {
-          ...aiChoice.message,
-          content: breakdownResponse,
-          tool_calls: undefined
-        }
-      };
-    } else if (preciseDateData) {
-      // 🎯 SINGLE DATE OVERRIDE
-      const responseText = aiChoice.message?.content || '';
-      const correctAnswer = `Based on the database records, there were exactly **${preciseDateData.count} reviews** on ${preciseDateData.date}.\n\n` +
-        `*(This count is retrieved directly from a precise database query — 100% accurate)*`;
-      
-      const numberMentionedByAI = responseText.match(/\b(\d+)\b/);
-      const aiNumber = numberMentionedByAI ? parseInt(numberMentionedByAI[1]) : null;
-      
-      if (aiNumber !== preciseDateData.count) {
-        console.log(`⚠️ AI gave wrong count (${aiNumber}) — overriding with correct count (${preciseDateData.count})`);
-        aiChoice = {
-          ...aiChoice,
-          message: { ...aiChoice.message, content: correctAnswer, tool_calls: undefined }
-        };
-      } else {
-        console.log(`✅ AI gave correct count (${aiNumber}) — no override needed`);
-      }
-    }
-    
-    // 🔥 Apply Data Honesty Engine only when we don't have precise verified data
-    const hasPreciseData = isDailyBreakdownQuery || !!preciseDateData;
-    if (!hasPreciseData) {
-      console.log('🔧 Applying Data Honesty Engine...');
-      aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(
-        aiChoice,
-        message,
-        conversationData,
-        specificData,
-        context,
-        consultantPrompt,
-        callOpenAI,
-        userHistory
-      );
-    } else {
-      console.log('⏭️ Skipping Data Honesty Engine — precise DB data already applied');
-    }
+    // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication
+    console.log('🔧 Applying Data Honesty Engine...');
+    aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(
+      aiChoice,
+      message,
+      conversationData,
+      specificData,
+      context,
+      consultantPrompt,
+      callOpenAI
+    );
     
     // Enhanced validation with data utilization scoring
     const validationResult = SmartResponseValidator.validateAIResponse(
@@ -378,17 +203,12 @@ serve(async (req) => {
     };
 
     // Check if AI wants to perform an action
-    // Find action tool calls (send_email, send_sms, send_whatsapp) — skip data tool calls like get_hotel_rates
-    const actionFunctionNames = ['send_email', 'send_sms', 'send_whatsapp'];
-    const actionToolCall = aiChoice.message.tool_calls?.find(
-      (tc: any) => actionFunctionNames.includes(tc.function.name)
-    );
-    
-    if (actionToolCall) {
-      console.log('🎯 AI detected action intent:', actionToolCall);
+    if (aiChoice.message.tool_calls && aiChoice.message.tool_calls.length > 0) {
+      console.log('🎯 AI detected action intent:', aiChoice.message.tool_calls[0]);
       
-      const functionName = actionToolCall.function.name;
-      const functionArgs = JSON.parse(actionToolCall.function.arguments);
+      const toolCall = aiChoice.message.tool_calls[0];
+      const functionName = toolCall.function.name;
+      const functionArgs = JSON.parse(toolCall.function.arguments);
       
       // Create action data based on function call
       let actionData: any = {
@@ -428,25 +248,8 @@ serve(async (req) => {
         actionStatus: 'pending_confirmation'
       };
     } else {
-      // Regular text response — smart fallback if content is empty
-      let finalContent = aiChoice.message?.content;
-      
-      if (!finalContent || finalContent.trim() === '' || finalContent === "I'm here to help!") {
-        console.log('⚠️ Empty response detected — attempting text-only fallback call...');
-        try {
-          const { OpenAIClient } = await import('./openai-client.ts');
-          const fallbackClient = new OpenAIClient();
-          const fallbackMessages = fallbackClient.createMessages(context, message, consultantPrompt, userHistory);
-          const fallbackResponse = await fallbackClient.makeRequest(fallbackMessages, [], 'none');
-          finalContent = fallbackResponse.choices?.[0]?.message?.content || "I apologize, I couldn't generate a proper response. Please try rephrasing your question.";
-          console.log('✅ Fallback text-only call succeeded');
-        } catch (fallbackErr) {
-          console.error('❌ Fallback call failed:', fallbackErr);
-          finalContent = "I apologize, I couldn't generate a proper response. Please try rephrasing your question.";
-        }
-      }
-      
-      response.response = finalContent;
+      // Regular text response
+      response.response = aiChoice.message?.content || "I'm here to help! How can I assist you today?";
     }
 
     // Enhanced conversation saving with full context

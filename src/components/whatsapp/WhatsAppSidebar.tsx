@@ -32,15 +32,9 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
 
   const filteredChats = chats.filter(chat => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch = chat.senderNumber.includes(searchQuery) || 
+    return chat.senderNumber.includes(searchQuery) || 
       chat.lastMessage.toLowerCase().includes(q) ||
       (chat.name && chat.name.toLowerCase().includes(q));
-
-    if (!matchesSearch) return false;
-
-    if (activeFilter === 'Unread') return (chat.unreadCount ?? 0) > 0;
-    // 'Favourites' and 'Groups' are not yet categorized in data - show all for now
-    return true;
   });
 
   const formatPhoneNumber = (number: string) => {

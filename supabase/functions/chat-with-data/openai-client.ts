@@ -87,31 +87,11 @@ export class OpenAIClient {
     return data;
   }
 
-  createMessages(context: string, userMessage: string, consultantPrompt?: string, conversationHistory?: Array<{user_message: string; ai_response: string}>): OpenAIMessage[] {
-    const messages: OpenAIMessage[] = [
-      { role: 'system', content: consultantPrompt || context }
+  createMessages(context: string, userMessage: string, consultantPrompt?: string): OpenAIMessage[] {
+    return [
+      { role: 'system', content: consultantPrompt || context },
+      { role: 'user', content: userMessage }
     ];
-
-    // Inject real conversation history so the AI truly remembers past exchanges
-    if (conversationHistory && conversationHistory.length > 0) {
-      // Send last 10 exchanges (user + assistant pairs) for strong memory
-      const recentHistory = conversationHistory.slice(-10);
-      for (const exchange of recentHistory) {
-        if (exchange.user_message) {
-          messages.push({ role: 'user', content: exchange.user_message });
-        }
-        if (exchange.ai_response) {
-          messages.push({ role: 'assistant', content: exchange.ai_response });
-        }
-      }
-    }
-
-    // Current user message is always last
-    messages.push({ role: 'user', content: userMessage });
-
-    console.log(`📝 Conversation history injected: ${conversationHistory?.length || 0} past exchanges → ${messages.length} total messages`);
-
-    return messages;
   }
 
   addToolResponse(messages: OpenAIMessage[], toolCallId: string, result: string): OpenAIMessage[] {

@@ -15,10 +15,11 @@ interface ActionRequest {
   messageId: string;
 }
 
-const N8N_WEBHOOK_URL = Deno.env.get('N8N_WHATSAPP_WEBHOOK_URL');
+const N8N_BASE_URL = Deno.env.get('N8N_BASE_URL');
+const N8N_WEBHOOK_ID = Deno.env.get('N8N_WEBHOOK_ID');
 
-if (!N8N_WEBHOOK_URL) {
-  console.error('🚨 Missing N8N configuration: N8N_WHATSAPP_WEBHOOK_URL not set');
+if (!N8N_BASE_URL || !N8N_WEBHOOK_ID) {
+  console.error('🚨 Missing N8N configuration: N8N_BASE_URL or N8N_WEBHOOK_ID not set');
 }
 
 // Generate HMAC-SHA256 signature for webhook request authentication
@@ -38,7 +39,7 @@ async function generateHmacSignature(payload: string, secret: string): Promise<s
 }
 
 async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
-  const webhookUrl = N8N_WEBHOOK_URL!;
+  const webhookUrl = `${N8N_BASE_URL}/webhook/${N8N_WEBHOOK_ID}`;
 
   const workflowData = {
     actionType: actionRequest.type,

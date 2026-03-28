@@ -1,76 +1,101 @@
 
+# Human Takeover Feature - تدخل الموظف البشري في المحادثة
 
-## Plan: Add SerpApi Secret and Build Google Hotels Scraping Function
+## ما المشكلة الحالية؟
+حالياً عندما تكتب رسالة في واجهة الويب، ترسل للـ n8n ثم يرد عليها الـ AI. لا يوجد طريقة لإرسال رسالة مباشرة للعميل على واتساب الحقيقي من الواجهة.
 
-### Step 1: Add SERPAPI_API_KEY secret
-Use the add_secret tool to request the SerpApi API key from the user.
+## كيف سيعمل النظام الجديد؟
 
-### Step 2: Create `serpapi-hotels` Edge Function
-New file: `supabase/functions/serpapi-hotels/index.ts`
-
-This function will use SerpApi's Google Hotels engine to fetch structured pricing data for all 6 hotels.
-
-**Request format:**
-```json
-{
-  "hotels": ["khalidiya-palace", "crowne-plaza-deira", ...],
-  "checkIn": "2026-03-25",
-  "checkOut": "2026-03-26"
-}
+الوضع الطبيعي - AI يرد تلقائياً:
 ```
-Or single hotel mode:
-```json
-{
-  "hotel": "khalidiya-palace",
-  "checkIn": "2026-03-25",
-  "checkOut": "2026-03-26"
-}
+العميل يرسل رسالة على واتساب
+         ↓
+   n8n يعالج الرسالة
+         ↓
+   AI يرد على العميل
+         ↓
+تُحفظ المحادثة في Supabase
 ```
 
-**Hotel mapping** (name → SerpApi Google Hotels query):
-
-| Key | SerpApi Query | Location |
-|:---|:---|:---|
-| `khalidiya-palace` | `Khalidiya Palace Rayhaan by Rotana Abu Dhabi` | Abu Dhabi |
-| `crowne-plaza-deira` | `Crowne Plaza Dubai Deira` | Dubai |
-| `al-bandar-rotana` | `Al Bandar Rotana Dubai` | Dubai |
-| `sheraton-creek` | `Sheraton Dubai Creek Hotel & Towers` | Dubai |
-| `hyatt-place-rigga` | `Hyatt Place Dubai Al Rigga` | Dubai |
-| `swissotel-ghurair` | `Swissotel Al Ghurair Dubai` | Dubai |
-
-**SerpApi call**: `GET https://serpapi.com/search.json?engine=google_hotels&q={query}&check_in_date={ci}&check_out_date={co}&currency=AED&adults=2&api_key={key}`
-
-**Response parsing**: Extract from SerpApi JSON response:
-- `properties[].name` — hotel name
-- `properties[].rate_per_night.lowest` — lowest nightly rate (string like "AED 350")
-- `properties[].total_rate.lowest` — total rate
-- `properties[].type` — room type
-
-**Batch mode**: When `hotels` array is provided, run all queries in parallel via `Promise.allSettled` and return combined results.
-
-**Output format:**
-```json
-{
-  "success": true,
-  "results": [
-    {
-      "hotel": "khalidiya-palace",
-      "hotelName": "Khalidiya Palace Rayhaan by Rotana",
-      "checkIn": "2026-03-25",
-      "checkOut": "2026-03-26",
-      "lowestPrice": 350,
-      "currency": "AED",
-      "allPrices": [...],
-      "source": "google_hotels"
-    }
-  ]
-}
+بعد تدخل الموظف البشري:
+```
+الموظف يضغط زر "Takeover"
+         ↓
+AI يتوقف تلقائياً (is_human_controlled = true)
+         ↓
+الموظف يكتب رسالة في الواجهة
+         ↓
+Edge Function جديدة ترسل الرسالة لـ WhatsApp Cloud API مباشرة
+         ↓
+الرسالة تصل للعميل على هاتفه الحقيقي فوراً
+         ↓
+تُحفظ في Supabase كـ "Human Reply"
 ```
 
-### Step 3: Deploy and test
-Deploy the function and invoke it with a test request for all 6 hotels for March 25-26.
+---
 
-### Files
-- **Create**: `supabase/functions/serpapi-hotels/index.ts`
-- **Secret**: `SERPAPI_API_KEY`
+## التغييرات المطلوبة
 
+### 1. تعديل قاعدة البيانات - إضافة عمود `is_human_controlled`
+إضافة عمود boolean في جدول `Chat History` لكل محادثة (بحسب `Sender Number`):
+- `false` = AI يتحكم (الوضع الافتراضي)
+- `true` = موظف بشري يتحكم، الـ AI يتوقف
+
+وعمود آخر `human_reply` لحفظ الرسائل التي أرسلها الموظف.
+
+### 2. Edge Function جديدة: `whatsapp-send-message`
+ترسل رسالة مباشرة لـ WhatsApp Cloud API:
+```
+POST https://graph.facebook.com/v22.0/806192452586846/messages
+Authorization: Bearer {WHATSAPP_ACCESS_TOKEN}
+Body: { to: senderNumber, type: "text", text: { body: "..." } }
+```
+وتحفظ الرسالة في Supabase كـ `human_reply`.
+
+### 3. تعديل n8n Workflow (يدوي من جانبك)
+في n8n، تحتاج إضافة node يتحقق قبل رد الـ AI:
+- إذا `is_human_controlled = true` لهذا الرقم → لا يرد الـ AI
+- إذا `is_human_controlled = false` → يرد الـ AI كالمعتاد
+
+### 4. تعديل واجهة WhatsApp
+
+**زر Takeover في الهيدر:**
+- زر "Take Over" بلون أخضر في أعلى نافذة المحادثة
+- عند الضغط: يتحول لـ "Release to AI" باللون الأزرق
+- مؤشر واضح يظهر أن المحادثة في وضع Human Control
+
+**تمييز نوع الرسائل في الواجهة:**
+- رسائل AI: تظهر باللون الأبيض (كما هي)
+- رسائل الموظف البشري: تظهر بظل أخضر خفيف مع أيقونة صغيرة 👤
+
+**إيقاف مؤشر الكتابة (Typing Indicator):**
+- عند تفعيل Human Mode، لا يظهر مؤشر الكتابة الخاص بالـ AI
+
+### 5. تعديل `useWhatsAppChat.ts`
+- إضافة state: `isHumanControlled`
+- إضافة function: `takeOver()` - تفعل Human Mode وتحديث Supabase
+- إضافة function: `releaseToAI()` - تعطل Human Mode
+- تعديل `sendMessage()`: في Human Mode يستدعي `whatsapp-send-message` مباشرة، في AI Mode يستدعي `whatsapp-web-chat` كالمعتاد
+
+### 6. سر جديد مطلوب: `WHATSAPP_ACCESS_TOKEN`
+تحتاج إضافة الـ Access Token من n8n credentials "2S WhatsApp account" كـ Secret في Supabase.
+
+---
+
+## الملفات المتأثرة
+
+| الملف | نوع التغيير |
+|-------|-------------|
+| `supabase/migrations/` | إضافة عمود `is_human_controlled` و`human_reply` لجدول Chat History |
+| `supabase/functions/whatsapp-send-message/index.ts` | Edge Function جديدة |
+| `src/hooks/useWhatsAppChat.ts` | إضافة Human Takeover logic |
+| `src/components/whatsapp/WhatsAppChatPanel.tsx` | زر Takeover + تمييز أنواع الرسائل |
+| `src/components/whatsapp/WhatsAppMessage.tsx` | مؤشر بصري للرسائل البشرية |
+
+---
+
+## ملاحظة مهمة قبل التنفيذ
+تحتاج إضافة `WHATSAPP_ACCESS_TOKEN` كـ Secret في Supabase. هذا الـ Token موجود في n8n:
+- اذهب لـ n8n → Credentials → "2S WhatsApp account" → انسخ الـ Access Token
+
+بعد موافقتك على الخطة، سأطلب منك الـ Token قبل إنشاء الـ Edge Function.

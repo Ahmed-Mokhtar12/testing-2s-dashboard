@@ -49,12 +49,3 @@ verify_jwt = false
 
 [functions.whatsapp-send-message]
 verify_jwt = false
-
-[functions.firecrawl-scrape]
-verify_jwt = false
-
-[functions.browserless-scrape]
-verify_jwt = false
-
-[functions.serpapi-hotels]
-verify_jwt = false

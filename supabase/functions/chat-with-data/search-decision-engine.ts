@@ -1,6 +1,5 @@
 export interface SearchDecisionResult {
   requiresWebsiteSearch: boolean;
-  requiresRateLookup: boolean;
   hasRichDatabaseContext: boolean;
   searchReason: string;
 }
@@ -9,49 +8,39 @@ export class SearchDecisionEngine {
   static analyzeSearchRequirement(context: string, message: string): SearchDecisionResult {
     console.log('🔍 Analyzing search requirement...');
     
+    // Check if we have rich database context available
     const hasRichDatabaseContext = context.includes('HOTEL REVIEWS') || 
                                   context.includes('COMPREHENSIVE HOTEL ANALYTICS') ||
                                   context.includes('RECENTLY UPLOADED DOCUMENTS') ||
                                   context.includes('TOTAL REVIEWS IN DATABASE');
     
-    // Check if this is a rate/price query
-    const rateKeywords = [
-      'rate', 'price', 'tariff', 'cost', 'pricing', 'how much',
-      'سعر', 'أسعار', 'تكلفة', 'كم سعر', 'أسعار الغرف',
-      'room rate', 'nightly rate', 'per night', 'accommodation cost',
-      'ليلة', 'ليالي'
-    ];
-    const requiresRateLookup = rateKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
-    // Real-time info keywords
+    // Keywords that suggest need for current/real-time information
     const realTimeKeywords = [
       'current', 'latest', 'today', 'now', 'availability', 
-      'contact', 'location', 'booking', 'real-time',
-      'الحالي', 'الآن', 'اليوم', 'متاح', 'التواصل', 'الموقع'
+      'contact', 'location', 'price', 'booking', 'real-time',
+      'الحالي', 'الآن', 'اليوم', 'متاح', 'التواصل', 'الموقع', 'السعر'
     ];
     
     const hasRealTimeRequest = realTimeKeywords.some(keyword => 
       message.toLowerCase().includes(keyword.toLowerCase())
     );
     
+    // Hotel service keywords that might need current info
     const serviceKeywords = [
-      'amenity', 'service', 'pool', 'restaurant', 
+      'room', 'amenity', 'service', 'pool', 'restaurant', 
       'facility', 'hours', 'schedule', 'menu', 'spa',
-      'خدمة', 'مسبح', 'مطعم', 'مرافق', 'ساعات', 'جدول'
+      'غرفة', 'خدمة', 'مسبح', 'مطعم', 'مرافق', 'ساعات', 'جدول'
     ];
     
     const hasServiceInquiry = serviceKeywords.some(keyword => 
       message.toLowerCase().includes(keyword.toLowerCase())
     );
     
+    // Decision logic
     let requiresWebsiteSearch = false;
     let searchReason = '';
     
-    if (requiresRateLookup) {
-      searchReason = 'Rate/price query detected — will use get_hotel_rates tool';
-    } else if (!hasRichDatabaseContext && hasRealTimeRequest) {
+    if (!hasRichDatabaseContext && hasRealTimeRequest) {
       requiresWebsiteSearch = true;
       searchReason = 'No database context available and user requests current information';
     } else if (!hasRichDatabaseContext && hasServiceInquiry) {
@@ -67,25 +56,17 @@ export class SearchDecisionEngine {
       hasRealTimeRequest,
       hasServiceInquiry,
       requiresWebsiteSearch,
-      requiresRateLookup,
       searchReason
     });
     
     return {
       requiresWebsiteSearch,
-      requiresRateLookup,
       hasRichDatabaseContext,
       searchReason
     };
   }
   
   static determineToolChoice(searchDecision: SearchDecisionResult): any {
-    if (searchDecision.requiresRateLookup) {
-      return {
-        type: 'function',
-        function: { name: 'get_hotel_rates' }
-      };
-    }
     if (searchDecision.requiresWebsiteSearch) {
       return {
         type: 'function',
