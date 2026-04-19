@@ -14,6 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
+      burst_email: {
+        Row: {
+          create_at: string | null
+          file_link: string | null
+          id: number
+          message: string | null
+          platform: string | null
+          sender_id: string | null
+          sender_name: string | null
+          sender_number: string | null
+          session_key: string | null
+        }
+        Insert: {
+          create_at?: string | null
+          file_link?: string | null
+          id?: never
+          message?: string | null
+          platform?: string | null
+          sender_id?: string | null
+          sender_name?: string | null
+          sender_number?: string | null
+          session_key?: string | null
+        }
+        Update: {
+          create_at?: string | null
+          file_link?: string | null
+          id?: never
+          message?: string | null
+          platform?: string | null
+          sender_id?: string | null
+          sender_name?: string | null
+          sender_number?: string | null
+          session_key?: string | null
+        }
+        Relationships: []
+      }
+      burst_messaging: {
+        Row: {
+          attachment_url: string | null
+          created_at: string | null
+          guest_display_name: string | null
+          id: number
+          long_term_memory: string | null
+          message_caption: string | null
+          message_text: string | null
+          message_type: string | null
+          sender_number: string | null
+        }
+        Insert: {
+          attachment_url?: string | null
+          created_at?: string | null
+          guest_display_name?: string | null
+          id?: never
+          long_term_memory?: string | null
+          message_caption?: string | null
+          message_text?: string | null
+          message_type?: string | null
+          sender_number?: string | null
+        }
+        Update: {
+          attachment_url?: string | null
+          created_at?: string | null
+          guest_display_name?: string | null
+          id?: never
+          long_term_memory?: string | null
+          message_caption?: string | null
+          message_text?: string | null
+          message_type?: string | null
+          sender_number?: string | null
+        }
+        Relationships: []
+      }
+      burst_social_dm: {
+        Row: {
+          attachment_url: string | null
+          claimed_at: string | null
+          combined_input: string | null
+          created_at: string
+          id: number
+          long_term_memory: string | null
+          message_caption: string | null
+          message_text: string | null
+          message_type: string
+          platform: string
+          processed: boolean
+          processed_at: string | null
+          recipient_id: string | null
+          sender_id: string
+          sender_name: string | null
+          session_key: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          claimed_at?: string | null
+          combined_input?: string | null
+          created_at?: string
+          id?: number
+          long_term_memory?: string | null
+          message_caption?: string | null
+          message_text?: string | null
+          message_type?: string
+          platform: string
+          processed?: boolean
+          processed_at?: string | null
+          recipient_id?: string | null
+          sender_id: string
+          sender_name?: string | null
+          session_key: string
+        }
+        Update: {
+          attachment_url?: string | null
+          claimed_at?: string | null
+          combined_input?: string | null
+          created_at?: string
+          id?: number
+          long_term_memory?: string | null
+          message_caption?: string | null
+          message_text?: string | null
+          message_type?: string
+          platform?: string
+          processed?: boolean
+          processed_at?: string | null
+          recipient_id?: string | null
+          sender_id?: string
+          sender_name?: string | null
+          session_key?: string
+        }
+        Relationships: []
+      }
       "Chat History": {
         Row: {
           "Ai Reply": string | null
@@ -92,6 +221,108 @@ export type Database = {
         }
         Relationships: []
       }
+      email_threads: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          id: number
+          internet_message_id: string | null
+          last_direction: string | null
+          last_email_cc: string | null
+          last_email_to: string | null
+          last_guest_name: string | null
+          last_subject_summary: string | null
+          last_update_at: string | null
+          normalized_category: string | null
+          outlook_message_id: string | null
+          sender_number: string
+          sent_at: string | null
+          status: string
+          subject: string | null
+          thread_key: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          internet_message_id?: string | null
+          last_direction?: string | null
+          last_email_cc?: string | null
+          last_email_to?: string | null
+          last_guest_name?: string | null
+          last_subject_summary?: string | null
+          last_update_at?: string | null
+          normalized_category?: string | null
+          outlook_message_id?: string | null
+          sender_number: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          thread_key: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          internet_message_id?: string | null
+          last_direction?: string | null
+          last_email_cc?: string | null
+          last_email_to?: string | null
+          last_guest_name?: string | null
+          last_subject_summary?: string | null
+          last_update_at?: string | null
+          normalized_category?: string | null
+          outlook_message_id?: string | null
+          sender_number?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          thread_key?: string
+        }
+        Relationships: []
+      }
+      khaldia_reviews: {
+        Row: {
+          Author: string | null
+          created_at: string
+          Date: string | null
+          "Hotel Name": string | null
+          id: number
+          "Response Text": string | null
+          Score: number | null
+          Source: string | null
+          Text: string | null
+          Title: string | null
+          URL: string | null
+        }
+        Insert: {
+          Author?: string | null
+          created_at?: string
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
+        }
+        Update: {
+          Author?: string | null
+          created_at?: string
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
+        }
+        Relationships: []
+      }
       LongTermMemory: {
         Row: {
           created_at: string
@@ -151,16 +382,19 @@ export type Database = {
       }
       n8n_chat_histories: {
         Row: {
+          Date: string | null
           id: number
           message: Json
           session_id: string
         }
         Insert: {
+          Date?: string | null
           id?: number
           message: Json
           session_id: string
         }
         Update: {
+          Date?: string | null
           id?: number
           message?: Json
           session_id?: string
@@ -236,57 +470,131 @@ export type Database = {
         }
         Relationships: []
       }
-      uploaded_documents: {
+      website_burst_whatsapp_message: {
         Row: {
-          chunk_count: number | null
+          attachment_url: string | null
           created_at: string
-          document_category: string | null
-          file_path: string
-          file_size: number
-          id: string
-          last_accessed: string | null
-          mime_type: string
-          original_filename: string
-          processed_at: string | null
-          processing_error: string | null
-          relevance_reason: string | null
-          relevance_score: number | null
-          session_id: string
-          upload_status: string
+          guest_display_name: string | null
+          id: number
+          long_term_memory: string | null
+          message_caption: string | null
+          message_text: string | null
+          message_type: string | null
+          sender_number: string
         }
         Insert: {
-          chunk_count?: number | null
+          attachment_url?: string | null
           created_at?: string
-          document_category?: string | null
-          file_path: string
-          file_size: number
-          id?: string
-          last_accessed?: string | null
-          mime_type: string
-          original_filename: string
-          processed_at?: string | null
-          processing_error?: string | null
-          relevance_reason?: string | null
-          relevance_score?: number | null
-          session_id: string
-          upload_status?: string
+          guest_display_name?: string | null
+          id?: number
+          long_term_memory?: string | null
+          message_caption?: string | null
+          message_text?: string | null
+          message_type?: string | null
+          sender_number: string
         }
         Update: {
-          chunk_count?: number | null
+          attachment_url?: string | null
           created_at?: string
-          document_category?: string | null
-          file_path?: string
-          file_size?: number
-          id?: string
-          last_accessed?: string | null
-          mime_type?: string
-          original_filename?: string
+          guest_display_name?: string | null
+          id?: number
+          long_term_memory?: string | null
+          message_caption?: string | null
+          message_text?: string | null
+          message_type?: string | null
+          sender_number?: string
+        }
+        Relationships: []
+      }
+      website_chat_messages: {
+        Row: {
+          created_at: string
+          id: number
+          message_direction: string
+          message_text: string
+          metadata: Json
+          processed_at: string | null
+          session_id: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          message_direction: string
+          message_text: string
+          metadata?: Json
           processed_at?: string | null
-          processing_error?: string | null
-          relevance_reason?: string | null
-          relevance_score?: number | null
+          session_id: string
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          message_direction?: string
+          message_text?: string
+          metadata?: Json
+          processed_at?: string | null
           session_id?: string
-          upload_status?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_website_chat_messages_session"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "website_chat_sessions"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
+      website_chat_sessions: {
+        Row: {
+          country: string | null
+          created_at: string
+          first_page_url: string | null
+          id: number
+          language: string | null
+          last_message_at: string
+          phone: string | null
+          session_id: string
+          source: string
+          status: string
+          updated_at: string
+          user_agent: string | null
+          visitor_email: string | null
+          visitor_name: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          first_page_url?: string | null
+          id?: number
+          language?: string | null
+          last_message_at?: string
+          phone?: string | null
+          session_id: string
+          source?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+          visitor_email?: string | null
+          visitor_name?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          first_page_url?: string | null
+          id?: number
+          language?: string | null
+          last_message_at?: string
+          phone?: string | null
+          session_id?: string
+          source?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+          visitor_email?: string | null
+          visitor_name?: string | null
         }
         Relationships: []
       }
@@ -317,6 +625,69 @@ export type Database = {
           session_id?: string
           user_id?: string | null
           user_message?: string | null
+        }
+        Relationships: []
+      }
+      website_email_threads: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          id: number
+          internet_message_id: string | null
+          last_direction: string | null
+          last_email_cc: string | null
+          last_email_to: string | null
+          last_guest_name: string | null
+          last_update_at: string
+          normalized_category: string | null
+          outlook_message_id: string | null
+          phone: string | null
+          sent_at: string | null
+          session_id: string | null
+          status: string
+          subject: string | null
+          thread_key: string
+          visitor_email: string | null
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          internet_message_id?: string | null
+          last_direction?: string | null
+          last_email_cc?: string | null
+          last_email_to?: string | null
+          last_guest_name?: string | null
+          last_update_at?: string
+          normalized_category?: string | null
+          outlook_message_id?: string | null
+          phone?: string | null
+          sent_at?: string | null
+          session_id?: string | null
+          status?: string
+          subject?: string | null
+          thread_key: string
+          visitor_email?: string | null
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          internet_message_id?: string | null
+          last_direction?: string | null
+          last_email_cc?: string | null
+          last_email_to?: string | null
+          last_guest_name?: string | null
+          last_update_at?: string
+          normalized_category?: string | null
+          outlook_message_id?: string | null
+          phone?: string | null
+          sent_at?: string | null
+          session_id?: string | null
+          status?: string
+          subject?: string | null
+          thread_key?: string
+          visitor_email?: string | null
         }
         Relationships: []
       }
