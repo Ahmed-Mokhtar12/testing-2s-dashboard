@@ -1,49 +1,75 @@
 
-خطة الإصلاحات الأمنية الآمنة — جاهزة للتنفيذ
+## تصحيح دالة `match_documents` + متابعة الإصلاحات الأمنية
 
-## نطاق التنفيذ المؤكد
-- لا مساس بـ `Chat History` ولا `/whatsapp` ولا `whatsapp-send-message`
-- لا مصادقة في هذه المرحلة
-- توافق كامل مع n8n وEdge Functions الحالية
+### المشكلة
+الدالة الحالية تستخدم `where filter = '{}'` فتُرجع نتائج فقط عندما يكون الفلتر فارغاً، وتُرجع صفر نتائج لأي فلتر غير فارغ — كسر كامل للبحث المتجهي المُفلتَر.
 
-## التغييرات
+### التصحيح
 
-### 1. Migration: إصلاح `website_chats`
-- حذف 4 سياسات `{public}` الخاطئة (Service role can read/insert/update/delete)
-- إنشاء سياسة موحّدة: `FOR ALL TO service_role USING (true) WITH CHECK (true)`
-- الإبقاء على `Anyone can insert website chats` و policies المصادقة
-
-### 2. Migration: تأمين Realtime للجداول الحساسة
-- إزالة من `supabase_realtime` publication: `website_chat_sessions`, `website_email_threads`, `burst_email`, `burst_social_dm`, `email_threads`
-- تفعيل RLS + إضافة policy `service_role` فقط لكل منها
-- **`Chat History` realtime يبقى كما هو** (مستخدم في `useWhatsAppChat`)
-
-### 3. Migration: تشديد سياسة `USING (true)` في `Chat History`
-- `Service role can update Chat History` تُعاد لـ `{service_role}` فقط (الواجهة لا تحدّث الجدول مباشرة)
-- باقي سياسات INSERT العامة تبقى كما هي
-
-### 4. Migration: Storage UPDATE policy لـ `documents`
 ```sql
-CREATE POLICY "Users can update files in own folder"
-ON storage.objects FOR UPDATE TO authenticated
-USING (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text)
-WITH CHECK (...);
+CREATE OR REPLACE FUNCTION public.match_documents(
+  query_embedding vector,
+  match_count integer DEFAULT 6,
+  filter jsonb DEFAULT '{}'::jsonb
+)
+RETURNS TABLE(id bigint, content text, metadata jsonb, similarity double precision)
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+begin
+  return query
+  select
+    docs.id,
+    docs.content,
+    docs.metadata,
+    1 - (docs.embedding <#> query_embedding) as similarity
+  from public."N8N_2S" as docs
+  where (filter = '{}'::jsonb OR docs.metadata @> filter)
+  order by docs.embedding <#> query_embedding
+  limit coalesce(match_count, 6);
+end;
+$$;
 ```
 
-### 5. Migration: إصلاح `search_path` في الدوال
-- `skip_reaction_rows()`
-- `N8N_2S(filter, match_count, query_embedding)`
-- `match_documents(query_embedding, match_count, filter)`
+ملاحظة: `SET search_path TO 'public'` يُضاف هنا أيضاً ليُغطّي إصلاح search_path المُخطّط له في الخطوة 5، فنُنفّذ الإصلاحين معاً.
 
-### 6. تقصير OTP expiry
-- تعديل `supabase/config.toml` → `[auth] otp_expiry = 600`
+### نفس المعالجة لدالة `N8N_2S`
+نفس النمط مطلوب لتسهيل الفلترة المستقبلية وإصلاح search_path:
 
-### 7. تحديث حالة الـ Findings
-- `mark_as_fixed`: website_chats, realtime sensitive tables, storage UPDATE, search_path, RLS USING true, OTP expiry
-- `ignore` بسبب مرحلة الاختبار: chat_history_anon, whatsapp_send_no_auth, realtime_messages_no_policies
+```sql
+CREATE OR REPLACE FUNCTION public."N8N_2S"(
+  filter jsonb,
+  match_count integer,
+  query_embedding vector
+)
+RETURNS TABLE(id bigint, content text, metadata jsonb, similarity double precision)
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+begin
+  return query
+  select
+    docs.id, docs.content, docs.metadata,
+    1 - (docs.embedding <#> query_embedding) as similarity
+  from public."N8N_2S" as docs
+  where (filter = '{}'::jsonb OR docs.metadata @> filter)
+  order by docs.embedding <#> query_embedding
+  limit match_count;
+end;
+$$;
+```
 
-## ما لن يتغيّر
-- `/whatsapp` يعمل بالكامل
-- `useWhatsAppChat` Realtime على Chat History مستمر
-- إرسال الرسائل عبر `whatsapp-send-message` بدون JWT
-- جدول Chat History مفتوح للـ anon
+### بقية الخطة الأمنية المعتمدة سابقاً (دون تغيير)
+1. `website_chats`: حذف 4 سياسات public خاطئة + إنشاء سياسة `service_role` موحّدة
+2. Realtime: إزالة الجداول الحساسة من publication + RLS service_role
+3. `Chat History`: تشديد سياسة UPDATE إلى service_role فقط
+4. Storage: إضافة UPDATE policy لـ `documents` bucket
+5. `skip_reaction_rows`: إضافة `SET search_path = public`
+6. `supabase/config.toml`: `[auth] otp_expiry = 600`
+7. تحديث حالات الـ findings (mark_as_fixed / ignore)
+
+### ما لن يتغيّر
+- `/whatsapp` يعمل كما هو
+- Realtime على `Chat History` مستمر
+- `whatsapp-send-message` بدون JWT
+- لا مصادقة في هذه المرحلة
