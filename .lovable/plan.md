@@ -1,75 +1,28 @@
 
-## تصحيح دالة `match_documents` + متابعة الإصلاحات الأمنية
 
-### المشكلة
-الدالة الحالية تستخدم `where filter = '{}'` فتُرجع نتائج فقط عندما يكون الفلتر فارغاً، وتُرجع صفر نتائج لأي فلتر غير فارغ — كسر كامل للبحث المتجهي المُفلتَر.
+Got it — before I extend the plan, I need your brief on each new table so the KPIs and charts are meaningful (not generic counts).
 
-### التصحيح
+### Tables to add to the dashboard
+1. **Two Seasons Competitor Hotel room Rates** — competitor pricing data (multiple hotels, daily rates in AED, lowest-price flag, Accor tax type, dry-run flag).
+2. **info_email_audit_log** — email routing/audit decisions (department, action, confidence, override, error).
+3. **social_engagement_logs** — social DM engagement events (platform, channel, event_type, status, escalation flag, grouped messages).
+4. **daily_welcome_message_stats** — *not found in the current schema.* I see only `welcome_message_success_log` (one row per sent welcome message with guest/reservation/arrival info). Please confirm:
+   - Should I use `welcome_message_success_log` and aggregate it daily myself, OR
+   - Is `daily_welcome_message_stats` a table/view you plan to create (and what columns)?
 
-```sql
-CREATE OR REPLACE FUNCTION public.match_documents(
-  query_embedding vector,
-  match_count integer DEFAULT 6,
-  filter jsonb DEFAULT '{}'::jsonb
-)
-RETURNS TABLE(id bigint, content text, metadata jsonb, similarity double precision)
-LANGUAGE plpgsql
-SET search_path TO 'public'
-AS $$
-begin
-  return query
-  select
-    docs.id,
-    docs.content,
-    docs.metadata,
-    1 - (docs.embedding <#> query_embedding) as similarity
-  from public."N8N_2S" as docs
-  where (filter = '{}'::jsonb OR docs.metadata @> filter)
-  order by docs.embedding <#> query_embedding
-  limit coalesce(match_count, 6);
-end;
-$$;
-```
+### What I need from you for each table
+For each of the 4 tables, please send a short brief covering:
 
-ملاحظة: `SET search_path TO 'public'` يُضاف هنا أيضاً ليُغطّي إصلاح search_path المُخطّط له في الخطوة 5، فنُنفّذ الإصلاحين معاً.
+- **Purpose** — one line on what the table represents
+- **Primary date column** — which timestamp drives "trend over time" (e.g. `created_at`, `report_date`, `sent_date`)
+- **Key dimensions to break down by** — e.g. for Competitor Rates: `hotel_name`, `source_group`, `status`; for audit log: `department`, `action`, `confidence`
+- **KPIs you want at the top** — 2–4 numbers per section (e.g. "today's lowest rate per hotel", "% of emails auto-routed", "% escalated DMs", "welcome messages sent today vs yesterday")
+- **Charts you want** — e.g. "rate trend line per hotel", "department pie", "escalation rate over time", "welcome sends per day"
+- **Filters** — date range is default; anything else? (hotel, platform, department…)
+- **Any rows to exclude** — e.g. exclude `dry_run = true` from competitor rates, exclude `error IS NOT NULL` from audit log
 
-### نفس المعالجة لدالة `N8N_2S`
-نفس النمط مطلوب لتسهيل الفلترة المستقبلية وإصلاح search_path:
+### Once you send the briefs, I will deliver the final consolidated plan
+It will cover all 8 sections (Reviews, WhatsApp, Bursts, Email, Competitor Rates, Email Audit, Social Engagement, Welcome Messages) on top of the Midnight Indigo shell, with sidebar nav, `/dashboard` overview, and per-section pages — all in one go.
 
-```sql
-CREATE OR REPLACE FUNCTION public."N8N_2S"(
-  filter jsonb,
-  match_count integer,
-  query_embedding vector
-)
-RETURNS TABLE(id bigint, content text, metadata jsonb, similarity double precision)
-LANGUAGE plpgsql
-SET search_path TO 'public'
-AS $$
-begin
-  return query
-  select
-    docs.id, docs.content, docs.metadata,
-    1 - (docs.embedding <#> query_embedding) as similarity
-  from public."N8N_2S" as docs
-  where (filter = '{}'::jsonb OR docs.metadata @> filter)
-  order by docs.embedding <#> query_embedding
-  limit match_count;
-end;
-$$;
-```
+Please send the briefs (even bullet points are fine) and I'll finalize the plan.
 
-### بقية الخطة الأمنية المعتمدة سابقاً (دون تغيير)
-1. `website_chats`: حذف 4 سياسات public خاطئة + إنشاء سياسة `service_role` موحّدة
-2. Realtime: إزالة الجداول الحساسة من publication + RLS service_role
-3. `Chat History`: تشديد سياسة UPDATE إلى service_role فقط
-4. Storage: إضافة UPDATE policy لـ `documents` bucket
-5. `skip_reaction_rows`: إضافة `SET search_path = public`
-6. `supabase/config.toml`: `[auth] otp_expiry = 600`
-7. تحديث حالات الـ findings (mark_as_fixed / ignore)
-
-### ما لن يتغيّر
-- `/whatsapp` يعمل كما هو
-- Realtime على `Chat History` مستمر
-- `whatsapp-send-message` بدون JWT
-- لا مصادقة في هذه المرحلة
