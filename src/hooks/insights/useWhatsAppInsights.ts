@@ -2,9 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/DateRangeContext';
 import { dailySeries, countBy } from './utils';
+import { useRealtimeInvalidate } from './useRealtimeInvalidate';
 
 export function useWhatsAppInsights() {
   const { from, to, fromISO, toISO } = useDateRange();
+
+  useRealtimeInvalidate('Chat History', ['insights', 'whatsapp']);
 
   return useQuery({
     queryKey: ['insights', 'whatsapp', fromISO, toISO],
