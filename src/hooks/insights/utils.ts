@@ -1,4 +1,4 @@
-import { format, eachDayOfInterval } from 'date-fns';
+import { format, eachDayOfInterval, parseISO } from 'date-fns';
 
 /** Group rows by day key (yyyy-MM-dd) using a date accessor. */
 export function groupByDay<T>(rows: T[], getDate: (r: T) => Date | null | undefined): Record<string, T[]> {
@@ -7,6 +7,21 @@ export function groupByDay<T>(rows: T[], getDate: (r: T) => Date | null | undefi
     const d = getDate(r);
     if (!d) continue;
     const key = format(d, 'yyyy-MM-dd');
+    (out[key] ||= []).push(r);
+  }
+  return out;
+}
+
+/** Group rows by an explicit date-key accessor (yyyy-MM-dd string) — no Date parsing. */
+export function groupByDayKey<T>(
+  rows: T[],
+  getKey: (r: T) => string | null | undefined
+): Record<string, T[]> {
+  const out: Record<string, T[]> = {};
+  for (const r of rows) {
+    const k = getKey(r);
+    if (!k) continue;
+    const key = k.slice(0, 10);
     (out[key] ||= []).push(r);
   }
   return out;
@@ -22,6 +37,27 @@ export function dailySeries<T>(
 ): { date: string; label: string; value: number }[] {
   const groups = groupByDay(rows, getDate);
   return eachDayOfInterval({ start: from, end: to }).map((d) => {
+    const key = format(d, 'yyyy-MM-dd');
+    return { date: key, label: format(d, 'MMM d'), value: reducer(groups[key] || []) };
+  });
+}
+
+/**
+ * Daily series driven by date-key strings (yyyy-MM-dd) — avoids any timezone shift
+ * that can happen when feeding a `date` column value to `new Date(...)`.
+ */
+export function dailySeriesByDateKey<T>(
+  fromKey: string,
+  toKey: string,
+  rows: T[],
+  getKey: (r: T) => string | null | undefined,
+  reducer: (bucket: T[]) => number = (b) => b.length
+): { date: string; label: string; value: number }[] {
+  const groups = groupByDayKey(rows, getKey);
+  // parseISO on yyyy-MM-dd produces a stable local Date; we only use it for labels & iteration.
+  const start = parseISO(fromKey);
+  const end = parseISO(toKey);
+  return eachDayOfInterval({ start, end }).map((d) => {
     const key = format(d, 'yyyy-MM-dd');
     return { date: key, label: format(d, 'MMM d'), value: reducer(groups[key] || []) };
   });

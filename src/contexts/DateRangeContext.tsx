@@ -1,10 +1,17 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import { startOfDay, endOfDay, subDays, format } from 'date-fns';
+import { format } from 'date-fns';
+import {
+  getDubaiNow,
+  dubaiDateKey,
+  dubaiStartOfDay,
+  dubaiEndOfDay,
+} from '@/utils/timezone';
 
 export type DateRangePreset = 'yesterday' | 'last7' | 'last30' | 'custom';
 
 export interface DateRangeValue {
   preset: DateRangePreset;
+  /** Anchor dates (Dubai wall-clock Date objects) — for display/date-math only. */
   from: Date;
   to: Date;
 }
@@ -12,49 +19,74 @@ export interface DateRangeValue {
 interface DateRangeContextType extends DateRangeValue {
   setPreset: (p: DateRangePreset) => void;
   setCustom: (from: Date, to: Date) => void;
-  /** ISO strings for queries */
+  /** ISO instants representing Dubai start/end of day — use with `timestamptz` columns. */
   fromISO: string;
   toISO: string;
+  /** yyyy-MM-dd Dubai-calendar keys — use with Postgres `date` columns. */
+  fromDateKey: string;
+  toDateKey: string;
   /** Display label */
   label: string;
 }
 
 const DateRangeContext = createContext<DateRangeContextType | undefined>(undefined);
 
-function rangeForPreset(p: DateRangePreset, custom?: { from: Date; to: Date }): { from: Date; to: Date } {
-  const today = new Date();
+function subDaysSimple(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() - n);
+  return x;
+}
+
+function rangeForPreset(
+  p: DateRangePreset,
+  custom?: { from: Date; to: Date }
+): { from: Date; to: Date } {
+  // Use Dubai "today" as the anchor so presets follow Dubai's calendar day.
+  const todayDubai = getDubaiNow();
   if (p === 'yesterday') {
-    const y = subDays(today, 1);
-    return { from: startOfDay(y), to: endOfDay(y) };
+    const y = subDaysSimple(todayDubai, 1);
+    return { from: y, to: y };
   }
-  if (p === 'last7') return { from: startOfDay(subDays(today, 7)), to: endOfDay(today) };
-  if (p === 'last30') return { from: startOfDay(subDays(today, 30)), to: endOfDay(today) };
-  if (p === 'custom' && custom) return { from: startOfDay(custom.from), to: endOfDay(custom.to) };
-  // fallback
-  const y = subDays(today, 1);
-  return { from: startOfDay(y), to: endOfDay(y) };
+  if (p === 'last7') return { from: subDaysSimple(todayDubai, 7), to: todayDubai };
+  if (p === 'last30') return { from: subDaysSimple(todayDubai, 30), to: todayDubai };
+  if (p === 'custom' && custom) return { from: custom.from, to: custom.to };
+  const y = subDaysSimple(todayDubai, 1);
+  return { from: y, to: y };
 }
 
 export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [preset, setPresetState] = useState<DateRangePreset>('yesterday');
+  const [preset, setPresetState] = useState<DateRangePreset>('last30');
   const [custom, setCustomState] = useState<{ from: Date; to: Date }>(() => {
-    const y = subDays(new Date(), 1);
+    const y = subDaysSimple(getDubaiNow(), 1);
     return { from: y, to: y };
   });
 
   const { from, to } = useMemo(() => rangeForPreset(preset, custom), [preset, custom]);
 
+  // Dubai-calendar day boundaries (absolute UTC instants) for timestamptz columns.
+  const fromISO = dubaiStartOfDay(from).toISOString();
+  const toISO = dubaiEndOfDay(to).toISOString();
+
+  // Dubai-calendar yyyy-MM-dd keys for `date` columns.
+  const fromDateKey = dubaiDateKey(from);
+  const toDateKey = dubaiDateKey(to);
+
   const value: DateRangeContextType = {
     preset,
     from,
     to,
-    fromISO: from.toISOString(),
-    toISO: to.toISOString(),
+    fromISO,
+    toISO,
+    fromDateKey,
+    toDateKey,
     label:
-      preset === 'yesterday' ? 'Yesterday' :
-      preset === 'last7' ? 'Last 7 days' :
-      preset === 'last30' ? 'Last 30 days' :
-      `${format(from, 'MMM d')} – ${format(to, 'MMM d, yyyy')}`,
+      preset === 'yesterday'
+        ? 'Yesterday'
+        : preset === 'last7'
+        ? 'Last 7 days'
+        : preset === 'last30'
+        ? 'Last 30 days'
+        : `${format(from, 'MMM d')} – ${format(to, 'MMM d, yyyy')}`,
     setPreset: (p) => setPresetState(p),
     setCustom: (f, t) => {
       setCustomState({ from: f, to: t });

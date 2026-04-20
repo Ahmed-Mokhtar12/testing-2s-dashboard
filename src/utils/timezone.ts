@@ -1,5 +1,4 @@
-import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
-import { format } from 'date-fns';
+import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 // Dubai timezone (Gulf Standard Time - GST)
 export const DUBAI_TIMEZONE = 'Asia/Dubai';
@@ -20,10 +19,43 @@ export const formatToDubaiTime = (
 };
 
 /**
- * Get current Dubai time
+ * "Now" expressed as a Date with the same wall-clock as Dubai.
+ * Useful for date-math like subDays where we want Dubai's calendar day.
  */
-export const getDubaiTime = (): Date => {
+export const getDubaiNow = (): Date => {
   return toZonedTime(new Date(), DUBAI_TIMEZONE);
+};
+
+/**
+ * Backwards-compat alias
+ */
+export const getDubaiTime = (): Date => getDubaiNow();
+
+/**
+ * Date key (yyyy-MM-dd) for a given instant, computed in Dubai's calendar.
+ * Use this for queries on Postgres `date` columns to avoid UTC day-shift.
+ */
+export const dubaiDateKey = (date: Date | string | number = new Date()): string => {
+  const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
+  return formatInTimeZone(dateObj, DUBAI_TIMEZONE, 'yyyy-MM-dd');
+};
+
+/**
+ * Start of day in Dubai for a given date, returned as an absolute UTC instant (Date).
+ * Suitable for `.gte()` on `timestamptz` columns.
+ */
+export const dubaiStartOfDay = (date: Date | string | number): Date => {
+  const key = dubaiDateKey(date);
+  return fromZonedTime(`${key}T00:00:00.000`, DUBAI_TIMEZONE);
+};
+
+/**
+ * End of day in Dubai for a given date (inclusive boundary 23:59:59.999),
+ * returned as an absolute UTC instant.
+ */
+export const dubaiEndOfDay = (date: Date | string | number): Date => {
+  const key = dubaiDateKey(date);
+  return fromZonedTime(`${key}T23:59:59.999`, DUBAI_TIMEZONE);
 };
 
 /**
@@ -52,5 +84,5 @@ export const getDubaiTimezoneInfo = () => ({
   timezone: DUBAI_TIMEZONE,
   name: 'Gulf Standard Time',
   abbreviation: 'GST',
-  offset: '+04:00'
+  offset: '+04:00',
 });

@@ -3,40 +3,58 @@ export const DUBAI_TIMEZONE = 'Asia/Dubai';
 export const DEFAULT_LANGUAGE = 'English';
 
 /**
- * Get current Dubai time as ISO string
+ * Format a Date in the Dubai timezone using Intl. Returns parts so callers
+ * can build any string they need without manual offset math.
  */
-export function getDubaiTimeISO(): string {
-  const now = new Date();
-  // Dubai is UTC+4 (GST - Gulf Standard Time)
-  const dubaiTime = new Date(now.getTime() + (4 * 60 * 60 * 1000));
-  return dubaiTime.toISOString();
+function dubaiParts(date: Date): Record<string, string> {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: DUBAI_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts: Record<string, string> = {};
+  for (const p of fmt.formatToParts(date)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  return parts;
 }
 
 /**
- * Format timestamp for Dubai timezone
+ * Get current Dubai wall-clock time as an ISO-like string (yyyy-MM-ddTHH:mm:ss+04:00).
+ */
+export function getDubaiTimeISO(): string {
+  const p = dubaiParts(new Date());
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}+04:00`;
+}
+
+/**
+ * Format timestamp for Dubai timezone (human-readable).
  */
 export function formatDubaiTimestamp(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const dubaiTime = new Date(dateObj.getTime() + (4 * 60 * 60 * 1000));
-  
-  return dubaiTime.toLocaleString('en-US', {
-    timeZone: 'UTC',
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    timeZone: DUBAI_TIMEZONE,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true
-  }) + ' (Dubai Time)';
+    hour12: true,
+  }).format(dateObj);
+  return `${formatted} (Dubai Time)`;
 }
 
 /**
  * Get Dubai timezone context for AI prompts
  */
 export function getDubaiTimezoneContext(): string {
-  const dubaiTime = getDubaiTimeISO();
-  const formattedTime = formatDubaiTimestamp(dubaiTime);
-  
+  const formattedTime = formatDubaiTimestamp(new Date());
+
   return `
 Current Dubai Time: ${formattedTime}
 Timezone: Gulf Standard Time (GST, UTC+4)
