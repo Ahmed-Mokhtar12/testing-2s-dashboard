@@ -38,7 +38,7 @@ function rangeForPreset(
 }
 
 export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [preset, setPresetState] = useState<DateRangePreset>('last30');
+  const [preset, setPresetState] = useState<DateRangePreset>('yesterday');
   const [custom, setCustomState] = useState<{ from: Date; to: Date }>(() => {
     const y = subDaysSimple(getDubaiNow(), 1);
     return { from: y, to: y };
