@@ -17,7 +17,7 @@ const ReviewsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Reviews" subtitle="Guest feedback across all channels (excluding Khaldia)" />
+      <SectionHeader title="Reviews" subtitle="Guest feedback across all channels" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Total reviews" value={data?.kpis.total ?? 0} icon={Star} tone="primary" loading={isLoading} />
