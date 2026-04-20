@@ -18,9 +18,8 @@ export function useRealtimeInvalidate(
     const channel = supabase
       .channel(channelName)
       .on(
-        // @ts-expect-error - postgres_changes is supported at runtime
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
+        'postgres_changes' as never,
+        { event: '*', schema: 'public', table } as never,
         () => {
           qc.invalidateQueries({ queryKey: queryKeyPrefix });
         },
