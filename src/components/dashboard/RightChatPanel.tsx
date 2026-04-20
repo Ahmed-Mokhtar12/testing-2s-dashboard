@@ -1,0 +1,165 @@
+import React, { useState } from 'react';
+import { MessageCircle, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Sidebar from '@/components/Sidebar';
+import WelcomeScreen from '@/components/WelcomeScreen';
+import ChatContainer from '@/components/ChatContainer';
+import DocumentProcessingProgress from '@/components/DocumentProcessingProgress';
+import { useChat } from '@/hooks/useChat';
+import { useChatSessions } from '@/hooks/useChatSessions';
+import { cn } from '@/lib/utils';
+
+/**
+ * RightChatPanel — collapsible right-side AI chat (Sera).
+ * Pushes content (no overlay) when open.
+ */
+export const RightChatPanel: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  const [innerSidebar, setInnerSidebar] = useState(false);
+
+  const {
+    chatSessions,
+    activeSessionId,
+    saveChatMessage,
+    createNewSession,
+    selectSession,
+    deleteSession,
+    createNewSessionId,
+  } = useChatSessions();
+
+  const {
+    messages,
+    inputValue,
+    isTyping,
+    currentSessionId,
+    processingProgress,
+    setInputValue,
+    handleFileUpload,
+    handleSendMessage,
+    handleActionConfirm,
+    handleActionCancel,
+    loadSessionMessages,
+    clearMessages,
+    clearProgress,
+  } = useChat({
+    onSaveChatMessage: saveChatMessage,
+    activeSessionId,
+    createNewSessionId,
+  });
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const startNewChat = () => {
+    createNewSession();
+    clearMessages();
+  };
+
+  const handleSessionSelect = (sessionId: string) => {
+    const sessionMessages = selectSession(sessionId);
+    loadSessionMessages(sessionMessages);
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    deleteSession(sessionId);
+    if (activeSessionId === sessionId || currentSessionId === sessionId) clearMessages();
+  };
+
+  return (
+    <>
+      {/* Floating trigger */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Open Sera AI chat"
+          className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary-gradient text-primary-foreground flex items-center justify-center shadow-card-soft glow-primary animate-pulse-glow hover:scale-105 transition-transform"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Side panel — pushes layout */}
+      <aside
+        className={cn(
+          'shrink-0 h-screen border-l border-border bg-card-gradient transition-[width] duration-300 ease-out overflow-hidden flex',
+          open ? 'w-[420px]' : 'w-0'
+        )}
+      >
+        {open && (
+          <div className="flex w-full h-full">
+            {innerSidebar && (
+              <div className="w-[200px] border-r border-border overflow-hidden">
+                <Sidebar
+                  sidebarOpen={true}
+                  chatSessions={chatSessions}
+                  activeSessionId={activeSessionId || currentSessionId}
+                  onNewChat={startNewChat}
+                  onSessionSelect={handleSessionSelect}
+                  onDeleteSession={handleDeleteSession}
+                />
+              </div>
+            )}
+            <div className="flex-1 flex flex-col min-w-0">
+              <div className="h-12 px-4 flex items-center justify-between border-b border-border shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-primary-gradient flex items-center justify-center glow-primary">
+                    <span className="text-[11px] font-bold text-primary-foreground">S</span>
+                  </div>
+                  <div>
+                    <p className="font-display font-semibold text-sm leading-none">Sera</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Hotel Consultant</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setInnerSidebar((v) => !v)} className="h-8 text-xs">
+                    {innerSidebar ? 'Hide' : 'History'}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(false)} aria-label="Close chat">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col min-h-0 bg-background">
+                {messages.length === 0 ? (
+                  <WelcomeScreen
+                    inputValue={inputValue}
+                    isTyping={isTyping}
+                    onInputChange={setInputValue}
+                    onSendMessage={handleSendMessage}
+                    onKeyPress={handleKeyPress}
+                    onFileUpload={handleFileUpload}
+                  />
+                ) : (
+                  <ChatContainer
+                    messages={messages}
+                    inputValue={inputValue}
+                    isTyping={isTyping}
+                    onInputChange={setInputValue}
+                    onSendMessage={handleSendMessage}
+                    onKeyPress={handleKeyPress}
+                    onFileUpload={handleFileUpload}
+                    onActionConfirm={handleActionConfirm}
+                    onActionCancel={handleActionCancel}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </aside>
+
+      {processingProgress && (
+        <DocumentProcessingProgress
+          progress={processingProgress}
+          fileName={processingProgress.stage !== 'complete' ? 'Processing document...' : 'Complete'}
+          onClose={clearProgress}
+        />
+      )}
+    </>
+  );
+};
