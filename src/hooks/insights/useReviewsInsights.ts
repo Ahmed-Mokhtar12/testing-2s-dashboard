@@ -1,21 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/DateRangeContext';
-import { dailySeries, countBy, safeNum } from './utils';
+import { dailySeriesByDateKey, countBy, safeNum } from './utils';
 
 export function useReviewsInsights() {
-  const { from, to, fromISO, toISO } = useDateRange();
+  const { fromDateKey, toDateKey } = useDateRange();
 
   return useQuery({
-    queryKey: ['insights', 'reviews', fromISO, toISO],
+    queryKey: ['insights', 'reviews', fromDateKey, toDateKey],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reviews')
         .select('id, Date, Source, Score, Text, "Hotel Name", Author')
-        .gte('Date', from.toISOString().slice(0, 10))
-        .lte('Date', to.toISOString().slice(0, 10))
+        .gte('Date', fromDateKey)
+        .lte('Date', toDateKey)
         .order('Date', { ascending: false })
-        .limit(1000);
+        .limit(10000);
       if (error) throw error;
       const rows = data || [];
 
@@ -25,7 +25,9 @@ export function useReviewsInsights() {
       const positive = scores.filter((s) => s >= 4).length;
       const negative = scores.filter((s) => s <= 2.5).length;
 
-      const trend = dailySeries(from, to, rows, (r) => (r.Date ? new Date(r.Date as string) : null));
+      const trend = dailySeriesByDateKey(fromDateKey, toDateKey, rows, (r) =>
+        r.Date ? String(r.Date) : null
+      );
       const sources = countBy(rows, (r) => r.Source as string);
       const distribution = [
         { name: '0–1', value: scores.filter((s) => s < 1.5).length },

@@ -12,20 +12,20 @@ function isOurHotel(name: string | null | undefined) {
 }
 
 export function useCompetitorsInsights() {
-  const { from, to, fromISO, toISO } = useDateRange();
+  const { fromDateKey, toDateKey } = useDateRange();
 
   return useQuery({
-    queryKey: ['insights', 'competitors', fromISO, toISO],
+    queryKey: ['insights', 'competitors', fromDateKey, toDateKey],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('Two Seasons Competitor Hotel room Rates')
         .select('id, hotel_name, checkin_date, report_date, converted_price_aed, status, dry_run, is_lowest_for_day, lowest_price_for_day_aed')
-        .gte('report_date', from.toISOString().slice(0, 10))
-        .lte('report_date', to.toISOString().slice(0, 10))
+        .gte('report_date', fromDateKey)
+        .lte('report_date', toDateKey)
         .eq('dry_run', false)
         .eq('status', 'success')
         .order('report_date', { ascending: true })
-        .limit(1000);
+        .limit(10000);
       if (error) throw error;
       const rows = data || [];
 
