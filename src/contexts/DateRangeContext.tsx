@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   getDubaiNow,
@@ -6,30 +6,14 @@ import {
   dubaiStartOfDay,
   dubaiEndOfDay,
 } from '@/utils/timezone';
+import {
+  DateRangeContext,
+  type DateRangeContextType,
+  type DateRangePreset,
+} from './date-range-context';
 
-export type DateRangePreset = 'yesterday' | 'last7' | 'last30' | 'custom';
-
-export interface DateRangeValue {
-  preset: DateRangePreset;
-  /** Anchor dates (Dubai wall-clock Date objects) — for display/date-math only. */
-  from: Date;
-  to: Date;
-}
-
-interface DateRangeContextType extends DateRangeValue {
-  setPreset: (p: DateRangePreset) => void;
-  setCustom: (from: Date, to: Date) => void;
-  /** ISO instants representing Dubai start/end of day — use with `timestamptz` columns. */
-  fromISO: string;
-  toISO: string;
-  /** yyyy-MM-dd Dubai-calendar keys — use with Postgres `date` columns. */
-  fromDateKey: string;
-  toDateKey: string;
-  /** Display label */
-  label: string;
-}
-
-const DateRangeContext = createContext<DateRangeContextType | undefined>(undefined);
+export type { DateRangePreset } from './date-range-context';
+export { useDateRange } from './useDateRange';
 
 function subDaysSimple(d: Date, n: number): Date {
   const x = new Date(d);
@@ -41,7 +25,6 @@ function rangeForPreset(
   p: DateRangePreset,
   custom?: { from: Date; to: Date }
 ): { from: Date; to: Date } {
-  // Use Dubai "today" as the anchor so presets follow Dubai's calendar day.
   const todayDubai = getDubaiNow();
   if (p === 'yesterday') {
     const y = subDaysSimple(todayDubai, 1);
@@ -63,11 +46,8 @@ export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const { from, to } = useMemo(() => rangeForPreset(preset, custom), [preset, custom]);
 
-  // Dubai-calendar day boundaries (absolute UTC instants) for timestamptz columns.
   const fromISO = dubaiStartOfDay(from).toISOString();
   const toISO = dubaiEndOfDay(to).toISOString();
-
-  // Dubai-calendar yyyy-MM-dd keys for `date` columns.
   const fromDateKey = dubaiDateKey(from);
   const toDateKey = dubaiDateKey(to);
 
@@ -96,9 +76,3 @@ export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>;
 };
-
-export function useDateRange() {
-  const ctx = useContext(DateRangeContext);
-  if (!ctx) throw new Error('useDateRange must be used inside DateRangeProvider');
-  return ctx;
-}
