@@ -5,10 +5,12 @@ import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { RightChatPanel } from '@/components/dashboard/RightChatPanel';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { DateRangeProvider } from '@/contexts/DateRangeContext';
+import { RealtimeBridge } from '@/components/dashboard/RealtimeBridge';
 
 export const DashboardShell: React.FC = () => {
   return (
     <DateRangeProvider>
+      <RealtimeBridge />
       <SidebarProvider defaultOpen={true}>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />

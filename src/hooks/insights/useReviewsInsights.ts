@@ -2,12 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/DateRangeContext';
 import { dailySeries, countBy, safeNum } from './utils';
-import { useRealtimeInvalidate } from './useRealtimeInvalidate';
 
 export function useReviewsInsights() {
   const { from, to, fromISO, toISO } = useDateRange();
-
-  useRealtimeInvalidate('reviews', ['insights', 'reviews']);
 
   return useQuery({
     queryKey: ['insights', 'reviews', fromISO, toISO],
