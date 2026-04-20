@@ -281,6 +281,48 @@ export type Database = {
         }
         Relationships: []
       }
+      info_email_audit_log: {
+        Row: {
+          action: string | null
+          confidence: string | null
+          created_at: string
+          department: string | null
+          error: string | null
+          id: number
+          override: boolean | null
+          processed_at: string
+          reason: string | null
+          sender: string | null
+          subject: string | null
+        }
+        Insert: {
+          action?: string | null
+          confidence?: string | null
+          created_at?: string
+          department?: string | null
+          error?: string | null
+          id?: number
+          override?: boolean | null
+          processed_at?: string
+          reason?: string | null
+          sender?: string | null
+          subject?: string | null
+        }
+        Update: {
+          action?: string | null
+          confidence?: string | null
+          created_at?: string
+          department?: string | null
+          error?: string | null
+          id?: number
+          override?: boolean | null
+          processed_at?: string
+          reason?: string | null
+          sender?: string | null
+          subject?: string | null
+        }
+        Relationships: []
+      }
       khaldia_reviews: {
         Row: {
           Author: string | null
@@ -443,6 +485,78 @@ export type Database = {
         }
         Relationships: []
       }
+      social_engagement_logs: {
+        Row: {
+          attachment_url: string | null
+          channel: string | null
+          created_at: string
+          escalation_flag: boolean | null
+          event_type: string | null
+          grouped_count: number | null
+          guest_message_text: string | null
+          has_attachment: boolean | null
+          id: string
+          latest_message_at: string | null
+          notes: string | null
+          platform: string | null
+          recipient_id: string | null
+          reply_text: string | null
+          sender_id: string | null
+          sender_name: string | null
+          session_key: string | null
+          source_message_ids: Json | null
+          status: string | null
+          workflow_id: string | null
+          workflow_name: string | null
+        }
+        Insert: {
+          attachment_url?: string | null
+          channel?: string | null
+          created_at?: string
+          escalation_flag?: boolean | null
+          event_type?: string | null
+          grouped_count?: number | null
+          guest_message_text?: string | null
+          has_attachment?: boolean | null
+          id?: string
+          latest_message_at?: string | null
+          notes?: string | null
+          platform?: string | null
+          recipient_id?: string | null
+          reply_text?: string | null
+          sender_id?: string | null
+          sender_name?: string | null
+          session_key?: string | null
+          source_message_ids?: Json | null
+          status?: string | null
+          workflow_id?: string | null
+          workflow_name?: string | null
+        }
+        Update: {
+          attachment_url?: string | null
+          channel?: string | null
+          created_at?: string
+          escalation_flag?: boolean | null
+          event_type?: string | null
+          grouped_count?: number | null
+          guest_message_text?: string | null
+          has_attachment?: boolean | null
+          id?: string
+          latest_message_at?: string | null
+          notes?: string | null
+          platform?: string | null
+          recipient_id?: string | null
+          reply_text?: string | null
+          sender_id?: string | null
+          sender_name?: string | null
+          session_key?: string | null
+          source_message_ids?: Json | null
+          status?: string | null
+          workflow_id?: string | null
+          workflow_name?: string | null
+        }
+        Relationships: []
+      }
       Sop: {
         Row: {
           department_name: string | null
@@ -467,6 +581,93 @@ export type Database = {
           section?: string | null
           sop?: string | null
           title?: string | null
+        }
+        Relationships: []
+      }
+      "Two Seasons Competitor Hotel room Rates": {
+        Row: {
+          accor_tax_type: string | null
+          booking_url: string | null
+          checkin_date: string
+          checkout_date: string | null
+          converted_price_aed: number | null
+          created_at: string
+          dry_run: boolean
+          error_message: string | null
+          execution_id: string | null
+          generated_at: string
+          hotel_name: string
+          id: number
+          is_lowest_for_day: boolean
+          lowest_price_for_day_aed: number | null
+          original_currency: string | null
+          original_price: number | null
+          parser_debug: Json | null
+          raw_result: Json | null
+          report_date: string
+          request_id: string | null
+          source_group: string | null
+          status: string
+          summary: Json | null
+          updated_at: string
+          workflow_id: string
+          workflow_name: string | null
+        }
+        Insert: {
+          accor_tax_type?: string | null
+          booking_url?: string | null
+          checkin_date: string
+          checkout_date?: string | null
+          converted_price_aed?: number | null
+          created_at?: string
+          dry_run?: boolean
+          error_message?: string | null
+          execution_id?: string | null
+          generated_at: string
+          hotel_name: string
+          id?: number
+          is_lowest_for_day?: boolean
+          lowest_price_for_day_aed?: number | null
+          original_currency?: string | null
+          original_price?: number | null
+          parser_debug?: Json | null
+          raw_result?: Json | null
+          report_date: string
+          request_id?: string | null
+          source_group?: string | null
+          status: string
+          summary?: Json | null
+          updated_at?: string
+          workflow_id: string
+          workflow_name?: string | null
+        }
+        Update: {
+          accor_tax_type?: string | null
+          booking_url?: string | null
+          checkin_date?: string
+          checkout_date?: string | null
+          converted_price_aed?: number | null
+          created_at?: string
+          dry_run?: boolean
+          error_message?: string | null
+          execution_id?: string | null
+          generated_at?: string
+          hotel_name?: string
+          id?: number
+          is_lowest_for_day?: boolean
+          lowest_price_for_day_aed?: number | null
+          original_currency?: string | null
+          original_price?: number | null
+          parser_debug?: Json | null
+          raw_result?: Json | null
+          report_date?: string
+          request_id?: string | null
+          source_group?: string | null
+          status?: string
+          summary?: Json | null
+          updated_at?: string
+          workflow_id?: string
+          workflow_name?: string | null
         }
         Relationships: []
       }
@@ -691,9 +892,66 @@ export type Database = {
         }
         Relationships: []
       }
+      welcome_message_success_log: {
+        Row: {
+          arrival_date: string | null
+          created_at: string
+          departure_date: string | null
+          execution_id: string | null
+          full_name: string | null
+          guest_id: string | null
+          id: string
+          mobile_number: string
+          reservation_id: string | null
+          room_number: string | null
+          sent_at: string
+          sent_date: string
+          status: string
+          workflow_id: string | null
+        }
+        Insert: {
+          arrival_date?: string | null
+          created_at?: string
+          departure_date?: string | null
+          execution_id?: string | null
+          full_name?: string | null
+          guest_id?: string | null
+          id?: string
+          mobile_number: string
+          reservation_id?: string | null
+          room_number?: string | null
+          sent_at?: string
+          sent_date?: string
+          status?: string
+          workflow_id?: string | null
+        }
+        Update: {
+          arrival_date?: string | null
+          created_at?: string
+          departure_date?: string | null
+          execution_id?: string | null
+          full_name?: string | null
+          guest_id?: string | null
+          id?: string
+          mobile_number?: string
+          reservation_id?: string | null
+          room_number?: string | null
+          sent_at?: string
+          sent_date?: string
+          status?: string
+          workflow_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      daily_welcome_message_stats: {
+        Row: {
+          sent_date: string | null
+          successful_welcome_messages: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_recent_document_context: {
