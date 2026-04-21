@@ -123,11 +123,21 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
 
       {/* Human control banner */}
       {isHumanControlled && (
-        <div className="bg-orange-50 border-b border-orange-200 px-4 py-2 flex items-center gap-2">
-          <UserCheck size={14} className="text-orange-500 flex-shrink-0" />
-          <p className="text-xs text-orange-700">
-            <span className="font-semibold">Human Agent Mode:</span> AI has been paused. Your messages will be sent directly to the customer on WhatsApp.
-          </p>
+        <div className="bg-orange-50 border-b border-orange-200 px-4 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <UserCheck size={14} className="text-orange-500 flex-shrink-0" />
+            <p className="text-xs text-orange-700 truncate">
+              <span className="font-semibold">Human Agent Mode:</span> AI paused. Messages sent directly to customer.
+            </p>
+          </div>
+          <button
+            onClick={onToggleHumanControl}
+            disabled={isTogglingControl}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#128C7E] text-white hover:bg-[#0e6b5f] transition-all shadow-sm flex-shrink-0 disabled:opacity-60"
+          >
+            {isTogglingControl ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} />}
+            Release to AI
+          </button>
         </div>
       )}
 
