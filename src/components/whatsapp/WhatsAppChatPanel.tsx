@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
