@@ -66,6 +66,15 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-[#F0F2F5] border-b border-gray-200 min-w-0">
         <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* Back button */}
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-[#54656F] hover:bg-gray-200 transition-colors shrink-0"
+            aria-label="Back to dashboard"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
           {/* Avatar */}
           <div className="w-10 h-10 bg-[#DFE5E7] rounded-full flex items-center justify-center shrink-0">
             <svg viewBox="0 0 212 212" className="w-full h-full">
@@ -93,33 +102,26 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2 text-[#54656F] shrink-0">
-          <button
-            onClick={onToggleHumanControl}
-            disabled={isTogglingControl}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm whitespace-nowrap ${
-              isHumanControlled
-                ? 'bg-[#128C7E] text-white hover:bg-[#0e6b5f] border-2 border-[#128C7E] animate-pulse'
-                : 'bg-orange-500 text-white hover:bg-orange-600 border-2 border-orange-500'
-            } disabled:opacity-60`}
-          >
-            {isTogglingControl ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : isHumanControlled ? (
-              <Bot size={12} />
-            ) : (
-              <UserCheck size={12} />
-            )}
-            {isTogglingControl
-              ? '...'
-              : isHumanControlled
-              ? 'Release to AI'
-              : 'Take Over'}
-          </button>
+          {!isHumanControlled && (
+            <button
+              onClick={onToggleHumanControl}
+              disabled={isTogglingControl}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm whitespace-nowrap bg-orange-500 text-white hover:bg-orange-600 border-2 border-orange-500 disabled:opacity-60"
+            >
+              {isTogglingControl ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <UserCheck size={12} />
+              )}
+              {isTogglingControl ? '...' : 'Take Over'}
+            </button>
+          )}
 
           <Search className="w-5 h-5 cursor-pointer hover:text-[#128C7E] shrink-0" />
           <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#128C7E] shrink-0" />
         </div>
       </div>
+
 
       {/* Human control banner */}
       {isHumanControlled && (
