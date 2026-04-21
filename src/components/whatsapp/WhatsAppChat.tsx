@@ -57,7 +57,8 @@ const WhatsAppChat: React.FC = () => {
         const chatMap = new Map<string, ChatPreview>();
         data?.forEach((chat) => {
           const num = chat['Sender Number'];
-          if (num && !chatMap.has(num)) {
+          const hasContent = chat['Ai Reply'] || chat['Sender Message'] || chat['human_reply'];
+          if (num && hasContent && !chatMap.has(num)) {
             chatMap.set(num, {
               senderNumber: num,
               name: chat['Name'] || undefined,
