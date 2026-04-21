@@ -83,12 +83,60 @@ Deno.serve(async (req) => {
       );
     }
 
-    const n8nPayload = {
+    // Init Supabase early so we can build handoff context BEFORE calling n8n
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Build conversationContext from history BEFORE the latest release marker (if any)
+    let conversationContext: string | null = null;
+    try {
+      const { data: lastReleaseRow } = await supabase
+        .from('Chat History')
+        .select('released_to_ai_at')
+        .eq('Sender Number', sanitizedSender)
+        .not('released_to_ai_at', 'is', null)
+        .order('released_to_ai_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const releaseAt = lastReleaseRow?.released_to_ai_at as string | undefined;
+
+      if (releaseAt) {
+        const { data: historyRows } = await supabase
+          .from('Chat History')
+          .select('"Sender Message", human_reply, "Ai Reply", created_at')
+          .eq('Sender Number', sanitizedSender)
+          .lte('created_at', releaseAt)
+          .order('created_at', { ascending: true })
+          .limit(50);
+
+        const lines: string[] = [];
+        for (const row of historyRows || []) {
+          if (row['Sender Message']) lines.push(`- Customer: ${row['Sender Message']}`);
+          if (row['human_reply']) lines.push(`- Human Agent: ${row['human_reply']}`);
+          else if (row['Ai Reply']) lines.push(`- AI: ${row['Ai Reply']}`);
+        }
+
+        if (lines.length > 0) {
+          conversationContext =
+            '[Read-only history. Do NOT reply to these messages — they were already handled by a human agent. Use them ONLY as context to understand and answer the new customer message below.]\n' +
+            lines.join('\n');
+        }
+      }
+    } catch (ctxErr) {
+      console.error('⚠️ failed to build conversationContext:', ctxErr);
+    }
+
+    const n8nPayload: Record<string, unknown> = {
       message: sanitizedMessage,
       senderNumber: sanitizedSender,
       timestamp: new Date().toISOString(),
       source: 'web',
     };
+    if (conversationContext) {
+      n8nPayload.conversationContext = conversationContext;
+    }
 
     const n8nResponse = await fetch(webhookUrl, {
       method: 'POST',
@@ -110,11 +158,6 @@ Deno.serve(async (req) => {
     const n8nData = await n8nResponse.json();
     const aiResponse = n8nData.output || n8nData.response || n8nData.message || n8nData.text ||
       (typeof n8nData === 'string' ? n8nData : JSON.stringify(n8nData));
-
-    // Save conversation to Supabase
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { error: insertError } = await supabase
       .from('Chat History')

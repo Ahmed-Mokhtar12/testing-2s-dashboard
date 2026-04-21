@@ -153,6 +153,7 @@ export type Database = {
           is_human_controlled: boolean
           Media: Json | null
           Name: string | null
+          released_to_ai_at: string | null
           "Sender Message": string | null
           "Sender Number": string | null
         }
@@ -165,6 +166,7 @@ export type Database = {
           is_human_controlled?: boolean
           Media?: Json | null
           Name?: string | null
+          released_to_ai_at?: string | null
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }
@@ -177,6 +179,7 @@ export type Database = {
           is_human_controlled?: boolean
           Media?: Json | null
           Name?: string | null
+          released_to_ai_at?: string | null
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }

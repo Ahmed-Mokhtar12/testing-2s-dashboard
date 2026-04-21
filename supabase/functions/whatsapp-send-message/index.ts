@@ -82,6 +82,19 @@ serve(async (req) => {
         throw updateError;
       }
 
+      // On release: insert a marker row to record the exact handoff time.
+      // The AI will treat any conversation BEFORE this timestamp as read-only context.
+      if (action === 'release') {
+        const { error: markerErr } = await supabase.from('Chat History').insert({
+          'Sender Number': recipientNumber.trim(),
+          released_to_ai_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        });
+        if (markerErr) {
+          console.error('Error inserting release marker:', markerErr);
+        }
+      }
+
       return new Response(
         JSON.stringify({ success: true, action, isHumanControlled }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
