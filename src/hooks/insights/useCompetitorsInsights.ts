@@ -23,7 +23,7 @@ export function useCompetitorsInsights() {
         .gte('report_date', fromDateKey)
         .lte('report_date', toDateKey)
         .eq('dry_run', false)
-        .eq('status', 'success')
+        .in('status', ['success', 'price_found'])
         .order('report_date', { ascending: true })
         .limit(10000);
       if (error) throw error;
