@@ -51,6 +51,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   onToggleHumanControl,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
