@@ -32,8 +32,9 @@ export function useSocialInsights() {
 
       const isIG = (r: typeof rows[number]) => (r.platform || '').toLowerCase().includes('insta') || (r.channel || '').toLowerCase().includes('insta');
       const isFB = (r: typeof rows[number]) => (r.platform || '').toLowerCase().includes('facebook') || (r.channel || '').toLowerCase().includes('facebook');
-      const isDM = (r: typeof rows[number]) => (r.event_type || '').toLowerCase().includes('dm') || (r.event_type || '').toLowerCase().includes('message');
+      // event_type values in DB: 'reply_sent', etc. Treat comment-related event_types as comments, otherwise DM/message engagement.
       const isComment = (r: typeof rows[number]) => (r.event_type || '').toLowerCase().includes('comment');
+      const isDM = (r: typeof rows[number]) => !isComment(r);
 
       const igComments = rows.filter((r) => isIG(r) && isComment(r)).length;
       const igDMs = rows.filter((r) => isIG(r) && isDM(r)).length;
