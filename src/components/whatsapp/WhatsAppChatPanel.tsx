@@ -96,18 +96,18 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           <button
             onClick={onToggleHumanControl}
             disabled={isTogglingControl}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all shadow-sm ${
               isHumanControlled
-                ? 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-300'
-                : 'bg-[#128C7E]/10 text-[#128C7E] hover:bg-[#128C7E]/20 border border-[#128C7E]/30'
+                ? 'bg-[#128C7E] text-white hover:bg-[#0e6b5f] border-2 border-[#128C7E] animate-pulse'
+                : 'bg-orange-500 text-white hover:bg-orange-600 border-2 border-orange-500'
             } disabled:opacity-60`}
           >
             {isTogglingControl ? (
-              <Loader2 size={12} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin" />
             ) : isHumanControlled ? (
-              <Bot size={12} />
+              <Bot size={14} />
             ) : (
-              <UserCheck size={12} />
+              <UserCheck size={14} />
             )}
             {isTogglingControl
               ? '...'
