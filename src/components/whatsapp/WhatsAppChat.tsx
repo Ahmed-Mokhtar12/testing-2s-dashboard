@@ -57,7 +57,8 @@ const WhatsAppChat: React.FC = () => {
         const chatMap = new Map<string, ChatPreview>();
         data?.forEach((chat) => {
           const num = chat['Sender Number'];
-          if (num && !chatMap.has(num)) {
+          const hasContent = chat['Ai Reply'] || chat['Sender Message'] || chat['human_reply'];
+          if (num && hasContent && !chatMap.has(num)) {
             chatMap.set(num, {
               senderNumber: num,
               name: chat['Name'] || undefined,
@@ -87,6 +88,11 @@ const WhatsAppChat: React.FC = () => {
           const chat = payload.new as Record<string, unknown>;
           const num = chat['Sender Number'] as string | undefined;
           if (!num) return;
+
+          // Skip system marker rows (release/auto-release) — no message content
+          const hasContent =
+            chat['Sender Message'] || chat['Ai Reply'] || chat['human_reply'];
+          if (!hasContent) return;
 
           const lastMessage =
             (chat['Ai Reply'] as string) ||
