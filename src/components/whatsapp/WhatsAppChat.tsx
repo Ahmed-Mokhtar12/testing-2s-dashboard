@@ -89,6 +89,11 @@ const WhatsAppChat: React.FC = () => {
           const num = chat['Sender Number'] as string | undefined;
           if (!num) return;
 
+          // Skip system marker rows (release/auto-release) — no message content
+          const hasContent =
+            chat['Sender Message'] || chat['Ai Reply'] || chat['human_reply'];
+          if (!hasContent) return;
+
           const lastMessage =
             (chat['Ai Reply'] as string) ||
             (chat['Sender Message'] as string) ||
