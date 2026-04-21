@@ -122,9 +122,9 @@ const WhatsAppChat: React.FC = () => {
   }, [buildTimestamp]);
 
   return (
-    <div className="flex h-full w-full bg-[#111B21]">
-      {/* Sidebar */}
-      <div className="w-[30%] min-w-[300px] max-w-[500px] h-full">
+    <div className="flex h-full w-full bg-[#111B21] overflow-hidden">
+      {/* Sidebar - fixed left like WhatsApp Web */}
+      <div className="w-[30%] min-w-[300px] max-w-[500px] h-full shrink-0">
         <WhatsAppSidebar
           chats={chatPreviews}
           selectedNumber={senderNumber}
@@ -136,7 +136,7 @@ const WhatsAppChat: React.FC = () => {
       </div>
 
       {/* Chat Panel */}
-      <div className="flex-1 h-full">
+      <div className="flex-1 min-w-0 h-full">
         <WhatsAppChatPanel
           messages={messages}
           senderNumber={senderNumber}
