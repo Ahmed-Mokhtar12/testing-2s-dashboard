@@ -1,105 +1,56 @@
 
 
-## خطة محدّثة: Release ذكي للـ AI + Auto-Release بعد 60 دقيقة
+## خطة: منع صفوف Release marker من التأثير على ترتيب الـ Sidebar
 
-### الهدف
-1. عند Release اليدوي: الـ AI يقرأ سياق محادثة Human كـ context-only، ولا يردّ على الرسائل القديمة، ويردّ فقط على رسائل جديدة بعد لحظة Release.
-2. **Auto-Release**: لو نسي الموظف الضغط على Release، يتم تحرير المحادثة تلقائياً للـ AI بعد **60 دقيقة من آخر نشاط** (آخر رسالة عميل أو آخر `human_reply`).
+### السبب
+بعد تنفيذ Auto-Release، يُدرَج صف "marker" في `Chat History` يحوي فقط `released_to_ai_at` (بدون أي محتوى نصّي). الـ Realtime في `WhatsAppChat.tsx` يلتقط أي INSERT ويرفع المحادثة لأعلى القائمة بـ timestamp جديد، فتظهر محادثات قديمة (مثل تلك من 18 Feb) كأنها وصلت الآن في 13:33.
 
----
+### الإصلاح (تغيير صغير وآمن)
 
-### الجزء 1 — Release اليدوي مع سياق read-only (كما اتُّفق سابقاً)
+#### تعديل واحد فقط في `src/components/whatsapp/WhatsAppChat.tsx`
+في معالج Realtime INSERT (السطور 86-117)، نضيف حارس في البداية:
 
-#### تغييرات DB
-إضافة عمود إلى `Chat History`:
-- `released_to_ai_at timestamptz nullable` — يُكتب في صف marker عند كل Release.
-
-#### `whatsapp-send-message` — توسيع `action: 'release'`
-1. تحديث `is_human_controlled = false` لكل صفوف هذا الرقم (السلوك الحالي).
-2. إدراج صف marker جديد:
-   - `Sender Number` = الرقم
-   - `released_to_ai_at = now()`
-   - باقي الحقول النصية null (لن يظهر في الـ UI).
-
-#### `whatsapp-web-chat` — منطق الردّ الذكي
-عند وصول رسالة عميل جديدة:
-1. اقرأ آخر `is_human_controlled` للرقم.
-2. لو `true` → لا ترسل لـ n8n.
-3. لو `false`:
-   - اقرأ آخر `released_to_ai_at` لهذا الرقم.
-   - ابنِ `conversationContext` من سجل المحادثة قبل ذلك التوقيت.
-   - مرّر للـ payload:
-     ```json
-     {
-       "message": "...",
-       "senderNumber": "...",
-       "conversationContext": "[Read-only history. Do NOT reply to these — already handled by human agent. Use only as context for the new message.]\n- Customer: ...\n- Human Agent: ...",
-       "source": "web"
-     }
-     ```
-
----
-
-### الجزء 2 — Auto-Release بعد 60 دقيقة خمول
-
-#### المبدأ
-كل دقيقة، job مجدوَل يفحص كل المحادثات النشطة في وضع Human ويحرّر تلقائياً تلك التي لم يحدث فيها أي نشاط منذ 60 دقيقة.
-
-#### Edge Function جديدة: `whatsapp-auto-release`
-- تُستدعى دورياً عبر `pg_cron`.
-- المنطق:
-  ```
-  لكل Sender Number لديه is_human_controlled = true:
-    اقرأ MAX(created_at) من صفوفه التي تحوي (Sender Message OR human_reply OR Ai Reply)
-    لو (now() - last_activity) > 60 دقيقة:
-      - تحديث is_human_controlled = false
-      - إدراج صف marker بـ released_to_ai_at = now()
-      - (اختياري) log سطر يوضّح أن الإفراج كان تلقائياً
-  ```
-
-#### جدولة عبر `pg_cron`
-تفعيل `pg_cron` و `pg_net`، ثم جدولة استدعاء كل دقيقة:
-```sql
-select cron.schedule(
-  'whatsapp-auto-release-every-minute',
-  '* * * * *',
-  $$ select net.http_post(
-       url:='https://yczcebfaqerlwfalrbjn.supabase.co/functions/v1/whatsapp-auto-release',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
-       body:='{}'::jsonb
-     ); $$
-);
+```ts
+// Skip system marker rows (release/auto-release) — they have no message content
+const hasContent =
+  chat['Sender Message'] || chat['Ai Reply'] || chat['human_reply'];
+if (!hasContent) return;
 ```
 
-#### تأثير على الواجهة (دون أي تغيير كود)
-الـ `useWhatsAppChat` مشترك أصلاً في Realtime على `Chat History` لهذا الرقم. عندما يُحدِّث الـ cron الـ `is_human_controlled` إلى `false`، الواجهة ستلتقط التغيير تلقائياً عبر الـ INSERT الخاص بصف الـ marker، ويتحول الزر من "Release to AI" إلى "Take Over" بدون تدخل المستخدم.
+هذا يضمن:
+- صف marker الذي لا يحوي رسالة فعلية يُتجاهل تماماً في الـ Sidebar.
+- لا يُغيّر ترتيب القائمة، ولا الـ timestamp، ولا الـ lastMessage.
+- لا يكسر ظهور الرسائل الحقيقية لأنها دائماً تحمل أحد الحقول الثلاثة.
 
-> تنبيه بسيط (اختياري): إن أردت توست يخبر الموظف "تم التحرير تلقائياً بعد 60 دقيقة"، يمكن إضافته في `useWhatsAppChat` بمقارنة الحالة السابقة. يُذكر ذلك فقط — لن يُنفّذ ما لم تطلبه.
+#### تنظيف بصري للبيانات الموجودة (اختياري داخل نفس الجلسة)
+الصفحة سترجع لطبيعتها فور تحديثها (refresh)، لأن الـ initial loader يبني الـ preview من أول صف يحوي محتوى فعلي (السطور 58-68 الموجودة أصلاً تتحقق من `chat['Ai Reply'] || chat['Sender Message']`).
 
----
+> ملاحظة: لا يوجد تأثير من marker rows على الـ initial load لأن الكود الحالي يبني `lastMessage` من الحقول النصّية فقط، لكنه لا يتجاهل الصف نفسه عند تحديد `created_at` للـ timestamp. لتأمين كامل، يمكن أيضاً تصفية مبكرة في الـ initial load:
 
-### ما لن يتغيّر (حماية للنظام الحالي)
-- بنية الـ UI (Sidebar/Header/Panel) — صفر تغيير.
-- منطق Take Over اليدوي — صفر تغيير.
-- منطق إرسال Human عبر WhatsApp Cloud API — صفر تغيير.
-- منطق Realtime — صفر تغيير.
-- منطق إرسال AI الحالي — يُضاف فقط حقل `conversationContext` في الـ payload (n8n سيتجاهله إن لم يستخدمه).
+```ts
+data?.forEach((chat) => {
+  const num = chat['Sender Number'];
+  const hasContent = chat['Ai Reply'] || chat['Sender Message'] || chat['human_reply'];
+  if (num && hasContent && !chatMap.has(num)) {
+    chatMap.set(num, { ... });
+  }
+});
+```
 
----
+### ما لن يتغيّر
+- منطق Auto-Release (الـ Edge Function والـ cron) — صحيح ويعمل (السجلات تؤكد إفراج 3 محادثات بنجاح).
+- منطق Release اليدوي.
+- منطق `useWhatsAppChat` (محادثة واحدة) — أصلاً يتحقق من وجود حقول نصّية قبل عرض الرسالة، فلا داعي لتعديله.
+- بنية الـ UI أو الـ Header.
 
-### الملفات المتأثرة
+### الملف المتأثر
 
 | الملف | التغيير |
 |-------|---------|
-| **DB migration** | إضافة `released_to_ai_at timestamptz` إلى `Chat History` + تفعيل `pg_cron` و `pg_net` + جدولة الـ cron job |
-| `supabase/functions/whatsapp-send-message/index.ts` | في فرع `action: 'release'` → إدراج صف marker بـ `released_to_ai_at = now()` |
-| `supabase/functions/whatsapp-web-chat/index.ts` | بناء `conversationContext` (سجل ما قبل آخر `released_to_ai_at`) وتمريره لـ n8n |
-| **جديدة** `supabase/functions/whatsapp-auto-release/index.ts` | فحص كل المحادثات وتحرير تلقائي بعد 60 دقيقة خمول |
-
----
+| `src/components/whatsapp/WhatsAppChat.tsx` | إضافة حارس `hasContent` في معالج Realtime INSERT + في الـ initial load loop لتجاهل marker rows |
 
 ### النتيجة
-- Release اليدوي: AI يفهم ما حدث ولا يكرّر ردّ Human، ويردّ فقط على رسائل جديدة.
-- Auto-Release: لو نسي الموظف، النظام يحرّر تلقائياً بعد 60 دقيقة من آخر نشاط، فلا تبقى محادثة عالقة في وضع Human بلا تدخّل.
-- صفر مخاطر على الواجهة أو منطق الإرسال الحالي.
+- بعد التطبيق، Auto-Release سيستمر في تحرير المحادثات الخاملة بصمت كل دقيقة دون رفع أي محادثة قديمة لأعلى الـ Sidebar.
+- المحادثات التي ترى تواريخها قديمة الآن (905340540810, 971501234567, 12532797073) ستعود لمكانها الصحيح فور التحديث.
+- Release اليدوي أيضاً لن يُحدث أي قفزة بصرية مزعجة.
 
