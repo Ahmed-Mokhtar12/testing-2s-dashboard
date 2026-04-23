@@ -34,6 +34,7 @@ const bottomItems: NavItem[] = [
 
 const WhatsAppNavRail: React.FC = () => {
   const [active, setActive] = useState('chats');
+  const navigate = useNavigate();
 
   const renderItem = (item: NavItem) => {
     const Icon = item.icon;
@@ -65,6 +66,15 @@ const WhatsAppNavRail: React.FC = () => {
         {topItems.map(renderItem)}
       </div>
       <div className="flex flex-col items-center gap-2">
+        {/* Back to Dashboard */}
+        <button
+          onClick={() => navigate('/dashboard')}
+          title="Back to Dashboard"
+          className="w-12 h-12 flex items-center justify-center rounded-lg text-[#54656F] hover:bg-[#E9EDEF] hover:text-[#128C7E] transition-colors"
+        >
+          <LayoutDashboard size={22} />
+        </button>
+        <div className="w-8 h-px bg-gray-300 my-1" />
         {bottomItems.map(renderItem)}
       </div>
     </div>
