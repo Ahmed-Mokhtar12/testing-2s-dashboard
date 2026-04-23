@@ -54,8 +54,12 @@ export const useMessageSending = ({
       } else {
         aiMessage = createAIMessage(aiResponseData.response || "I'm here to help!");
         
-        // Add action data if present
-        if (aiResponseData.hasAction && aiResponseData.actionData) {
+        // Ignore disabled send-action payloads so the chat always shows a text reply.
+        if (
+          aiResponseData.hasAction &&
+          aiResponseData.actionData &&
+          aiResponseData.actionData.type === 'sms'
+        ) {
           aiMessage = {
             ...aiMessage,
             hasAction: true,

@@ -53,13 +53,12 @@ export class FunctionCallHandler {
         const result = await this.executeSearchFunction(functionName, functionArgs, toolCall.id);
         messages.push(...result);
       } else if (this.isActionFunction(functionName)) {
-        console.log(`📧 Action function detected: ${functionName}`);
-        // For action functions, return early with the original choice
-        return {
-          shouldReturnEarly: true,
-          messages,
-          earlyReturnChoice: { message: { tool_calls: toolCalls } }
-        };
+        console.log(`🚫 Disabled action function requested by model: ${functionName}`);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: 'Sending actions are disabled in this product. Reply to the user with a normal text answer only. Do not ask for confirmation and do not generate send_email, send_sms, or send_whatsapp actions.'
+        });
       } else {
         console.warn(`⚠️ Unknown function: ${functionName}`);
       }
@@ -76,8 +75,7 @@ export class FunctionCallHandler {
   }
   
   private isActionFunction(functionName: string): boolean {
-    const actionFunctions = ['send_email', 'send_sms', 'send_whatsapp'];
-    return actionFunctions.includes(functionName);
+    return functionName === 'send_email' || functionName === 'send_sms' || functionName === 'send_whatsapp';
   }
   
   private async executeSearchFunction(
