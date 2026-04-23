@@ -47,11 +47,11 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#F0F2F5]">
-        <span className="text-[#128C7E] font-semibold text-xl">WhatsApp</span>
+      <div className="flex items-center justify-between px-4 py-3 bg-white">
+        <span className="text-[#111B21] font-semibold text-2xl tracking-tight">WhatsApp</span>
         <div className="flex items-center gap-4 text-[#54656F]">
-          <MessageSquarePlus className="w-5 h-5 cursor-pointer hover:text-[#128C7E]" />
-          <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#128C7E]" />
+          <MessageSquarePlus className="w-5 h-5 cursor-pointer hover:text-[#111B21]" />
+          <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#111B21]" />
         </div>
       </div>
 
