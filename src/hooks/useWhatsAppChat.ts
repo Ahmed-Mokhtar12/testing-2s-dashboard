@@ -351,7 +351,7 @@ export const useWhatsAppChat = () => {
 
       const errContent: string = isHumanControlled
         ? 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.'
-        : 'Please press the Take Over button above to be able to send messages to the guest.\n\nيرجى الضغط على زر Take Over في الأعلى حتى تتمكن من إرسال رسائل إلى الضيف.';
+        : 'Please press the Take Over button above to send messages to the user';
 
       const errorMessage: WhatsAppMessage = {
         id: `error-${Date.now()}`,
