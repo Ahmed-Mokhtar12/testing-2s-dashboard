@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import WhatsAppNavRail from './WhatsAppNavRail';
 import WhatsAppSidebar from './WhatsAppSidebar';
 import WhatsAppChatPanel from './WhatsAppChatPanel';
-import { useWhatsAppChat, WhatsAppMessage } from '@/hooks/useWhatsAppChat';
+import { useWhatsAppChat } from '@/hooks/useWhatsAppChat';
 
 interface ChatPreview {
   senderNumber: string;
@@ -129,6 +130,9 @@ const WhatsAppChat: React.FC = () => {
 
   return (
     <div className="flex h-full w-full bg-[#111B21] overflow-hidden">
+      {/* Navigation Rail - far left like WhatsApp Web */}
+      <WhatsAppNavRail />
+
       {/* Sidebar - fixed left like WhatsApp Web */}
       <div className="w-[30%] min-w-[300px] max-w-[500px] h-full shrink-0">
         <WhatsAppSidebar
