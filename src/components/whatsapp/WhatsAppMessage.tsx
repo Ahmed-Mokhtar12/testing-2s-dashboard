@@ -25,7 +25,7 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2`}>
       <div
-        className={`max-w-[75%] rounded-lg shadow-sm relative ${
+        className={`max-w-[65%] rounded-lg shadow-sm relative ${
           isUser
             ? 'bg-[#DCF8C6] rounded-tr-none'
             : isHumanReply
