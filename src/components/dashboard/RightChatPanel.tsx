@@ -91,7 +91,7 @@ export const RightChatPanel: React.FC = () => {
         )}
       >
         {open && (
-          <div className="flex w-full h-full">
+          <div className="flex w-full h-full pt-6">
             {innerSidebar && (
               <div className="w-[200px] border-r border-border overflow-hidden">
                 <Sidebar
