@@ -15,6 +15,7 @@ export interface ChatSession {
 }
 
 const STORAGE_KEY = 'sera_chat_sessions_v1';
+const ACTIVE_KEY = 'sera_active_session_v1';
 const MAX_SESSIONS = 50;
 
 type StoredSession = Omit<ChatSession, 'timestamp' | 'messages'> & {
@@ -56,24 +57,49 @@ const writeStorage = (sessions: ChatSession[]) => {
   }
 };
 
+const readActiveId = (): string | null => {
+  try {
+    return localStorage.getItem(ACTIVE_KEY);
+  } catch {
+    return null;
+  }
+};
+
 const truncate = (text: string, len: number) =>
   !text ? '' : text.length > len ? `${text.slice(0, len)}…` : text;
 
 export const useSeraLocalSessions = () => {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(() => readActiveId());
   const { toast } = useToast();
 
-  // Load on mount
+  // Load sessions on mount
   useEffect(() => {
     setChatSessions(readStorage().sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+  }, []);
+
+  // Persist activeSessionId whenever it changes
+  useEffect(() => {
+    try {
+      if (activeSessionId) {
+        localStorage.setItem(ACTIVE_KEY, activeSessionId);
+      } else {
+        localStorage.removeItem(ACTIVE_KEY);
+      }
+    } catch (e) {
+      console.warn('Failed to persist active session id', e);
+    }
+  }, [activeSessionId]);
+
+  const setActiveSessionId = useCallback((id: string | null) => {
+    setActiveSessionIdState((prev) => (prev === id ? prev : id));
   }, []);
 
   const createNewSessionId = useCallback(() => `session_${crypto.randomUUID()}`, []);
 
   const createNewSession = useCallback(() => {
     const id = createNewSessionId();
-    setActiveSessionId(id);
+    setActiveSessionIdState(id);
     return id;
   }, [createNewSessionId]);
 
@@ -119,14 +145,14 @@ export const useSeraLocalSessions = () => {
         return next;
       });
 
-      if (!activeSessionId) setActiveSessionId(finalId);
+      if (activeSessionId !== finalId) setActiveSessionIdState(finalId);
     },
     [activeSessionId, createNewSessionId]
   );
 
   const selectSession = useCallback(
     (sessionId: string) => {
-      setActiveSessionId(sessionId);
+      setActiveSessionIdState(sessionId);
       const session = chatSessions.find((s) => s.id === sessionId);
       return session?.messages || [];
     },
@@ -140,7 +166,7 @@ export const useSeraLocalSessions = () => {
         writeStorage(next);
         return next;
       });
-      if (activeSessionId === sessionId) setActiveSessionId(null);
+      if (activeSessionId === sessionId) setActiveSessionIdState(null);
       toast({ title: 'Conversation removed' });
     },
     [activeSessionId, toast]
@@ -149,6 +175,7 @@ export const useSeraLocalSessions = () => {
   return {
     chatSessions,
     activeSessionId,
+    setActiveSessionId,
     saveChatMessage,
     createNewSession,
     selectSession,
