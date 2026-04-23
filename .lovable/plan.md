@@ -1,36 +1,47 @@
 
 
-## تحسين رسالة الخطأ عند محاولة المراسلة أثناء تحكّم AI
+## تكبير شعار Two Seasons وتوضيح زر Back to Dashboard
 
-### المشكلة
-في `/whatsapp`، حين يكون AI يتحكّم بالمحادثة (Take Over غير مفعّل) ويحاول الموظف إرسال رسالة للضيف، يظهر خطأ عام:
-> "Sorry, there was an error processing your message. Please try again."
+### التغييرات المطلوبة في `src/components/whatsapp/WhatsAppNavRail.tsx`
 
-السبب: الحارس (Guard) في `useWhatsAppChat.ts` السطر 308 يرمي خطأ "Conversation is currently under human control..." لكن الـ catch block يعرض رسالة عامة بدل التعليمات الواضحة.
+#### 1) تكبير دائرة شعار Two Seasons
+- زيادة حجم الحاوية من `w-7 h-7` إلى `w-10 h-10` لتملأ معظم زر الـ rail (الذي حجمه `w-12 h-12`).
+- إزالة `bg-white` و `ring-1 ring-gray-200` لأن الشعار نفسه واضح ولا يحتاج إطار.
+- استخدام `object-contain` بدل `object-cover` حتى يظهر الشعار كاملاً بدون قص.
+- النتيجة: شعار أكبر وأوضح بكثير داخل دائرة نظيفة.
 
-### الحل
-تعديل واحد بسيط في ملف واحد فقط: `src/hooks/useWhatsAppChat.ts` (الأسطر 333-344).
+#### 2) تحسين زر Back to Dashboard ليكون مفهوماً للمستخدم الجديد
+بدل أيقونة `LayoutDashboard` الغامضة، نستبدلها بحلّ مرئي أوضح:
 
-**المنطق الجديد** في الـ catch block:
-- إذا كان الخطأ بسبب الحارس (AI متحكّم والموظف حاول إرسال) → عرض رسالة إرشادية واضحة.
-- إذا كان فشل في إرسال WhatsApp أثناء Human mode → نفس رسالة الفشل الحالية.
-- إذا كان أي خطأ آخر → رسالة عامة.
+- **استخدام أيقونة `Home` من lucide-react** (أكثر شيوعاً وفهماً للرجوع للصفحة الرئيسية).
+- **إضافة label نصي صغير "Dashboard"** أسفل الأيقونة داخل نفس الزر.
+- **تمييز الزر بصرياً**: خلفية خضراء فاتحة دائمة `bg-[#E7FCE8]` ولون نص `text-[#128C7E]` (نفس ألوان WhatsApp البراند) ليبرز كزر إجراء مهم.
+- **توسيع الزر** من `h-12` إلى `h-14` ليستوعب الأيقونة + النص.
+- **الإبقاء على `title="Back to Dashboard"`** للـ tooltip عند hover.
 
-**الرسالة الإرشادية المقترحة (إنجليزية + عربية)**:
-> "⚠️ The AI is currently handling this conversation. Please click the **Take Over** button at the top to start replying to the guest manually."
+```text
+┌──────────┐
+│   🏠     │   ← Home icon
+│Dashboard │   ← نص صغير
+└──────────┘
+```
+
+#### 3) ترتيب نهائي للعمود السفلي (بدون تغيير منطقي)
+```text
+Back to Dashboard (الجديد بشكله الواضح)
+─────────────  (separator موجود)
+Settings
+Two Seasons logo (أكبر وأوضح)
+```
 
 ### تفاصيل تقنية
-- التحقّق من نوع الخطأ عبر `error.message?.includes('human control')` لمطابقة النص الذي يرميه الحارس في السطر 309.
-- لا تغييرات على n8n workflows ولا على الـ Edge Functions ولا على قاعدة البيانات.
-- لا تغييرات على مكونات الـ UI — الرسالة تظهر بنفس فقاعة رسالة النظام الحالية.
-
-### نطاق التغيير
-- ملف واحد: `src/hooks/useWhatsAppChat.ts`
-- ~10 أسطر فقط داخل الـ catch block.
+- ملف واحد فقط: `src/components/whatsapp/WhatsAppNavRail.tsx`.
+- استيراد `Home` بدل `LayoutDashboard` من `lucide-react`.
+- لا تغييرات على الـ routing أو على باقي مكونات `/whatsapp`.
+- لا تغييرات على n8n أو Edge Functions أو قاعدة البيانات.
 
 ### اختبار سريع بعد التطبيق
-1. تأكّد أن Take Over **غير مفعّل** (AI يتحكّم).
-2. اكتب رسالة في الـ input واضغط إرسال.
-3. تأكّد أن الرسالة الإرشادية الجديدة تظهر بدلاً من رسالة الخطأ القديمة.
-4. فعّل Take Over، أرسل رسالة، تأكّد أنها تصل للضيف عادةً.
+1. افتح `/whatsapp` وتأكّد أن شعار Two Seasons أكبر وأوضح في أسفل العمود الأيمن.
+2. تأكّد أن زر Back to Dashboard يظهر بأيقونة Home + كلمة "Dashboard" بخلفية خضراء فاتحة.
+3. اضغط على الزر وتأكد أنه ينقلك إلى `/dashboard`.
 
