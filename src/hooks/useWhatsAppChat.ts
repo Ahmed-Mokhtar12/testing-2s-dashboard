@@ -133,6 +133,7 @@ export const useWhatsAppChat = () => {
                 isUser: false,
                 isHumanReply: true,
                 timestamp: new Date(chat.created_at),
+                repliedByName: (chat as Record<string, unknown>)['replied_by_name'] as string | undefined,
               });
             } else if (chat['Ai Reply']) {
               historyMessages.push({
@@ -225,6 +226,7 @@ export const useWhatsAppChat = () => {
               isUser: false,
               isHumanReply: true,
               timestamp,
+              repliedByName: (chat['replied_by_name'] as string | undefined) ?? undefined,
             });
           } else if (chat['Ai Reply']) {
             newMessages.push({
@@ -313,6 +315,10 @@ export const useWhatsAppChat = () => {
       }
     }
 
+    // Resolve current user's first name for optimistic bubble
+    const { data: userData } = await supabase.auth.getUser();
+    const myFirstName = deriveFirstName(userData?.user ?? null);
+
     // Add outgoing message immediately to UI
     const outgoingMessage: WhatsAppMessage = {
       id: `out-${Date.now()}`,
@@ -321,6 +327,7 @@ export const useWhatsAppChat = () => {
       isHumanReply: isHumanControlled,
       timestamp: new Date(),
       attachment,
+      repliedByName: isHumanControlled ? myFirstName : undefined,
     };
 
     setMessages(prev => [...prev, outgoingMessage]);
