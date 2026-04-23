@@ -332,12 +332,23 @@ export const useWhatsAppChat = () => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      
+
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const isGuardBlock = errMsg.toLowerCase().includes('human control');
+
+      let content: string;
+      if (isGuardBlock) {
+        content =
+          '⚠️ The AI is currently handling this conversation. Please click the **Take Over** button at the top to start replying to the guest manually.\n\n⚠️ الذكاء الاصطناعي يدير هذه المحادثة حالياً. اضغط زر **Take Over** في الأعلى للرد على الضيف يدوياً.';
+      } else if (isHumanControlled) {
+        content = 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.';
+      } else {
+        content = 'Sorry, there was an error processing your message. Please try again.';
+      }
+
       const errorMessage: WhatsAppMessage = {
         id: `error-${Date.now()}`,
-        content: isHumanControlled 
-          ? 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.'
-          : 'Sorry, there was an error processing your message. Please try again.',
+        content,
         isUser: false,
         timestamp: new Date(),
       };
