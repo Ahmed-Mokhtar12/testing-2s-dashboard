@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { UploadedAttachment } from './useWhatsAppAttachment';
 
 export interface WhatsAppMessage {
   id: string;
@@ -9,6 +10,7 @@ export interface WhatsAppMessage {
   isHumanReply?: boolean;
   timestamp: Date;
   mediaUrl?: string;
+  attachment?: UploadedAttachment;
 }
 
 // Get or create persistent sender number
@@ -244,7 +246,7 @@ export const useWhatsAppChat = () => {
     }
   }, [isHumanControlled, senderNumber]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, attachment?: UploadedAttachment) => {
     // Add outgoing message immediately to UI
     const outgoingMessage: WhatsAppMessage = {
       id: `out-${Date.now()}`,
@@ -252,6 +254,7 @@ export const useWhatsAppChat = () => {
       isUser: false,
       isHumanReply: isHumanControlled,
       timestamp: new Date(),
+      attachment,
     };
 
     setMessages(prev => [...prev, outgoingMessage]);
@@ -264,6 +267,7 @@ export const useWhatsAppChat = () => {
           body: {
             message: content,
             recipientNumber: senderNumber,
+            attachment,
           },
         });
 
@@ -276,6 +280,7 @@ export const useWhatsAppChat = () => {
           body: {
             message: content,
             senderNumber,
+            attachment,
           },
         });
 
