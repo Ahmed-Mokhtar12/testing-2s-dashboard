@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MessageCircle, X, Plus, Settings, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import Sidebar from '@/components/Sidebar';
+import { SeraHistorySidebar } from '@/components/dashboard/SeraHistorySidebar';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import ChatContainer from '@/components/ChatContainer';
 import DocumentProcessingProgress from '@/components/DocumentProcessingProgress';
@@ -93,14 +93,13 @@ export const RightChatPanel: React.FC = () => {
         {open && (
           <div className="flex w-full h-full border-l border-border bg-card-gradient">
             {innerSidebar && (
-              <div className="w-[200px] border-r border-border overflow-hidden">
-                <Sidebar
-                  sidebarOpen={true}
+              <div className="w-[220px] border-r border-border overflow-hidden">
+                <SeraHistorySidebar
                   chatSessions={chatSessions}
                   activeSessionId={activeSessionId || currentSessionId}
-                  onNewChat={startNewChat}
                   onSessionSelect={handleSessionSelect}
                   onDeleteSession={handleDeleteSession}
+                  onClose={() => setInnerSidebar(false)}
                 />
               </div>
             )}
