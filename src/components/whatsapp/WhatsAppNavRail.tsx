@@ -7,11 +7,12 @@ import {
   Sparkles,
   Settings,
   User,
+  type LucideIcon,
 } from 'lucide-react';
 
 interface NavItem {
   key: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   label: string;
   badge?: number;
 }
