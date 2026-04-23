@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
 const WhatsAppHeader: React.FC = () => {
   return (
@@ -9,8 +10,12 @@ const WhatsAppHeader: React.FC = () => {
         <ArrowLeft size={24} />
       </Link>
       
-      <div className="w-10 h-10 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center flex-shrink-0">
-        <span className="text-white font-bold text-sm">TS</span>
+      <div className="w-10 h-10 rounded-full overflow-hidden bg-white flex items-center justify-center flex-shrink-0">
+        <img
+          src={twoSeasonsLogo}
+          alt="Two Seasons Hotel Dubai"
+          className="w-full h-full object-contain"
+        />
       </div>
       
       <div className="flex-1 min-w-0">
