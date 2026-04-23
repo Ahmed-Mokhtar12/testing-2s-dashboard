@@ -7,7 +7,7 @@ import WelcomeScreen from '@/components/WelcomeScreen';
 import ChatContainer from '@/components/ChatContainer';
 import DocumentProcessingProgress from '@/components/DocumentProcessingProgress';
 import { useChat } from '@/hooks/useChat';
-import { useChatSessions } from '@/hooks/useChatSessions';
+import { useSeraLocalSessions } from '@/hooks/useSeraLocalSessions';
 import { cn } from '@/lib/utils';
 import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
