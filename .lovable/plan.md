@@ -1,76 +1,77 @@
 
 
-## تفعيل زر `+` لإرفاق ومشاركة المستندات في شريط المحادثة
+## إصلاح منطق "الاستلام البشري" — منع AI من الرد أثناء التحكم البشري
 
-سأجعل زر الإضافة `+` على يسار حقل الإدخال في WhatsApp يعمل تماماً كما في WhatsApp Web الحقيقي — فتح قائمة منبثقة بخيارات إرفاق (مستند، صورة/فيديو، كاميرا) مع إمكانية اختيار الملفات وإرسالها داخل المحادثة.
+### المشكلة الحالية
+عندما تضغط "Take Over" وترد على العميل:
+1. ✅ رسالتك تصل للعميل بنجاح.
+2. ❌ عندما يرد العميل، الرسالة تصل إلى webhook الخاص بـ n8n (مباشرة من Meta WhatsApp Cloud)، و **n8n ليس لديه أي فكرة أن المحادثة تحت تحكم بشري** — فيرد الـ AI تلقائياً.
+3. ❌ لا يوجد آلية تمنع n8n من الرد أثناء وضع التحكم البشري.
 
-### ما سيحدث للمستخدم
-- الضغط على زر `+` يفتح قائمة منبثقة فوقه تحتوي على:
-  - 📄 **Document** — يفتح متصفح الملفات لاختيار PDF/Word/Excel/PowerPoint/TXT.
-  - 🖼️ **Photos & videos** — يفتح متصفح الملفات لاختيار صور أو فيديو.
-  - 📷 **Camera** — معطّل مع تلميح "Coming soon" (الكاميرا تتطلب صلاحيات إضافية، خارج النطاق).
-- بعد اختيار الملف:
-  - تظهر **بطاقة معاينة** فوق حقل الإدخال (اسم الملف + حجمه + أيقونة نوعه + زر × لإلغاء الإرفاق).
-  - يمكن للمستخدم كتابة تعليق نصي اختياري مع المرفق.
-  - الضغط على زر الإرسال يُرسل الرسالة + المرفق.
-- بعد الإرسال:
-  - تظهر **فقاعة رسالة** تحتوي على بطاقة المرفق (أيقونة + اسم الملف + الحجم + زر تنزيل) — مطابقة لشكل WhatsApp.
-  - الصور تُعرض كمعاينة مصغّرة قابلة للنقر.
-- أيقونة `+` تتلوّن بأخضر `#128C7E` عند فتح القائمة.
+السبب الجذري: حالة `is_human_controlled` مخزّنة في Supabase فقط، ولا تُفحَص في تدفّق n8n الذي يستقبل رسائل WhatsApp الواردة.
 
-### حدود الملفات
-- الحد الأقصى للحجم: **16 MB** لكل ملف (نفس حد WhatsApp).
-- الأنواع المسموحة:
-  - **مستندات**: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV.
-  - **صور/فيديو**: JPG, PNG, GIF, WEBP, MP4, MOV.
-- التحقّق من النوع والحجم قبل الإرفاق، مع رسالة `toast` خطأ واضحة عند التجاوز.
+### الحل: حارس قاعدة بيانات + فحص في n8n
 
-### التخزين
-استخدام **Supabase Storage** (Lovable Cloud) — bucket عام جديد باسم `whatsapp-attachments`:
-- مسار التخزين: `whatsapp-attachments/{senderNumber}/{timestamp}_{filename}`.
-- الملفات تُرفع أولاً، ثم يُرسل الرابط العام (`publicUrl`) ضمن payload الرسالة إلى n8n webhook.
-- سياسات RLS: قراءة عامة (للعرض في الفقاعات)، كتابة مفتوحة عبر الـ anon key (الواجهة فقط).
+سأبني طبقتين دفاع:
 
-### تكامل n8n
-سيُضاف إلى payload الـ `whatsapp-web-chat` Edge Function حقول جديدة:
+#### الطبقة 1 — دالة Postgres للاستعلام السريع
+إنشاء دالة `is_conversation_human_controlled(sender_number text)` ترجع `boolean`:
+- تبحث عن آخر صف لهذا الرقم.
+- ترجع `true` إذا كان `is_human_controlled = true` ولم يُسجَّل `released_to_ai_at` بعد ذلك.
+
+#### الطبقة 2 — Edge Function جديدة: `whatsapp-control-status`
+نقطة وصول `GET ?senderNumber=...` ترجع:
 ```json
-{
-  "message": "النص الاختياري",
-  "senderNumber": "...",
-  "attachment": {
-    "url": "https://.../public/whatsapp-attachments/...",
-    "filename": "report.pdf",
-    "mimeType": "application/pdf",
-    "size": 1234567,
-    "kind": "document" | "image" | "video"
-  }
-}
+{ "isHumanControlled": true|false, "lastReleaseAt": "..." }
 ```
-يبقى الحقل `attachment` اختيارياً (null عند عدم وجود مرفق) — لن يكسر التدفّق الحالي.
+هذه الدالة تُستدعى من **n8n** كأول خطوة في تدفّق الرد على العميل. إذا كانت `true` → n8n **يتجاوز عقدة AI نهائياً** ولا يرسل أي شيء للعميل. الرسالة تُحفظ فقط في `Chat History` كـ `Sender Message`.
 
-### عرض المرفقات في فقاعة الرسالة
-في `WhatsAppMessage.tsx`:
-- إذا كانت الرسالة تحوي `attachment.kind === "image"` → عرض `<img>` مصغّرة مع ضغطة لفتحها.
-- إذا كانت `kind === "document"` → بطاقة بيضاء بأيقونة نوع الملف (PDF أحمر، Word أزرق، Excel أخضر) + اسم الملف + الحجم + زر تنزيل.
-- إذا كانت `kind === "video"` → عنصر `<video controls>` مصغّر.
+#### الطبقة 3 — تحديث `whatsapp-web-chat` (الواجهة)
+عندما تكون المحادثة `is_human_controlled = true` والمستخدم يكتب من الواجهة في وضع AI خطأً، نمنع الإرسال ونعرض تحذير. (دفاع إضافي للحالات الحدّية.)
 
-### الملفات المعدّلة / المُنشأة
+### تدفّق العمل الجديد
+
+```text
+[العميل يرسل رسالة على WhatsApp]
+            ↓
+   [Meta Cloud → n8n webhook]
+            ↓
+   [n8n يستدعي whatsapp-control-status]
+            ↓
+   ┌────────┴────────┐
+   ↓                 ↓
+isHuman=true    isHuman=false
+   ↓                 ↓
+[احفظ فقط    [مرّر إلى AI agent
+كـ Sender     → احفظ Ai Reply
+Message،      → أرسل للعميل]
+لا ترد]
+```
+
+### عند الضغط على "Release" (تحرير للـ AI)
+- يُحدَّث `is_human_controlled = false` لكل صفوف الرقم (موجود حالياً ✅).
+- يُدرَج صف marker بـ `released_to_ai_at = now()` (موجود حالياً ✅).
+- **إضافة جديدة**: لن يرد الـ AI تلقائياً على رسالة سابقة. سيرد فقط عندما يرسل العميل رسالة **جديدة** بعد التحرير. هذا يتحقق طبيعياً لأن n8n يرد على رسائل واردة جديدة فقط.
+- السياق التاريخي يُمرَّر عبر `conversationContext` (موجود حالياً في `whatsapp-web-chat` ✅) ليكون الـ AI واعياً بما حدث أثناء تحكم البشري — لكن **بدون الرد على تلك الرسائل**.
+
+### الملفات
 
 **جديد**:
-1. `src/components/whatsapp/AttachmentMenu.tsx` — القائمة المنبثقة لزر `+`.
-2. `src/components/whatsapp/AttachmentPreview.tsx` — بطاقة المعاينة قبل الإرسال.
-3. `src/components/whatsapp/AttachmentBubble.tsx` — عرض المرفق داخل فقاعة الرسالة.
-4. `src/hooks/useWhatsAppAttachment.ts` — منطق الرفع لـ Supabase Storage + التحقّق.
-5. **Migration SQL** — إنشاء bucket `whatsapp-attachments` + RLS policies.
+1. **Migration SQL** — دالة `public.is_conversation_human_controlled(text) returns boolean` (SECURITY DEFINER).
+2. `supabase/functions/whatsapp-control-status/index.ts` — Edge Function عامة (verify_jwt=false) ترجع حالة التحكم لرقم معيّن. بدون مفاتيح، فقط استعلام للقراءة.
 
 **معدّل**:
-6. `src/components/whatsapp/WhatsAppInput.tsx` — لفّ زر `+` بـ `Popover` يحتوي `AttachmentMenu`، إدارة state للمرفق المختار، عرض `AttachmentPreview` فوق الحقل، تمرير المرفق إلى `onSend`.
-7. `src/components/whatsapp/WhatsAppMessage.tsx` — عرض `AttachmentBubble` عند وجود مرفق في الرسالة.
-8. `src/hooks/useWhatsAppChat.ts` — تمديد دالة الإرسال لقبول مرفق + إدراجه في `Chat History` + إرساله ضمن payload.
-9. `supabase/functions/whatsapp-web-chat/index.ts` — تمرير حقل `attachment` من الواجهة إلى webhook n8n.
+3. `src/hooks/useWhatsAppChat.ts` — منع إرسال رسالة عبر مسار AI (`whatsapp-web-chat`) إذا كانت `isHumanControlled = true` (دفاع إضافي).
+
+### ما يجب على المستخدم فعله في n8n (سأشرحه بوضوح)
+بعد نشر التغييرات، أُرفق دليلاً قصيراً يوضّح:
+- إضافة عقدة **HTTP Request** في بداية تدفّق n8n WhatsApp.
+- URL: `https://yczcebfaqerlwfalrbjn.supabase.co/functions/v1/whatsapp-control-status?senderNumber={{ $json.from }}`.
+- إضافة عقدة **IF** بعدها: إذا `isHumanControlled === true` → اذهب لمسار "حفظ فقط" (يحفظ الرسالة في Chat History بدون رد).
+- إذا `false` → التدفّق الحالي للـ AI كما هو.
 
 ### خارج النطاق
-- لن أُفعّل الكاميرا (تتطلب `getUserMedia` وصلاحيات).
-- لن أُضيف خيارات WhatsApp الأخرى (Sticker, Poll, Contact, Event) — يمكن في خطوات لاحقة.
-- لن أُغيّر شكل/سلوك زر الإيموجي أو الميكروفون أو الإرسال.
+- لن أُعدّل تدفّق n8n نفسه (لا أملك صلاحية تعديل سير عمل العميل) — سأعطي تعليمات واضحة.
+- لن أُغيّر شكل أو سلوك زر Take Over / Release في الواجهة — يعملان بشكل صحيح.
+- لن أضيف إشعارات للوكيل البشري عند رسالة جديدة (يمكن طلبه لاحقاً).
 
