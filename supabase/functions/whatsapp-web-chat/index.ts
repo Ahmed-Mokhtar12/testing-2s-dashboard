@@ -41,16 +41,19 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { message, senderNumber } = body;
+    const { message, senderNumber, attachment } = body;
 
     // Input validation
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    const hasAttachment = attachment && typeof attachment === 'object' && typeof attachment.url === 'string';
+    const trimmedMessage = typeof message === 'string' ? message.trim() : '';
+
+    if (!trimmedMessage && !hasAttachment) {
       return new Response(
-        JSON.stringify({ error: 'message is required and must be a non-empty string' }),
+        JSON.stringify({ error: 'message or attachment is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    if (message.length > 4096) {
+    if (trimmedMessage.length > 4096) {
       return new Response(
         JSON.stringify({ error: 'message must not exceed 4096 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const sanitizedMessage = message.trim();
+    const sanitizedMessage = trimmedMessage;
     const sanitizedSender = senderNumber.trim();
 
     console.log('📨 Received message from web:', { senderNumber: sanitizedSender });
@@ -137,6 +140,15 @@ Deno.serve(async (req) => {
     if (conversationContext) {
       n8nPayload.conversationContext = conversationContext;
     }
+    if (hasAttachment) {
+      n8nPayload.attachment = {
+        url: String(attachment.url),
+        filename: typeof attachment.filename === 'string' ? attachment.filename : '',
+        mimeType: typeof attachment.mimeType === 'string' ? attachment.mimeType : '',
+        size: typeof attachment.size === 'number' ? attachment.size : 0,
+        kind: typeof attachment.kind === 'string' ? attachment.kind : 'document',
+      };
+    }
 
     const n8nResponse = await fetch(webhookUrl, {
       method: 'POST',
@@ -159,14 +171,19 @@ Deno.serve(async (req) => {
     const aiResponse = n8nData.output || n8nData.response || n8nData.message || n8nData.text ||
       (typeof n8nData === 'string' ? n8nData : JSON.stringify(n8nData));
 
+    const insertPayload: Record<string, unknown> = {
+      'Sender Number': sanitizedSender,
+      'Sender Message': sanitizedMessage,
+      'Ai Reply': aiResponse,
+      created_at: new Date().toISOString(),
+    };
+    if (hasAttachment) {
+      insertPayload['Media'] = n8nPayload.attachment;
+    }
+
     const { error: insertError } = await supabase
       .from('Chat History')
-      .insert({
-        'Sender Number': sanitizedSender,
-        'Sender Message': sanitizedMessage,
-        'Ai Reply': aiResponse,
-        created_at: new Date().toISOString(),
-      });
+      .insert(insertPayload);
 
     if (insertError) {
       console.error('⚠️ Failed to save chat:', insertError);

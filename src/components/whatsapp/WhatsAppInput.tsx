@@ -2,25 +2,50 @@ import React, { useRef, useState } from 'react';
 import { Send, Smile, Plus, Mic } from 'lucide-react';
 import EmojiPicker, { EmojiStyle, Categories, EmojiClickData } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import AttachmentMenu from './AttachmentMenu';
+import AttachmentPreview from './AttachmentPreview';
+import { useWhatsAppAttachment, validateFile, type StagedAttachment, type UploadedAttachment } from '@/hooks/useWhatsAppAttachment';
+import { toast } from '@/hooks/use-toast';
 
 interface WhatsAppInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, attachment?: UploadedAttachment) => void;
   disabled?: boolean;
   isHumanMode?: boolean;
+  senderNumber: string;
 }
 
-const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHumanMode }) => {
+const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHumanMode, senderNumber }) => {
   const [message, setMessage] = useState('');
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+  const [isAttachOpen, setIsAttachOpen] = useState(false);
+  const [staged, setStaged] = useState<StagedAttachment | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const cursorRef = useRef<number>(0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { uploadAttachment, isUploading } = useWhatsAppAttachment();
+
+  const clearStaged = () => {
+    if (staged?.previewUrl) URL.revokeObjectURL(staged.previewUrl);
+    setStaged(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim() && !disabled) {
-      onSend(message.trim());
-      setMessage('');
+    if (disabled || isUploading) return;
+    if (!message.trim() && !staged) return;
+
+    let uploaded: UploadedAttachment | undefined;
+    if (staged) {
+      const result = await uploadAttachment(staged.file, senderNumber);
+      if (!result) return; // upload failed; keep staged so user can retry
+      uploaded = result;
     }
+
+    onSend(message.trim(), uploaded);
+    setMessage('');
+    clearStaged();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -51,17 +76,85 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
     });
   };
 
+  const handleFileSelected = (file: File) => {
+    const v = validateFile(file);
+    if (!v.ok || !v.kind) {
+      toast({ title: 'Cannot attach file', description: v.error, variant: 'destructive' });
+      return;
+    }
+    const previewUrl = v.kind === 'image' ? URL.createObjectURL(file) : undefined;
+    if (staged?.previewUrl) URL.revokeObjectURL(staged.previewUrl);
+    setStaged({ file, kind: v.kind, previewUrl });
+  };
+
+  const onDocChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) handleFileSelected(f);
+    e.target.value = '';
+  };
+
+  const onMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) handleFileSelected(f);
+    e.target.value = '';
+  };
+
+  const canSend = (message.trim().length > 0 || !!staged) && !isUploading;
+
   return (
     <div className="bg-[#F7F8FA] px-4 py-2.5">
+      {/* Hidden file inputs */}
+      <input
+        ref={docInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv"
+        className="hidden"
+        onChange={onDocChange}
+      />
+      <input
+        ref={mediaInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime"
+        className="hidden"
+        onChange={onMediaChange}
+      />
+
+      {staged && (
+        <AttachmentPreview attachment={staged} onRemove={clearStaged} />
+      )}
+
       <form onSubmit={handleSubmit} className="flex items-end gap-2">
-        <button
-          type="button"
-          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-[#54656F] hover:bg-[#E9EDEF] transition-colors"
-          aria-label="Attach"
-          title="Attach"
-        >
-          <Plus size={24} strokeWidth={2.2} />
-        </button>
+        <Popover open={isAttachOpen} onOpenChange={setIsAttachOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
+                isAttachOpen ? 'text-[#128C7E] bg-[#E9EDEF]' : 'text-[#54656F] hover:bg-[#E9EDEF]'
+              }`}
+              aria-label="Attach"
+              title="Attach"
+            >
+              <Plus size={24} strokeWidth={2.2} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="p-0 border-0 bg-transparent shadow-none w-auto"
+          >
+            <AttachmentMenu
+              onPickDocument={() => {
+                setIsAttachOpen(false);
+                docInputRef.current?.click();
+              }}
+              onPickMedia={() => {
+                setIsAttachOpen(false);
+                mediaInputRef.current?.click();
+              }}
+            />
+          </PopoverContent>
+        </Popover>
 
         <div className="flex-1 flex items-center bg-white rounded-lg px-2 shadow-sm">
           <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
@@ -115,16 +208,24 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
             onClick={trackCursor}
             onSelect={trackCursor}
             onKeyDown={handleKeyDown}
-            placeholder={isHumanMode ? "Type a message to the customer..." : "Type a message"}
-            disabled={disabled}
+            placeholder={
+              isUploading
+                ? 'Uploading...'
+                : staged
+                ? 'Add a caption (optional)'
+                : isHumanMode
+                ? 'Type a message to the customer...'
+                : 'Type a message'
+            }
+            disabled={disabled || isUploading}
             className="flex-1 bg-transparent px-2 py-2.5 text-[15px] text-[#111B21] placeholder:text-[#667781] focus:outline-none disabled:opacity-50"
           />
         </div>
 
-        {message.trim() ? (
+        {canSend ? (
           <button
             type="submit"
-            disabled={disabled}
+            disabled={disabled || isUploading}
             className="shrink-0 w-10 h-10 flex items-center justify-center bg-[#128C7E] text-white rounded-full hover:bg-[#075E54] transition-colors disabled:opacity-50"
             aria-label="Send message"
           >

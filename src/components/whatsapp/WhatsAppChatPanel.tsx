@@ -3,6 +3,7 @@ import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
+import type { UploadedAttachment } from '@/hooks/useWhatsAppAttachment';
 
 const avatarColors = [
   'bg-[#F44336]', 'bg-[#E91E63]', 'bg-[#9C27B0]', 'bg-[#673AB7]',
@@ -39,7 +40,7 @@ interface WhatsAppChatPanelProps {
   isLoadingHistory: boolean;
   isHumanControlled: boolean;
   isTogglingControl: boolean;
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, attachment?: UploadedAttachment) => void;
   onToggleHumanControl: () => void;
 }
 
@@ -195,6 +196,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
                 isHumanReply={msg.isHumanReply}
                 timestamp={msg.timestamp}
                 mediaUrl={msg.mediaUrl}
+                attachment={msg.attachment}
               />
             </div>
           );
@@ -227,10 +229,11 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
       </div>
 
       {/* Input area */}
-      <WhatsAppInput 
-        onSend={onSendMessage} 
+      <WhatsAppInput
+        onSend={onSendMessage}
         disabled={isLoading}
         isHumanMode={isHumanControlled}
+        senderNumber={senderNumber}
       />
     </div>
   );

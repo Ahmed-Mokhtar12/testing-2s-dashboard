@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { UploadedAttachment } from './useWhatsAppAttachment';
 
 export interface WhatsAppMessage {
   id: string;
@@ -9,6 +10,7 @@ export interface WhatsAppMessage {
   isHumanReply?: boolean;
   timestamp: Date;
   mediaUrl?: string;
+  attachment?: UploadedAttachment;
 }
 
 // Get or create persistent sender number
@@ -73,14 +75,26 @@ export const useWhatsAppChat = () => {
           setIsHumanControlled(latestRecord.is_human_controlled ?? false);
 
           data.forEach((chat) => {
-            // Extract media URL from Media column
+            // Extract attachment / media URL from Media column
             let mediaUrl: string | undefined;
+            let attachment: UploadedAttachment | undefined;
             if (chat['Media']) {
               if (typeof chat['Media'] === 'string') {
                 mediaUrl = chat['Media'];
               } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
-                const mediaObj = chat['Media'] as Record<string, unknown>;
-                mediaUrl = (mediaObj.url || mediaObj.link || mediaObj.src) as string | undefined;
+                const m = chat['Media'] as Record<string, unknown>;
+                const url = (m.url || m.link || m.src) as string | undefined;
+                if (url && typeof m.kind === 'string') {
+                  attachment = {
+                    url,
+                    filename: (m.filename as string) || 'file',
+                    mimeType: (m.mimeType as string) || '',
+                    size: (m.size as number) || 0,
+                    kind: m.kind as UploadedAttachment['kind'],
+                  };
+                } else {
+                  mediaUrl = url;
+                }
               }
             }
 
@@ -91,6 +105,7 @@ export const useWhatsAppChat = () => {
                 isUser: true,
                 timestamp: new Date(chat.created_at),
                 mediaUrl,
+                attachment,
               });
             }
 
@@ -149,14 +164,26 @@ export const useWhatsAppChat = () => {
         (payload) => {
           const chat = payload.new as Record<string, unknown>;
 
-          // Extract media URL
+          // Extract attachment / media URL
           let mediaUrl: string | undefined;
+          let attachment: UploadedAttachment | undefined;
           if (chat['Media']) {
             if (typeof chat['Media'] === 'string') {
               mediaUrl = chat['Media'] as string;
             } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
-              const mediaObj = chat['Media'] as Record<string, unknown>;
-              mediaUrl = (mediaObj.url || mediaObj.link || mediaObj.src) as string | undefined;
+              const m = chat['Media'] as Record<string, unknown>;
+              const url = (m.url || m.link || m.src) as string | undefined;
+              if (url && typeof m.kind === 'string') {
+                attachment = {
+                  url,
+                  filename: (m.filename as string) || 'file',
+                  mimeType: (m.mimeType as string) || '',
+                  size: (m.size as number) || 0,
+                  kind: m.kind as UploadedAttachment['kind'],
+                };
+              } else {
+                mediaUrl = url;
+              }
             }
           }
 
@@ -171,6 +198,7 @@ export const useWhatsAppChat = () => {
               isUser: true,
               timestamp,
               mediaUrl,
+              attachment,
             });
           }
 
@@ -244,7 +272,7 @@ export const useWhatsAppChat = () => {
     }
   }, [isHumanControlled, senderNumber]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, attachment?: UploadedAttachment) => {
     // Add outgoing message immediately to UI
     const outgoingMessage: WhatsAppMessage = {
       id: `out-${Date.now()}`,
@@ -252,6 +280,7 @@ export const useWhatsAppChat = () => {
       isUser: false,
       isHumanReply: isHumanControlled,
       timestamp: new Date(),
+      attachment,
     };
 
     setMessages(prev => [...prev, outgoingMessage]);
@@ -264,6 +293,7 @@ export const useWhatsAppChat = () => {
           body: {
             message: content,
             recipientNumber: senderNumber,
+            attachment,
           },
         });
 
@@ -276,6 +306,7 @@ export const useWhatsAppChat = () => {
           body: {
             message: content,
             senderNumber,
+            attachment,
           },
         });
 
