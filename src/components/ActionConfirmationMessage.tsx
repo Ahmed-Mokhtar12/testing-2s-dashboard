@@ -21,8 +21,8 @@ const ActionConfirmationMessage: React.FC<ActionConfirmationMessageProps> = ({
 }) => {
   const [editableData, setEditableData] = useState<ActionData>(actionData);
 
-  // WhatsApp sending is disabled — never render a confirmation card for it.
-  if (actionData.type === 'whatsapp') {
+  // Email and WhatsApp sending are disabled — never render a confirmation card for them.
+  if (actionData.type === 'whatsapp' || actionData.type === 'email') {
     return null;
   }
 
