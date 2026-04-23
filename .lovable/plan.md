@@ -1,37 +1,84 @@
 
 
-## مزامنة `activeSessionId` بين `useChat` و `useSeraLocalSessions`
+## خطة إعداد المصادقة (Login فقط + email confirmation)
 
-### المشكلة
-الآن `useChat` يحتفظ بـ `currentSessionId` داخلي منفصل عن `activeSessionId` في `useSeraLocalSessions`. عند بدء محادثة جديدة من داخل `useChat` (عبر `createNewSessionId`)، الـ hook الخارجي لا يعرف بالـ session الجديد، فلا يتم تحديث `activeSessionId` ولا تظهر الجلسة كنشطة في الـ sidebar حتى يتم حفظ أول رسالة. كذلك عند إعادة render للـ `RightChatPanel`، الـ `activeSessionId` يبدأ دائمًا `null` لأنه state محلي بدون persistence.
+### المرحلة 1: قاعدة البيانات (Migration واحدة)
 
-### الحل
+#### 1.1 حذف الـ trigger المكسور
+```sql
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
+```
+سبب: الـ function تستهدف جدول `profiles` غير موجود → سيكسر التسجيل.
 
-#### 1. `src/hooks/useSeraLocalSessions.ts`
-- **Persist `activeSessionId`** في `localStorage` تحت مفتاح `sera_active_session_v1`:
-  - تهيئة الـ state عبر lazy initializer يقرأ من الـ storage.
-  - `useEffect` يكتب القيمة عند أي تغيير (يمسح المفتاح إذا كانت `null`).
-- **إضافة setter صريح** `setActiveSessionId` ضمن القيم المُرجَعة من الـ hook ليتمكن المستهلك من المزامنة من الخارج.
-- التأكد أن `createNewSession`, `selectSession`, `deleteSession` تستمر تحديث الـ state (موجود فعلاً، لكن نضمن أن الـ persistence effect يلتقطها).
+#### 1.2 تشديد RLS — تقييد كل القراءة على المستخدمين المسجّلين فقط
 
-#### 2. `src/hooks/useChat.ts`
-- استقبال prop جديد اختياري: `onSessionIdChange?: (sessionId: string | null) => void`.
-- الإبقاء على `currentSessionId` المحلي لكن:
-  - مزامنته مع `activeSessionId` القادم من الـ props عبر `useEffect` (عند تغيّر `activeSessionId` الخارجي → تحديث الـ state الداخلي).
-  - عند تغيّر `currentSessionId` داخليًا (مثلاً بعد `createNewSessionId` في `useMessageSending`) → استدعاء `onSessionIdChange` لإبلاغ الـ parent.
+**الجداول المتأثرة (تحويل من `public` → `authenticated` only):**
+- `Chat History` — استبدال السياسات الحالية الفضفاضة
+- `reviews`, `email_threads`, `welcome_message_success_log`
+- `info_email_audit_log`, `social_engagement_logs`
+- `Two Seasons Competitor Hotel room Rates`
+- `Sop`, `Conducted Training`, `LongTermMemory`, `N8N_2S`
+- `khaldia_reviews`, `conducted_training` — إضافة سياسة قراءة للمسجّلين
 
-#### 3. `src/components/dashboard/RightChatPanel.tsx`
-- استخراج `setActiveSessionId` من `useSeraLocalSessions`.
-- تمرير `onSessionIdChange={setActiveSessionId}` إلى `useChat`.
-- النتيجة: عند إنشاء session جديد من `useChat`، يُرفع للـ hook الخارجي ويُحفظ في localStorage فورًا، ويظهر highlighted في الـ sidebar حتى قبل حفظ أول رد.
+**النموذج المُطبَّق على كل جدول:**
+```sql
+DROP POLICY IF EXISTS "..." ON public."...";
+CREATE POLICY "Authenticated users can read X"
+  ON public."X" FOR SELECT TO authenticated USING (true);
+```
 
-### الملفات المعدّلة
-- `src/hooks/useSeraLocalSessions.ts` — persistence للـ `activeSessionId` + إضافة setter.
-- `src/hooks/useChat.ts` — قبول `onSessionIdChange` ومزامنة ثنائية الاتجاه مع `activeSessionId`.
-- `src/components/dashboard/RightChatPanel.tsx` — توصيل الـ setter بين الـ hookين.
+#### 1.3 منع التسجيل الذاتي على مستوى DB
+لا حاجة لتغيير DB — سنعطّل sign-up من الـ UI ومن إعدادات Supabase Auth (يدويًا من اللوحة، أو عبر تعطيل صفحة sign-up فقط).
+
+---
+
+### المرحلة 2: الكود (Frontend)
+
+#### 2.1 ملفات جديدة
+- **`src/contexts/AuthContext.tsx`** — Provider يدير `user`/`session` عبر `onAuthStateChange` (يُسجَّل **قبل** `getSession()` كما يُلزم الـ guide).
+- **`src/hooks/useAuth.ts`** — wrapper بسيط للسياق.
+- **`src/components/ProtectedRoute.tsx`** — يلفّ الـ routes الحساسة، يعيد التوجيه لـ `/auth` عند عدم وجود session، مع `loading` state أثناء التحقق.
+- **`src/pages/Auth.tsx`** — صفحة بنموذج Login فقط (email + password) + رابط "Forgot password?".
+- **`src/pages/ResetPassword.tsx`** — صفحة لإعادة تعيين كلمة المرور (تتعامل مع `type=recovery` في الـ hash).
+- **`src/components/UserMenu.tsx`** — قائمة منسدلة في الـ top bar تعرض البريد + زر Logout.
+
+#### 2.2 ملفات معدّلة
+- **`src/App.tsx`**:
+  - لفّ التطبيق بـ `<AuthProvider>`.
+  - إضافة `/auth` و `/reset-password` كـ public routes.
+  - لفّ كل الـ dashboard routes (`/`, `/dashboard/*`, `/whatsapp*`) بـ `<ProtectedRoute>`.
+- **`src/layouts/DashboardShell.tsx`** — إضافة `<UserMenu />` في الـ top bar (يسار/يمين الـ DateRangePicker).
+- **`src/hooks/useSeraLocalSessions.ts`** — جعل الـ storage key يتضمن `user.id` لمنع تسريب محادثات Sera بين المستخدمين على نفس المتصفح.
+
+#### 2.3 سلوك email confirmation
+- في `signUp()` المستقبلي (إن أُعيد تفعيله): `emailRedirectTo: window.location.origin`.
+- في `resetPasswordForEmail()`: `redirectTo: window.location.origin + '/reset-password'`.
+- بما أن sign-up معطّل من UI، الحسابات تُنشأ يدويًا من Supabase Dashboard → المستخدم سيتلقى إيميل دعوة → يضغط الرابط → يدخل لتعيين كلمة مرور.
+
+---
+
+### المرحلة 3: التحقق
+
+1. **Build check** — تشغيل `npm run build` للتأكد من عدم وجود أخطاء TypeScript.
+2. **Security scan** — تشغيل `security--run_security_scan` بعد الـ migration.
+3. **اختبار يدوي بسيط** — التأكد أن `/auth` تُحمَّل، والـ redirect يعمل عند الوصول لـ `/dashboard`.
+
+---
+
+### ⚠️ ملاحظة مهمة للمستخدم بعد التنفيذ
+
+ستحتاج تنفيذ هذه الخطوات **يدويًا في Supabase Dashboard**:
+
+1. **تعطيل sign-up** (Authentication → Providers → Email → ❌ Enable Sign-ups).
+2. **تفعيل Email Confirmations** (Authentication → Settings → ✅ Confirm email).
+3. **إنشاء أول حساب admin** يدويًا من (Authentication → Users → Add user → Send invite).
+4. **(اختياري) لتفعيل Lovable auth email templates مع برانديق Two Seasons** — يحتاج إعداد email domain منفصل (يمكن طلبه لاحقًا).
+
+---
 
 ### لا تأثير على
-- بنية الرسائل أو الـ storage الحالي للـ sessions.
-- تدفق الحفظ (`saveChatMessage`) أو حذف الجلسات.
-- الـ UI للـ sidebar أو الهيدر.
+- منطق الـ chat-with-data أو أي edge function أخرى.
+- بنية `useChat` و `useSeraLocalSessions` (سوى scoping الـ key).
+- الـ UI للـ dashboard pages أو الـ sidebar.
 
