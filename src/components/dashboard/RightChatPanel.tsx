@@ -110,8 +110,8 @@ export const RightChatPanel: React.FC = () => {
                   onClick={() => setInnerSidebar((v) => !v)}
                   className="flex items-center gap-2 hover:bg-background/40 rounded-md px-1.5 py-1 transition-colors"
                 >
-                  <div className="h-7 w-7 rounded-full bg-card border border-primary/40 overflow-hidden flex items-center justify-center">
-                    <img src={twoSeasonsLogo} alt="Sera" className="w-5 h-5 object-contain" />
+                  <div className="h-7 w-7 rounded-full bg-card border border-primary/40 overflow-hidden flex items-center justify-center shrink-0">
+                    <img src={twoSeasonsLogo} alt="Sera" className="w-full h-full object-cover" />
                   </div>
                   <span className="text-sm font-medium text-foreground">Sera</span>
                   <ChevronDown size={14} className="text-muted-foreground" />
