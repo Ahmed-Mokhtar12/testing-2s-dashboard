@@ -41,16 +41,19 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { message, senderNumber } = body;
+    const { message, senderNumber, attachment } = body;
 
     // Input validation
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    const hasAttachment = attachment && typeof attachment === 'object' && typeof attachment.url === 'string';
+    const trimmedMessage = typeof message === 'string' ? message.trim() : '';
+
+    if (!trimmedMessage && !hasAttachment) {
       return new Response(
-        JSON.stringify({ error: 'message is required and must be a non-empty string' }),
+        JSON.stringify({ error: 'message or attachment is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    if (message.length > 4096) {
+    if (trimmedMessage.length > 4096) {
       return new Response(
         JSON.stringify({ error: 'message must not exceed 4096 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const sanitizedMessage = message.trim();
+    const sanitizedMessage = trimmedMessage;
     const sanitizedSender = senderNumber.trim();
 
     console.log('📨 Received message from web:', { senderNumber: sanitizedSender });
