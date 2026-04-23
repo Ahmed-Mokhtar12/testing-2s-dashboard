@@ -86,12 +86,12 @@ export const RightChatPanel: React.FC = () => {
       {/* Side panel — pushes layout */}
       <aside
         className={cn(
-          'shrink-0 h-full border-l border-border bg-card-gradient transition-[width] duration-300 ease-out overflow-hidden flex',
+          'shrink-0 h-full overflow-hidden pt-6 transition-[width] duration-300 ease-out flex',
           open ? 'w-[420px]' : 'w-0'
         )}
       >
         {open && (
-          <div className="flex w-full h-full pt-6">
+          <div className="flex w-full h-[calc(100%-1.5rem)] border-l border-border bg-card-gradient">
             {innerSidebar && (
               <div className="w-[200px] border-r border-border overflow-hidden">
                 <Sidebar
