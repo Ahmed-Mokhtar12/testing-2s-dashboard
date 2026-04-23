@@ -6,6 +6,7 @@ import { RightChatPanel } from '@/components/dashboard/RightChatPanel';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { DateRangeProvider } from '@/contexts/DateRangeContext';
 import { RealtimeBridge } from '@/components/dashboard/RealtimeBridge';
+import { UserMenu } from '@/components/UserMenu';
 
 export const DashboardShell: React.FC = () => {
   return (
@@ -37,6 +38,7 @@ export const DashboardShell: React.FC = () => {
                   </svg>
                 </Link>
                 <DateRangePicker />
+                <UserMenu />
               </div>
             </header>
 
