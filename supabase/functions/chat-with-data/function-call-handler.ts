@@ -30,47 +30,11 @@ export class FunctionCallHandler {
   }
   
   getActionFunctions(): any[] {
-    return [
-      {
-        name: 'send_email',
-        description: 'Send an email to a specified recipient',
-        parameters: {
-          type: 'object',
-          properties: {
-            recipient: { type: 'string', description: 'Email address of the recipient' },
-            subject: { type: 'string', description: 'Subject line of the email' },
-            message: { type: 'string', description: 'Email message content' }
-          },
-          required: ['recipient', 'subject', 'message']
-        }
-      },
-      {
-        name: 'send_sms',
-        description: 'Send an SMS to a specified phone number. Use this when the user asks to send SMS or text message.',
-        parameters: {
-          type: 'object',
-          properties: {
-            phoneNumber: { type: 'string', description: 'Phone number to send SMS to' },
-            message: { type: 'string', description: 'SMS message content' }
-          },
-          required: ['phoneNumber', 'message']
-        }
-      },
-      {
-        name: 'send_whatsapp',
-        description: 'Send a WhatsApp message to a specified phone number',
-        parameters: {
-          type: 'object',
-          properties: {
-            phoneNumber: { type: 'string', description: 'Phone number to send WhatsApp message to' },
-            message: { type: 'string', description: 'WhatsApp message content' }
-          },
-          required: ['phoneNumber', 'message']
-        }
-      }
-    ];
+    // Sending actions (email, SMS, WhatsApp) are disabled in this product.
+    // Sera should always respond with text — never invoke a send_* tool.
+    return [];
   }
-  
+
   async executeToolCalls(
     toolCalls: ToolCall[], 
     baseMessages: OpenAIMessage[]
