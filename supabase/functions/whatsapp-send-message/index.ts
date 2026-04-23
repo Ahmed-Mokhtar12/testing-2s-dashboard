@@ -45,6 +45,7 @@ serve(async (req) => {
     const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
     console.log('Using Phone Number ID:', WHATSAPP_PHONE_NUMBER_ID ? `${WHATSAPP_PHONE_NUMBER_ID.slice(0, 6)}...` : 'NOT SET');
     console.log('Access Token set:', !!WHATSAPP_ACCESS_TOKEN);
@@ -68,6 +69,40 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+
+    // Resolve current authenticated user (for human-reply attribution)
+    let repliedByUserId: string | null = null;
+    let repliedByName: string | null = null;
+    try {
+      const authHeader = req.headers.get('Authorization') || '';
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (token && SUPABASE_URL && SUPABASE_ANON_KEY) {
+        const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        const { data: userRes } = await userClient.auth.getUser();
+        const u = userRes?.user;
+        if (u) {
+          repliedByUserId = u.id;
+          const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+          const fromMeta = typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
+          if (fromMeta) {
+            repliedByName = fromMeta;
+          } else {
+            const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+            if (fullName) {
+              repliedByName = fullName.split(/\s+/)[0];
+            } else {
+              const local = (u.email ?? '').split('@')[0] ?? '';
+              const raw = local.split(/[._-]/)[0] ?? '';
+              if (raw) repliedByName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+            }
+          }
+        }
+      }
+    } catch (authErr) {
+      console.warn('Could not resolve user for attribution:', authErr);
+    }
 
     // Handle takeover/release actions
     if (action === 'takeover' || action === 'release') {
