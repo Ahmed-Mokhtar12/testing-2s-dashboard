@@ -140,6 +140,15 @@ Deno.serve(async (req) => {
     if (conversationContext) {
       n8nPayload.conversationContext = conversationContext;
     }
+    if (hasAttachment) {
+      n8nPayload.attachment = {
+        url: String(attachment.url),
+        filename: typeof attachment.filename === 'string' ? attachment.filename : '',
+        mimeType: typeof attachment.mimeType === 'string' ? attachment.mimeType : '',
+        size: typeof attachment.size === 'number' ? attachment.size : 0,
+        kind: typeof attachment.kind === 'string' ? attachment.kind : 'document',
+      };
+    }
 
     const n8nResponse = await fetch(webhookUrl, {
       method: 'POST',
