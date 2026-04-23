@@ -1,43 +1,57 @@
 
 
-## الهدف
-محاذاة لوحة Sera (يمين) مع المحتوى الرئيسي (يسار) بحيث يبدآن **من نفس الخط الأفقي** بالضبط، تحت الـ topbar.
+## إعادة تصميم الـ Sidebar داخل لوحة Sera
 
-## المشكلة الحالية
-- `RightChatPanel` يستخدم `h-screen` ويبدأ من أعلى الصفحة (Y=0)
-- المحتوى الرئيسي على اليسار يبدأ **تحت** topbar بارتفاع `h-14` (56px)
-- النتيجة: عنوان "Competitor Rates" يقع أوطى من رأس Sera بـ ~56px
+### المشاكل الحالية
+1. **لا يوجد زر إغلاق** للـ inner sidebar — فُتح ولا طريقة لإقفاله من داخله.
+2. **لا يعرض المحادثات السابقة** بشكل صحيح — يظهر فقط الهيدر "Two Seasons GPT" + زر New Chat + أيقونة Settings، والقائمة فارغة.
+3. **زر "+ New Chat" مكرر** — موجود أصلاً في هيدر Sera الأيمن (`+`).
+4. **هيدر "Two Seasons GPT" غير ضروري** داخل لوحة Sera (تكرار بصري).
 
-## الحل المقترح
+### الحل المقترح
 
-تعديل واحد فقط في `src/layouts/DashboardShell.tsx`:
+إنشاء مكوّن جديد مخصص للـ inner sidebar بدلاً من إعادة استخدام `Sidebar.tsx` العام (المصمم أصلاً للصفحة الكاملة `/`).
 
-نقل `<RightChatPanel />` من خارج العمود الرئيسي إلى **داخل صف يبدأ تحت الـ topbar**، بحيث:
-- الـ topbar يصبح ممتدًا فوق كامل العرض (sidebar + main + Sera)
-- Sera وmain content يبدآن من نفس النقطة (تحت الـ topbar مباشرة)
+**ملف جديد:** `src/components/dashboard/SeraHistorySidebar.tsx`
 
-### التغيير البنيوي
+#### المحتوى الجديد للـ sidebar:
 
 ```text
-قبل:                          بعد:
-┌─────┬──────────────┬──┐    ┌─────┬─────────────────┐
-│Side │ Topbar       │  │    │Side │ Topbar (full)   │
-│bar  ├──────────────┤Se│    │bar  ├──────────┬──────┤
-│     │ Main         │ra│    │     │ Main     │ Sera │
-└─────┴──────────────┴──┘    └─────┴──────────┴──────┘
+┌──────────────────────────┐
+│ Chat History         [×] │ ← هيدر بسيط + زر إغلاق
+├──────────────────────────┤
+│ 🔍 Search conversations  │ ← (اختياري) بحث
+├──────────────────────────┤
+│ ▸ Today                  │
+│   • Rate vs competitors  │ ← المحادثات السابقة
+│   • Latest reviews    🗑 │   مع زر حذف عند hover
+│ ▸ Yesterday              │
+│   • WhatsApp summary     │
+│ ▸ Previous 7 days        │
+│   • ...                  │
+└──────────────────────────┘
 ```
 
-### تفاصيل تقنية
-1. في `DashboardShell.tsx`: نقل `<RightChatPanel />` ليكون **شقيقًا للـ `<main>`** داخل نفس الـ flex row، وإزالة `h-screen` منه (يصبح يأخذ ارتفاع المتاح تلقائيًا).
-2. في `RightChatPanel.tsx`: تغيير `h-screen` إلى `h-full` على الـ `<aside>` لأنه أصبح داخل container بارتفاع محدود.
-3. الـ floating trigger button (الزر العائم لفتح Sera) يبقى كما هو `fixed bottom-6 right-6`.
+#### المواصفات التقنية
 
-### ملفات معدّلة
-- `src/layouts/DashboardShell.tsx` — إعادة ترتيب الصفوف
-- `src/components/dashboard/RightChatPanel.tsx` — `h-screen` → `h-full`
+1. **زر إغلاق (×)** في الزاوية اليمنى العليا للـ sidebar — يستدعي `setInnerSidebar(false)` عبر prop جديد `onClose`.
+2. **حذف زر "+ New Chat"** ورمز Settings و LayoutDashboard و LogIn من الـ inner sidebar (تبقى موجودة في هيدر Sera الرئيسي).
+3. **حذف هيدر "Two Seasons GPT"** — نستبدله بعنوان مبسّط "Chat History".
+4. **عرض المحادثات السابقة** من `chatSessions` (آتية أصلاً من `useChatSessions`) — مع تجميع اختياري حسب التاريخ (Today / Yesterday / Previous).
+5. **تنسيق متّسق** مع ثيم لوحة Sera: `bg-card/40`, `border-border`, `text-foreground`, `text-muted-foreground` — بدون ألوان hardcoded مثل `#1E1E1E`.
+6. **تفاعل العنصر:** click → اختيار الجلسة، hover → إظهار أيقونة الحذف.
+
+#### تعديل `RightChatPanel.tsx`
+
+- استبدال `<Sidebar … />` (السطور 97–104) بـ `<SeraHistorySidebar … onClose={() => setInnerSidebar(false)} />`.
+- تمرير نفس الـ props الحالية: `chatSessions`, `activeSessionId`, `onSessionSelect`, `onDeleteSession`.
+
+### الملفات المعدّلة
+- **جديد:** `src/components/dashboard/SeraHistorySidebar.tsx`
+- **تعديل:** `src/components/dashboard/RightChatPanel.tsx` (استبدال المكوّن المستخدم في الـ inner sidebar فقط)
 
 ### لا تأثير على
-- وظائف Sera (الشات، الجلسات، الرفع)
-- الـ sidebar الأيسر
-- الزر العائم
+- `src/components/Sidebar.tsx` يبقى كما هو (مستخدم في صفحة `/` الرئيسية).
+- منطق `useChatSessions` و حفظ/تحميل المحادثات.
+- الزر العائم وهيدر Sera الرئيسي.
 
