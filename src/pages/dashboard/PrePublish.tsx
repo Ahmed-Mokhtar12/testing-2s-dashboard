@@ -151,7 +151,7 @@ export default function PrePublish() {
     <div className="space-y-6">
       <SectionHeader
         title="Pre-publish checklist"
-        description="Verify the app is ready for production deployment."
+        subtitle="Verify the app is ready for production deployment."
       />
 
       <Card>
