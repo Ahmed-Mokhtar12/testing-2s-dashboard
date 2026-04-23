@@ -2,12 +2,12 @@ import React, { useRef, useEffect } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import TypingIndicator from '@/components/TypingIndicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Message } from '@/types/chat';
+import { Message, ActionData } from '@/types/chat';
 
 interface MessageListProps {
   messages: Message[];
   isTyping: boolean;
-  onActionConfirm?: (messageId: string, actionData: any) => void;
+  onActionConfirm?: (messageId: string, actionData: ActionData) => void;
   onActionCancel?: (messageId: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;

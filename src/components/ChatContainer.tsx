@@ -2,7 +2,7 @@
 import React from 'react';
 import MessageList from '@/components/MessageList';
 import InputBar from '@/components/InputBar';
-import { Message } from '@/types/chat';
+import { Message, ActionData } from '@/types/chat';
 
 interface ChatContainerProps {
   messages: Message[];
@@ -12,7 +12,7 @@ interface ChatContainerProps {
   onSendMessage: () => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
   onFileUpload: (file: File) => void;
-  onActionConfirm?: (messageId: string, actionData: any) => void;
+  onActionConfirm?: (messageId: string, actionData: ActionData) => void;
   onActionCancel?: (messageId: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
