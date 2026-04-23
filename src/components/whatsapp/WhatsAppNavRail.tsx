@@ -7,7 +7,7 @@ import {
   Users,
   Sparkles,
   Settings,
-  User,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
 import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
@@ -29,7 +29,7 @@ const topItems: NavItem[] = [
 
 const bottomItems: NavItem[] = [
   { key: 'settings', icon: Settings, label: 'Settings' },
-  { key: 'profile', icon: User, label: 'Profile' },
+  { key: 'two-seasons', icon: 'two-seasons-logo', label: 'Two Seasons' },
 ];
 
 const WhatsAppNavRail: React.FC = () => {
@@ -83,15 +83,9 @@ const WhatsAppNavRail: React.FC = () => {
         <button
           onClick={() => navigate('/dashboard')}
           title="Back to Dashboard"
-          className="w-12 h-12 flex items-center justify-center rounded-lg hover:bg-[#E9EDEF] transition-colors"
+          className="w-12 h-12 flex items-center justify-center rounded-lg text-[#54656F] hover:bg-[#E9EDEF] hover:text-[#128C7E] transition-colors"
         >
-          <span className="w-7 h-7 rounded-full overflow-hidden bg-white flex items-center justify-center ring-1 ring-gray-200">
-            <img
-              src={twoSeasonsLogo}
-              alt="Back to Dashboard"
-              className="w-full h-full object-cover"
-            />
-          </span>
+          <LayoutDashboard size={22} />
         </button>
         <div className="w-8 h-px bg-gray-300 my-1" />
         {bottomItems.map(renderItem)}
