@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,15 +20,13 @@ const InputBar: React.FC<InputBarProps> = ({
   isTyping,
   onInputChange,
   onSendMessage,
-  onKeyPress,
-  onSendWithFiles
+  onSendWithFiles,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [textareaHeight, setTextareaHeight] = useState(50);
   const { stagedFiles, addFile, removeFile, clearFiles } = useFileStaging();
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -41,13 +38,8 @@ const InputBar: React.FC<InputBarProps> = ({
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      addFile(file);
-    }
-    // Reset the input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (file) addFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSendMessage = () => {
@@ -59,7 +51,6 @@ const InputBar: React.FC<InputBarProps> = ({
     }
   };
 
-  // Handle key presses for ChatGPT-style behavior
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -69,15 +60,12 @@ const InputBar: React.FC<InputBarProps> = ({
     }
   };
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
-  };
+  const triggerFileUpload = () => fileInputRef.current?.click();
 
   return (
-    <div className="border-t bg-white">
+    <div className="border-t border-border bg-transparent">
       <div className="px-4 py-4">
         <div className="space-y-3 max-w-3xl mx-auto">
-          {/* File attachment pills */}
           {stagedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {stagedFiles.map((file, index) => (
@@ -89,28 +77,34 @@ const InputBar: React.FC<InputBarProps> = ({
               ))}
             </div>
           )}
-          
-          <div className="flex items-end space-x-3">
+
+          <div className="flex items-end gap-2">
             <div className="flex-1 relative">
-              <div className="relative rounded-2xl border border-gray-300 bg-white shadow-sm focus-within:border-[#C8A351] focus-within:ring-1 focus-within:ring-[#C8A351]">
+              <div className="relative rounded-2xl bg-card/80 border border-border shadow-card-soft backdrop-blur transition-all focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/40">
                 <Textarea
                   ref={textareaRef}
                   value={inputValue}
                   onChange={(e) => onInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask something... (Shift+Enter for new line)"
-                  className="border-0 rounded-2xl resize-none bg-transparent px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-0 focus:outline-none min-h-[50px] max-h-[200px] pr-20 overflow-y-auto"
+                  placeholder="Ask Sera anything…"
+                  className="border-0 rounded-2xl resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:ring-0 focus:outline-none min-h-[50px] max-h-[200px] pr-20 overflow-y-auto"
                   disabled={isTyping}
                   style={{ height: `${textareaHeight}px` }}
                 />
-                <div className="absolute right-3 flex items-center gap-2" style={{ top: textareaHeight <= 50 ? '50%' : '16px', transform: textareaHeight <= 50 ? 'translateY(-50%)' : 'none' }}>
-                  <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+                <div
+                  className="absolute right-3 flex items-center gap-1"
+                  style={{
+                    top: textareaHeight <= 50 ? '50%' : '14px',
+                    transform: textareaHeight <= 50 ? 'translateY(-50%)' : 'none',
+                  }}
+                >
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8 p-0">
                     <Mic size={16} />
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-gray-400 hover:text-gray-600"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8 p-0"
                     onClick={triggerFileUpload}
                     disabled={isTyping}
                   >
@@ -122,15 +116,14 @@ const InputBar: React.FC<InputBarProps> = ({
             <Button
               onClick={handleSendMessage}
               disabled={(!inputValue.trim() && stagedFiles.length === 0) || isTyping}
-              className="rounded-2xl px-6 py-3 bg-[#C8A351] hover:bg-[#B8934A] text-white font-medium transition-colors"
+              className="rounded-2xl h-[50px] w-[50px] p-0 bg-primary-gradient text-primary-foreground glow-primary hover:scale-105 transition-transform disabled:opacity-40 disabled:hover:scale-100"
             >
-              <Send size={16} />
+              <Send size={18} />
             </Button>
           </div>
         </div>
       </div>
-      
-      {/* Hidden file input */}
+
       <input
         type="file"
         ref={fileInputRef}
