@@ -106,13 +106,6 @@ const InputBar: React.FC<InputBarProps> = ({
               <Paperclip size={14} />
             </Button>
             <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-background/60"
-            >
-              <Mic size={14} />
-            </Button>
-            <Button
               onClick={handleSendMessage}
               disabled={!canSend}
               className="h-7 w-7 p-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
