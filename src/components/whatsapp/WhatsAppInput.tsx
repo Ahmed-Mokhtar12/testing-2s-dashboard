@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Send, Smile, Plus, Mic } from 'lucide-react';
+import EmojiPicker, { EmojiStyle, Categories, EmojiClickData } from 'emoji-picker-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface WhatsAppInputProps {
   onSend: (message: string) => void;
@@ -9,6 +11,9 @@ interface WhatsAppInputProps {
 
 const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHumanMode }) => {
   const [message, setMessage] = useState('');
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cursorRef = useRef<number>(0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,10 +30,30 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
     }
   };
 
+  const trackCursor = () => {
+    if (inputRef.current) {
+      cursorRef.current = inputRef.current.selectionStart ?? message.length;
+    }
+  };
+
+  const handleEmojiSelect = (emojiData: EmojiClickData) => {
+    const emoji = emojiData.emoji;
+    const pos = cursorRef.current ?? message.length;
+    const next = message.slice(0, pos) + emoji + message.slice(pos);
+    setMessage(next);
+    const newPos = pos + emoji.length;
+    cursorRef.current = newPos;
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newPos, newPos);
+      }
+    });
+  };
+
   return (
     <div className="bg-[#F7F8FA] px-4 py-2.5">
       <form onSubmit={handleSubmit} className="flex items-end gap-2">
-        {/* Circular + button (WhatsApp Web style) */}
         <button
           type="button"
           className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-[#54656F] hover:bg-[#E9EDEF] transition-colors"
@@ -38,20 +63,57 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
           <Plus size={24} strokeWidth={2.2} />
         </button>
 
-        {/* Input pill with internal Emoji icon */}
         <div className="flex-1 flex items-center bg-white rounded-lg px-2 shadow-sm">
-          <button
-            type="button"
-            className="shrink-0 p-1.5 text-[#54656F] hover:text-[#128C7E] transition-colors"
-            aria-label="Emoji"
-            title="Emoji"
-          >
-            <Smile size={22} />
-          </button>
+          <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`shrink-0 p-1.5 transition-colors ${
+                  isEmojiOpen ? 'text-[#128C7E]' : 'text-[#54656F] hover:text-[#128C7E]'
+                }`}
+                aria-label="Emoji"
+                title="Emoji"
+              >
+                <Smile size={22} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="p-0 border-0 bg-transparent shadow-none w-auto wa-emoji-popover"
+            >
+              <EmojiPicker
+                onEmojiClick={handleEmojiSelect}
+                emojiStyle={EmojiStyle.NATIVE}
+                width={350}
+                height={450}
+                searchPlaceHolder="Search emoji"
+                previewConfig={{ showPreview: false }}
+                skinTonesDisabled={false}
+                lazyLoadEmojis
+                categories={[
+                  { category: Categories.SUGGESTED, name: 'Recently Used' },
+                  { category: Categories.SMILEYS_PEOPLE, name: 'Smileys & People' },
+                  { category: Categories.ANIMALS_NATURE, name: 'Animals & Nature' },
+                  { category: Categories.FOOD_DRINK, name: 'Food & Drink' },
+                  { category: Categories.ACTIVITIES, name: 'Activities' },
+                  { category: Categories.TRAVEL_PLACES, name: 'Travel & Places' },
+                  { category: Categories.OBJECTS, name: 'Objects' },
+                  { category: Categories.SYMBOLS, name: 'Symbols' },
+                  { category: Categories.FLAGS, name: 'Flags' },
+                ]}
+              />
+            </PopoverContent>
+          </Popover>
           <input
+            ref={inputRef}
             type="text"
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => { setMessage(e.target.value); trackCursor(); }}
+            onKeyUp={trackCursor}
+            onClick={trackCursor}
+            onSelect={trackCursor}
             onKeyDown={handleKeyDown}
             placeholder={isHumanMode ? "Type a message to the customer..." : "Type a message"}
             disabled={disabled}
