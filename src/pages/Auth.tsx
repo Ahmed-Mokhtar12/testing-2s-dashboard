@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, Mail, Lock } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import twoSeasonsLogo from '@/assets/two-seasons-logo-full.png';
 
 const AuthPage: React.FC = () => {
@@ -23,6 +24,10 @@ const AuthPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('ts_remember_me') !== '0';
+  });
 
   useEffect(() => {
     if (!loading && user) navigate(from, { replace: true });
@@ -36,7 +41,14 @@ const AuthPage: React.FC = () => {
     if (error) {
       toast.error(error.message || 'Sign-in failed');
     } else {
-      try { localStorage.setItem('ts_last_email', email); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('ts_remember_me', rememberMe ? '1' : '0');
+        if (rememberMe) {
+          localStorage.setItem('ts_last_email', email);
+        } else {
+          localStorage.removeItem('ts_last_email');
+        }
+      } catch { /* ignore */ }
       toast.success('Welcome back');
       navigate(from, { replace: true });
     }
@@ -101,6 +113,17 @@ const AuthPage: React.FC = () => {
                   autoComplete="current-password"
                 />
               </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="remember-me" className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(v) => setRememberMe(v === true)}
+                />
+                Remember me
+              </label>
             </div>
 
             <Button type="submit" className="w-full" disabled={submitting}>
