@@ -1,25 +1,35 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import DashboardShell from "./layouts/DashboardShell";
-import Overview from "./pages/dashboard/Overview";
-import ReviewsPage from "./pages/dashboard/Reviews";
-import WhatsAppPage from "./pages/dashboard/WhatsApp";
-import EmailPage from "./pages/dashboard/Email";
-import CompetitorsPage from "./pages/dashboard/Competitors";
-import InfoEmailPage from "./pages/dashboard/InfoEmail";
-import SocialPage from "./pages/dashboard/Social";
-import WelcomePage from "./pages/dashboard/Welcome";
-import WhatsAppLanding from "./pages/WhatsAppLanding";
-import AuthPage from "./pages/Auth";
-import ResetPasswordPage from "./pages/ResetPassword";
-import NotFound from "./pages/NotFound";
+
+// Lazy-load route pages so the initial bundle stays small.
+const Overview = lazy(() => import("./pages/dashboard/Overview"));
+const ReviewsPage = lazy(() => import("./pages/dashboard/Reviews"));
+const WhatsAppPage = lazy(() => import("./pages/dashboard/WhatsApp"));
+const EmailPage = lazy(() => import("./pages/dashboard/Email"));
+const CompetitorsPage = lazy(() => import("./pages/dashboard/Competitors"));
+const InfoEmailPage = lazy(() => import("./pages/dashboard/InfoEmail"));
+const SocialPage = lazy(() => import("./pages/dashboard/Social"));
+const WelcomePage = lazy(() => import("./pages/dashboard/Welcome"));
+const WhatsAppLanding = lazy(() => import("./pages/WhatsAppLanding"));
+const AuthPage = lazy(() => import("./pages/Auth"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
+
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  </div>
+);
 
 function App() {
   return (
@@ -29,51 +39,53 @@ function App() {
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-              {/* Protected dashboard */}
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <DashboardShell />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Overview />} />
-                <Route path="/dashboard" element={<Overview />} />
-                <Route path="/dashboard/reviews" element={<ReviewsPage />} />
-                <Route path="/dashboard/whatsapp" element={<WhatsAppPage />} />
-                <Route path="/dashboard/email" element={<EmailPage />} />
-                <Route path="/dashboard/competitors" element={<CompetitorsPage />} />
-                <Route path="/dashboard/info-email" element={<InfoEmailPage />} />
-                <Route path="/dashboard/social" element={<SocialPage />} />
-                <Route path="/dashboard/welcome" element={<WelcomePage />} />
-              </Route>
+                {/* Protected dashboard */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <DashboardShell />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<Overview />} />
+                  <Route path="/dashboard" element={<Overview />} />
+                  <Route path="/dashboard/reviews" element={<ReviewsPage />} />
+                  <Route path="/dashboard/whatsapp" element={<WhatsAppPage />} />
+                  <Route path="/dashboard/email" element={<EmailPage />} />
+                  <Route path="/dashboard/competitors" element={<CompetitorsPage />} />
+                  <Route path="/dashboard/info-email" element={<InfoEmailPage />} />
+                  <Route path="/dashboard/social" element={<SocialPage />} />
+                  <Route path="/dashboard/welcome" element={<WelcomePage />} />
+                </Route>
 
-              {/* Standalone WhatsApp Web clone (also protected) */}
-              <Route
-                path="/whatsapp-inbox"
-                element={
-                  <ProtectedRoute>
-                    <WhatsAppLanding />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/whatsapp"
-                element={
-                  <ProtectedRoute>
-                    <WhatsAppLanding />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Standalone WhatsApp Web clone (also protected) */}
+                <Route
+                  path="/whatsapp-inbox"
+                  element={
+                    <ProtectedRoute>
+                      <WhatsAppLanding />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/whatsapp"
+                  element={
+                    <ProtectedRoute>
+                      <WhatsAppLanding />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
