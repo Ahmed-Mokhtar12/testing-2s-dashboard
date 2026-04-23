@@ -21,14 +21,14 @@ const FileAttachmentPill: React.FC<FileAttachmentPillProps> = ({ file, onRemove 
   };
 
   return (
-    <div className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-sm border">
+    <div className="inline-flex items-center gap-2 bg-muted rounded-full px-3 py-1.5 text-sm border border-border text-foreground">
       {getFileIcon(file.type)}
       <span className="truncate max-w-32">{file.name}</span>
-      <span className="text-gray-500 text-xs">({formatFileSize(file.size)})</span>
+      <span className="text-muted-foreground text-xs">({formatFileSize(file.size)})</span>
       <Button
         variant="ghost"
         size="sm"
-        className="h-4 w-4 p-0 hover:bg-gray-200 rounded-full"
+        className="h-4 w-4 p-0 hover:bg-muted-foreground/20 rounded-full"
         onClick={onRemove}
       >
         <X size={12} />
