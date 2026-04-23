@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   MessageCircle,
   CircleDashed,
-  Megaphone,
   Users,
   Sparkles,
   Settings,
@@ -11,10 +10,11 @@ import {
   LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
+import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
 interface NavItem {
   key: string;
-  icon: LucideIcon;
+  icon: LucideIcon | 'two-seasons-logo';
   label: string;
   badge?: number;
 }
@@ -22,7 +22,7 @@ interface NavItem {
 const topItems: NavItem[] = [
   { key: 'chats', icon: MessageCircle, label: 'Chats', badge: 19 },
   { key: 'status', icon: CircleDashed, label: 'Status' },
-  { key: 'channels', icon: Megaphone, label: 'Channels' },
+  { key: 'channels', icon: 'two-seasons-logo', label: 'Two Seasons' },
   { key: 'communities', icon: Users, label: 'Communities' },
   { key: 'meta-ai', icon: Sparkles, label: 'Meta AI' },
 ];
