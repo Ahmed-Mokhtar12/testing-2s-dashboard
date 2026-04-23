@@ -86,7 +86,7 @@ export const RightChatPanel: React.FC = () => {
       {/* Side panel — pushes layout */}
       <aside
         className={cn(
-          'shrink-0 h-screen border-l border-border bg-card-gradient transition-[width] duration-300 ease-out overflow-hidden flex',
+          'shrink-0 h-full border-l border-border bg-card-gradient transition-[width] duration-300 ease-out overflow-hidden flex',
           open ? 'w-[420px]' : 'w-0'
         )}
       >
