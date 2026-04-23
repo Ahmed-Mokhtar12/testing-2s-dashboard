@@ -1,9 +1,19 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft } from 'lucide-react';
+import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
+
+const avatarColors = [
+  'bg-[#F44336]', 'bg-[#E91E63]', 'bg-[#9C27B0]', 'bg-[#673AB7]',
+  'bg-[#3F51B5]', 'bg-[#2196F3]', 'bg-[#009688]', 'bg-[#4CAF50]',
+  'bg-[#FF9800]', 'bg-[#FF5722]', 'bg-[#795548]', 'bg-[#607D8B]',
+];
+const getAvatarColor = (key: string) => {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return avatarColors[hash % avatarColors.length];
+};
 
 const getDateLabel = (date: Date): string => {
   const now = new Date();
@@ -51,7 +61,6 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   onToggleHumanControl,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,44 +70,41 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
     scrollToBottom();
   }, [messages]);
 
+  const initials = senderNumber.slice(-2);
+
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-[#F0F2F5] border-b border-gray-200 min-w-0">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          {/* Back button */}
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-[#54656F] hover:bg-gray-200 transition-colors shrink-0"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-          {/* Avatar */}
-          <div className="w-10 h-10 bg-[#DFE5E7] rounded-full flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 212 212" className="w-full h-full">
-              <path fill="#DFE5E7" d="M106.251.5C164.653.5 212 47.846 212 106.25S164.653 212 106.25 212C47.846 212 .5 164.654.5 106.25S47.846.5 106.251.5z"/>
-              <path fill="#FFF" d="M173.561 171.615a62.767 62.767 0 0 0-2.065-2.955 67.7 67.7 0 0 0-2.608-3.299 70.112 70.112 0 0 0-3.184-3.527 71.097 71.097 0 0 0-5.924-5.47 72.458 72.458 0 0 0-10.204-7.026 75.2 75.2 0 0 0-5.98-3.055c-.062-.028-.118-.059-.18-.087-9.792-4.44-22.106-7.529-37.416-7.529s-27.624 3.089-37.416 7.529c-.338.153-.653.318-.985.474a75.37 75.37 0 0 0-6.229 3.298 72.589 72.589 0 0 0-9.15 6.395 71.243 71.243 0 0 0-5.924 5.47 70.064 70.064 0 0 0-3.184 3.527 67.142 67.142 0 0 0-2.609 3.299 63.292 63.292 0 0 0-2.065 2.955 56.33 56.33 0 0 0-1.447 2.324c-.033.056-.073.119-.104.174a47.92 47.92 0 0 0-1.07 1.926c-.559 1.068-.818 1.678-.818 1.678v.398c18.285 17.927 43.322 28.985 70.945 28.985 27.678 0 52.761-11.103 71.055-29.095v-.289s-.619-1.45-1.992-3.778a58.346 58.346 0 0 0-1.446-2.322zM106.002 125.5c2.645 0 5.212-.253 7.68-.737a38.272 38.272 0 0 0 3.624-.896 37.124 37.124 0 0 0 5.12-1.958 36.307 36.307 0 0 0 6.15-3.67 35.923 35.923 0 0 0 9.489-10.48 36.558 36.558 0 0 0 2.422-4.84 37.051 37.051 0 0 0 1.716-5.25c.299-1.208.542-2.443.725-3.701.275-1.887.417-3.827.417-5.811s-.142-3.925-.417-5.811a38.734 38.734 0 0 0-1.215-5.494 36.68 36.68 0 0 0-3.648-8.298 35.923 35.923 0 0 0-9.489-10.48 36.347 36.347 0 0 0-6.15-3.67 37.124 37.124 0 0 0-5.12-1.958 37.67 37.67 0 0 0-3.624-.896 39.875 39.875 0 0 0-7.68-.737c-21.162 0-37.345 16.183-37.345 37.345 0 21.159 16.183 37.342 37.345 37.342z"/>
-            </svg>
+          {/* Avatar with status badge */}
+          <div className="relative shrink-0">
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${getAvatarColor(senderNumber)}`}
+            >
+              {initials}
+            </div>
+            {/* AI/Human status badge */}
+            <div
+              className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#F0F2F5] ${
+                isHumanControlled ? 'bg-orange-500' : 'bg-[#25D366]'
+              }`}
+              title={isHumanControlled ? 'Human Agent Active' : 'AI Responding'}
+            >
+              {isHumanControlled ? (
+                <UserCheck size={8} className="text-white" strokeWidth={3} />
+              ) : (
+                <Bot size={8} className="text-white" strokeWidth={3} />
+              )}
+            </div>
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-medium text-[#111B21] truncate">
               {formatPhoneNumber(senderNumber)}
             </h2>
-            <div className="flex items-center gap-1 mt-0.5 min-w-0">
-              {isHumanControlled ? (
-                <>
-                  <UserCheck size={10} className="text-orange-500 shrink-0" />
-                  <span className="text-[10px] text-orange-500 font-medium truncate">Human Agent Active</span>
-                </>
-              ) : (
-                <>
-                  <Bot size={10} className="text-[#128C7E] shrink-0" />
-                  <span className="text-[10px] text-[#128C7E] font-medium truncate">AI Responding</span>
-                </>
-              )}
-            </div>
+            <p className="text-[11px] text-[#667781] truncate">
+              {isHumanControlled ? 'Human Agent Active' : 'AI Responding'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-[#54656F] shrink-0">
