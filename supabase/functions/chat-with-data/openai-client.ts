@@ -30,17 +30,24 @@ export class OpenAIClient {
   private config: OpenAIConfig;
 
   constructor() {
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    // Use Lovable AI Gateway (preferred) — falls back to OpenAI direct if LOVABLE_API_KEY missing
+    const lovableKey = Deno.env.get('LOVABLE_API_KEY');
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    const apiKey = lovableKey || openaiKey;
+
     if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
+      throw new Error('Neither LOVABLE_API_KEY nor OPENAI_API_KEY is configured');
     }
 
     this.config = {
       apiKey,
-      model: 'gpt-4.1-2025-04-14',
+      // GPT-5.2 via Lovable AI Gateway — best for consultant-grade reasoning + tool calling
+      model: lovableKey ? 'openai/gpt-5.2' : 'gpt-4.1-2025-04-14',
       temperature: 0.7,
       maxTokens: 1500
     };
+
+    console.log(`🤖 OpenAIClient initialized with model: ${this.config.model} (gateway: ${lovableKey ? 'Lovable AI' : 'OpenAI direct'})`);
   }
 
   async makeRequest(
@@ -48,11 +55,17 @@ export class OpenAIClient {
     tools?: any[],
     toolChoice?: any
   ): Promise<OpenAIResponse> {
-    console.log('🤖 Making OpenAI API request...');
+    console.log('🤖 Making AI request...');
     console.log(`📝 Messages count: ${messages.length}`);
     console.log(`🔧 Tools available: ${tools?.length || 0}`);
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Route based on which key is in use
+    const isLovableGateway = !!Deno.env.get('LOVABLE_API_KEY');
+    const endpoint = isLovableGateway
+      ? 'https://ai.gateway.lovable.dev/v1/chat/completions'
+      : 'https://api.openai.com/v1/chat/completions';
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.config.apiKey}`,
@@ -73,17 +86,25 @@ export class OpenAIClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ OpenAI API Error:', { 
-        status: response.status, 
+      console.error('❌ AI Gateway Error:', {
+        endpoint,
+        model: this.config.model,
+        status: response.status,
         statusText: response.statusText,
-        body: errorText 
+        body: errorText
       });
-      throw new Error(`OpenAI API Error: ${response.statusText} - ${errorText}`);
+      if (response.status === 429) {
+        throw new Error('Rate limit exceeded — please try again in a moment.');
+      }
+      if (response.status === 402) {
+        throw new Error('AI credits exhausted — please add funds at Settings > Workspace > Usage.');
+      }
+      throw new Error(`AI Gateway Error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('✅ OpenAI API request successful');
-    
+    console.log('✅ AI request successful');
+
     return data;
   }
 
