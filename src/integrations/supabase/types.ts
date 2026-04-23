@@ -967,6 +967,10 @@ export type Database = {
           relevance_score: number
         }[]
       }
+      is_conversation_human_controlled: {
+        Args: { p_sender_number: string }
+        Returns: boolean
+      }
       mark_recent_document_context: {
         Args: { doc_id: string }
         Returns: undefined
