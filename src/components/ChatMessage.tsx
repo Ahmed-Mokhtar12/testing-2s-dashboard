@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Message, ActionData } from '@/types/chat';
 import ActionConfirmationMessage from './ActionConfirmationMessage';
-import { User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { formatChatTimestamp } from '@/utils/timezone';
 import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
@@ -19,9 +17,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   onActionConfirm,
   onActionCancel,
 }) => {
-  const [, setIsEditing] = useState(false);
-  const { toast } = useToast();
-
   const formatContent = (content: string) =>
     content.split('\n').map((line, index, arr) => (
       <span key={index}>
@@ -30,44 +25,44 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       </span>
     ));
 
+  if (message.hasAction && message.actionData) {
+    return (
+      <div className="py-3">
+        <ActionConfirmationMessage
+          actionData={message.actionData}
+          actionStatus={message.actionStatus || 'pending_confirmation'}
+          onConfirm={(updatedActionData) => onActionConfirm?.(message.id, updatedActionData)}
+          onCancel={() => onActionCancel?.(message.id)}
+        />
+      </div>
+    );
+  }
+
+  if (message.isUser) {
+    return (
+      <div className="flex justify-end py-2">
+        <div className="max-w-[85%] bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 text-sm text-foreground">
+          <div className="whitespace-pre-wrap leading-relaxed">{formatContent(message.content)}</div>
+          <div className="text-[10px] mt-1 text-foreground/40 text-right">
+            {formatChatTimestamp(message.timestamp)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6`}>
-      <div className="flex items-start gap-3 max-w-[85%] relative">
-        {!message.isUser && (
-          <div className="w-8 h-8 rounded-full bg-card border border-primary/40 glow-primary overflow-hidden flex items-center justify-center flex-shrink-0 mt-1">
-            <img src={twoSeasonsLogo} alt="Sera" className="w-6 h-6 object-contain" />
-          </div>
-        )}
-
-        {message.hasAction && message.actionData ? (
-          <ActionConfirmationMessage
-            actionData={message.actionData}
-            actionStatus={message.actionStatus || 'pending_confirmation'}
-            onConfirm={(updatedActionData) => onActionConfirm?.(message.id, updatedActionData)}
-            onCancel={() => onActionCancel?.(message.id)}
-          />
-        ) : (
-          <div
-            className={`rounded-2xl px-4 py-3 shadow-card-soft ${
-              message.isUser
-                ? 'bg-primary-gradient text-primary-foreground rounded-tr-md ml-2'
-                : 'bg-card border border-border text-card-foreground rounded-tl-md'
-            }`}
-          >
-            <div className={`whitespace-pre-wrap leading-relaxed ${message.isUser ? 'text-right' : 'text-left'}`}>
-              {formatContent(message.content)}
-            </div>
-            <div className={`text-[10px] mt-2 ${message.isUser ? 'text-primary-foreground/70' : 'text-foreground/50'} text-left`}>
-              {formatChatTimestamp(message.timestamp)} <span className="opacity-60">(Dubai)</span>
-            </div>
-          </div>
-        )}
-
-        {message.isUser && (
-          <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/40 text-accent flex items-center justify-center flex-shrink-0 mt-1">
-            <User size={14} />
-          </div>
-        )}
+    <div className="flex items-start gap-3 py-3">
+      <div className="w-7 h-7 rounded-full bg-card border border-primary/40 overflow-hidden flex items-center justify-center flex-shrink-0 mt-0.5">
+        <img src={twoSeasonsLogo} alt="Sera" className="w-5 h-5 object-contain" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="whitespace-pre-wrap leading-relaxed text-sm text-foreground/90">
+          {formatContent(message.content)}
+        </div>
+        <div className="text-[10px] mt-1.5 text-foreground/40">
+          {formatChatTimestamp(message.timestamp)}
+        </div>
       </div>
     </div>
   );

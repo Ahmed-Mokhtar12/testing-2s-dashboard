@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, X } from 'lucide-react';
+import { MessageCircle, X, Plus, Settings, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Sidebar from '@/components/Sidebar';
 import WelcomeScreen from '@/components/WelcomeScreen';
@@ -105,21 +105,25 @@ export const RightChatPanel: React.FC = () => {
               </div>
             )}
             <div className="flex-1 flex flex-col min-w-0">
-              <div className="h-12 px-4 flex items-center justify-between border-b border-border shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-card border border-primary/40 glow-primary overflow-hidden flex items-center justify-center">
-                    <img src={twoSeasonsLogo} alt="Sera" className="w-6 h-6 object-contain" />
+              <div className="h-12 px-3 flex items-center justify-between border-b border-border shrink-0 bg-card/40 backdrop-blur">
+                <button
+                  onClick={() => setInnerSidebar((v) => !v)}
+                  className="flex items-center gap-2 hover:bg-background/40 rounded-md px-1.5 py-1 transition-colors"
+                >
+                  <div className="h-7 w-7 rounded-full bg-card border border-primary/40 overflow-hidden flex items-center justify-center">
+                    <img src={twoSeasonsLogo} alt="Sera" className="w-5 h-5 object-contain" />
                   </div>
-                  <div>
-                    <p className="font-display font-semibold text-sm leading-none">Sera</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Hotel Consultant</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setInnerSidebar((v) => !v)} className="h-8 text-xs">
-                    {innerSidebar ? 'Hide' : 'History'}
+                  <span className="text-sm font-medium text-foreground">Sera</span>
+                  <ChevronDown size={14} className="text-muted-foreground" />
+                </button>
+                <div className="flex items-center gap-0.5">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={startNewChat} aria-label="New chat">
+                    <Plus className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(false)} aria-label="Close chat">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label="Settings">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)} aria-label="Close chat">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
