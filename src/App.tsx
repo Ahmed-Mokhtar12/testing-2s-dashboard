@@ -18,7 +18,6 @@ const CompetitorsPage = lazy(() => import("./pages/dashboard/Competitors"));
 const InfoEmailPage = lazy(() => import("./pages/dashboard/InfoEmail"));
 const SocialPage = lazy(() => import("./pages/dashboard/Social"));
 const WelcomePage = lazy(() => import("./pages/dashboard/Welcome"));
-const PrePublishPage = lazy(() => import("./pages/dashboard/PrePublish"));
 const WhatsAppLanding = lazy(() => import("./pages/WhatsAppLanding"));
 const AuthPage = lazy(() => import("./pages/Auth"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
@@ -63,7 +62,6 @@ function App() {
                   <Route path="/dashboard/info-email" element={<InfoEmailPage />} />
                   <Route path="/dashboard/social" element={<SocialPage />} />
                   <Route path="/dashboard/welcome" element={<WelcomePage />} />
-                  <Route path="/dashboard/pre-publish" element={<PrePublishPage />} />
                 </Route>
 
                 {/* Standalone WhatsApp Web clone (also protected) */}
