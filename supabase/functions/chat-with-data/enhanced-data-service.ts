@@ -6,6 +6,22 @@ import { QuerySpecificDataService, DataFetchPlan } from './query-specific-data-s
 import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
 import { QueryAnalysis } from './query-analyzer.ts';
 
+// Sera is restricted to these 11 Two Seasons tables only.
+// Never query khaldia_reviews, website_*, burst_*, n8n_chat_histories, conducted_training (lowercase).
+export const ALLOWED_TABLES = [
+  'reviews',
+  'Chat History',
+  'email_threads',
+  'Two Seasons Competitor Hotel room Rates',
+  'info_email_audit_log',
+  'social_engagement_logs',
+  'welcome_message_success_log',
+  'N8N_2S',
+  'Sop',
+  'Conducted Training',
+  'LongTermMemory',
+] as const;
+
 export class EnhancedDataService {
   private supabase;
 
@@ -121,16 +137,16 @@ export class EnhancedDataService {
       
       // First, let's check total count
       const { count } = await this.supabase
-        .from('Hotel Reviews')
+        .from('reviews')
         .select('*', { count: 'exact', head: true });
       
-      console.log('📊 Total Hotel Reviews count:', count);
+      console.log('📊 Total reviews count:', count);
       
       // Fetch all reviews without any filtering
       const allReviews = await this.supabase
-        .from('Hotel Reviews')
+        .from('reviews')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('Date', { ascending: false });
       
       console.log('📋 All Hotel Reviews raw result:', allReviews);
       console.log('📋 Hotel Reviews data length:', allReviews.data?.length);
@@ -276,16 +292,17 @@ export class EnhancedDataService {
 
   private async fetchInfoSummary() {
     try {
+      // Pull from email_threads (whitelisted) instead of removed 'Info Summary'.
       const result = await this.supabase
-        .from('Info Summary')
+        .from('email_threads')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('last_update_at', { ascending: false })
         .limit(20);
-      
-      console.log('📧 Info Summary result:', result);
+
+      console.log('📧 email_threads result:', result);
       return result;
     } catch (error) {
-      console.error('❌ Error fetching Info Summary:', error);
+      console.error('❌ Error fetching email_threads:', error);
       throw error;
     }
   }

@@ -2,13 +2,12 @@ import { SmartQueryAnalysis } from './types.ts';
 import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
 
 export async function buildIntelligentContext(supabase: any, queryAnalysis: SmartQueryAnalysis, specificData?: any) {
-  console.log('🧠 Building intelligent context with customer behavior analytics...');
-  
+  console.log('🧠 Building intelligent context for Sera...');
+
   // Get all reviews and chat history for comprehensive analysis
-  const { data: allReviews } = await supabase.from('Hotel Reviews').select('*').order('Date', { ascending: false });
+  const { data: allReviews } = await supabase.from('reviews').select('*').order('Date', { ascending: false });
   const { data: chatHistory } = await supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(100);
-  
-  // Generate comprehensive customer behavior insights
+
   let behaviorInsights = '';
   if (allReviews && allReviews.length > 0) {
     const sentimentData = CustomerBehaviorAnalytics.analyzeReviewSentiment(allReviews);
@@ -16,34 +15,35 @@ export async function buildIntelligentContext(supabase: any, queryAnalysis: Smar
     const recommendations = CustomerBehaviorAnalytics.generateManagementRecommendations(sentimentData, behaviorPatterns);
     behaviorInsights = CustomerBehaviorAnalytics.formatInsightsForAI(sentimentData, behaviorPatterns, recommendations);
   }
-  
+
   let context = `${behaviorInsights}
 
-🏨 You are Marcus Chen, Senior Hotel Management Consultant for Two Seasons Hotel with comprehensive access to hotel data and intelligent retrieval capabilities.
+🏨 You are Sera, Senior Hotel Management Consultant for Two Seasons Hotel, Dubai.
 
-🔧 RETRIEVAL PRIORITY STRUCTURE:
-🥇 PRIMARY SOURCE: Hotel Database (Use extensive hotel reviews, analytics, and operational data as your main information source)
-🥈 SECONDARY SOURCE: Official Hotel Website (www.2seasonshotels.com - search only when database lacks specific current information)
-🥉 TERTIARY SOURCE: Web Search (Use when hotel website doesn't contain needed information)
-🔚 FALLBACK: General Knowledge (Only when no other sources have the information)
+📊 ALLOWED DATA SOURCES (11 tables — Two Seasons only):
+Dashboard: reviews, Chat History, email_threads, Two Seasons Competitor Hotel room Rates,
+           info_email_audit_log, social_engagement_logs, welcome_message_success_log
+Knowledge: N8N_2S, Sop, Conducted Training, LongTermMemory
+
+🔒 NEVER reference: khaldia_reviews, website_*, burst_*, n8n_chat_histories, or any other property.
+
+🔧 RETRIEVAL PRIORITY:
+1. The 11 tables above (primary)
+2. site:2seasonshotels.com via search_web (current hotel info)
+3. General web search (industry / external context)
+4. General knowledge as last resort with disclaimer
 
 📊 QUERY ANALYSIS: ${queryAnalysis.description}
 📅 QUERY TYPE: ${queryAnalysis.type}
-
-🎯 INTELLIGENT SEARCH STRATEGY:
-- Prioritize using rich database information provided in context
-- Search hotel website only when database lacks current/specific details
-- Use web search when hotel website doesn't have the information
-- Apply general knowledge as final fallback with appropriate disclaimers
 
 `;
 
   if (specificData?.reviews) {
     const reviews = specificData.reviews;
     const reviewsWithScores = reviews.filter((r: any) => r.Score);
-    const avgScore = reviewsWithScores.length > 0 ? 
+    const avgScore = reviewsWithScores.length > 0 ?
       reviewsWithScores.reduce((sum: number, r: any) => sum + r.Score, 0) / reviewsWithScores.length : 0;
-    
+
     const sourceBreakdown = reviews.reduce((acc: any, review: any) => {
       const source = review.Source || 'Unknown';
       acc[source] = (acc[source] || 0) + 1;
@@ -58,7 +58,7 @@ export async function buildIntelligentContext(supabase: any, queryAnalysis: Smar
 
 📋 SAMPLE REVIEWS FROM THIS PERIOD:
 `;
-    
+
     reviews.slice(0, 5).forEach((review: any, index: number) => {
       context += `${index + 1}. ${review.Date} - ${review.Source} - Score: ${review.Score || 'N/A'}
    ${review.Title ? `Title: ${review.Title}` : ''}
@@ -67,7 +67,7 @@ export async function buildIntelligentContext(supabase: any, queryAnalysis: Smar
 `;
     });
   }
-  
+
   if (specificData?.analytics) {
     const analytics = specificData.analytics;
     context += `📈 COMPREHENSIVE HOTEL ANALYTICS:
@@ -85,19 +85,12 @@ ${Object.entries(analytics.monthlyBreakdown)
 `;
   }
 
-  context += `🎯 INTELLIGENT RETRIEVAL GUIDELINES:
-- 🥇 PRIORITIZE DATABASE: Use comprehensive hotel database as primary information source
-- 🥈 SELECTIVE WEBSITE SEARCH: Call search_web("site:2seasonshotels.com [topic]") ONLY when database lacks current/specific details
-- 🥉 WEB SEARCH ESCALATION: Use broader web search when hotel website doesn't contain needed information
-- 🔚 GENERAL KNOWLEDGE FALLBACK: Apply general hospitality knowledge with clear disclaimers when no other sources help
-- 📊 RESPONSE STRUCTURE: Lead with database information, supplement with targeted searches as needed
-- 💬 MESSAGING CAPABILITIES: Send emails, SMS, WhatsApp when requested
-- 📞 CONTACT EXTRACTION: Extract recipient info and message content from user requests
-- 📧 EMAIL FORMAT: Include relevant subject lines for email communications
-- 📊 DATA PRECISION: Use exact database numbers - never estimate or approximate
-- 🔄 INTEGRATION APPROACH: Database analytics + targeted searches for missing details
-- 💼 CONSULTANT ROLE: Professional, conversational, data-driven hotel advisor
-- 🎯 ALWAYS PROVIDE VALUE: Give helpful guidance using best available source
+  context += `🎯 RESPONSE GUIDELINES:
+- Lead with concrete numbers from the 11 allowed tables
+- Use search_web only when database lacks the needed info
+- Use exact database numbers — never estimate
+- Professional, data-driven, conversational tone
+- Respond in the user's language
 
 `;
 
