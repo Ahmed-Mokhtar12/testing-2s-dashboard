@@ -27,7 +27,7 @@ export const RightChatPanel: React.FC = () => {
     selectSession,
     deleteSession,
     createNewSessionId,
-  } = useChatSessions();
+  } = useSeraLocalSessions();
 
   const {
     messages,
