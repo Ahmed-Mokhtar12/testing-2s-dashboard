@@ -7,7 +7,7 @@ import {
   Users,
   Sparkles,
   Settings,
-  User,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
 import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
@@ -29,7 +29,7 @@ const topItems: NavItem[] = [
 
 const bottomItems: NavItem[] = [
   { key: 'settings', icon: Settings, label: 'Settings' },
-  { key: 'profile', icon: User, label: 'Profile' },
+  { key: 'two-seasons', icon: 'two-seasons-logo', label: 'Two Seasons' },
 ];
 
 const WhatsAppNavRail: React.FC = () => {
