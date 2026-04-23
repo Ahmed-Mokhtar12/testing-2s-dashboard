@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import WhatsAppNavRail from './WhatsAppNavRail';
 import WhatsAppSidebar from './WhatsAppSidebar';
 import WhatsAppChatPanel from './WhatsAppChatPanel';
-import { useWhatsAppChat, WhatsAppMessage } from '@/hooks/useWhatsAppChat';
+import { useWhatsAppChat } from '@/hooks/useWhatsAppChat';
 
 interface ChatPreview {
   senderNumber: string;
