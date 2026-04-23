@@ -171,14 +171,19 @@ Deno.serve(async (req) => {
     const aiResponse = n8nData.output || n8nData.response || n8nData.message || n8nData.text ||
       (typeof n8nData === 'string' ? n8nData : JSON.stringify(n8nData));
 
+    const insertPayload: Record<string, unknown> = {
+      'Sender Number': sanitizedSender,
+      'Sender Message': sanitizedMessage,
+      'Ai Reply': aiResponse,
+      created_at: new Date().toISOString(),
+    };
+    if (hasAttachment) {
+      insertPayload['Media'] = n8nPayload.attachment;
+    }
+
     const { error: insertError } = await supabase
       .from('Chat History')
-      .insert({
-        'Sender Number': sanitizedSender,
-        'Sender Message': sanitizedMessage,
-        'Ai Reply': aiResponse,
-        created_at: new Date().toISOString(),
-      });
+      .insert(insertPayload);
 
     if (insertError) {
       console.error('⚠️ Failed to save chat:', insertError);
