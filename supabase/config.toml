@@ -49,7 +49,7 @@ port = 54332
 verify_jwt = false
 
 [functions.whatsapp-send-message]
-verify_jwt = false
+verify_jwt = true
 
 [functions.whatsapp-control-status]
 verify_jwt = false
