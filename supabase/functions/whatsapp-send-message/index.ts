@@ -39,7 +39,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { message, recipientNumber, action } = body;
+    const { message, recipientNumber, action, attachment } = body;
 
     const WHATSAPP_ACCESS_TOKEN = Deno.env.get('WHATSAPP_ACCESS_TOKEN');
     const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
@@ -101,22 +101,63 @@ serve(async (req) => {
       );
     }
 
-    // Send message via WhatsApp Cloud API
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    // Send message via WhatsApp Cloud API — message OR attachment is required
+    const hasMessage = typeof message === 'string' && message.trim().length > 0;
+    const hasAttachment = attachment && typeof attachment === 'object' && typeof attachment.url === 'string';
+
+    if (!hasMessage && !hasAttachment) {
       return new Response(
-        JSON.stringify({ success: false, error: 'message is required and must be a non-empty string' }),
+        JSON.stringify({ success: false, error: 'Either message or attachment is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    if (message.length > 4096) {
+    if (hasMessage && message.length > 4096) {
       return new Response(
         JSON.stringify({ success: false, error: 'message must not exceed 4096 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const sanitizedMessage = message.trim();
+    const sanitizedMessage = hasMessage ? message.trim() : '';
     const sanitizedRecipient = recipientNumber.trim();
+
+    // Build WhatsApp Cloud API payload — media or text
+    let waPayload: Record<string, unknown>;
+    if (hasAttachment) {
+      const kind = attachment.kind as string;
+      const mimeType = (attachment.mimeType as string) || '';
+      const url = attachment.url as string;
+      const filename = (attachment.filename as string) || 'file';
+
+      // Map our kind → WhatsApp media type
+      let waType: 'image' | 'video' | 'document' = 'document';
+      if (kind === 'image' || mimeType.startsWith('image/')) waType = 'image';
+      else if (kind === 'video' || mimeType.startsWith('video/')) waType = 'video';
+
+      const mediaObject: Record<string, unknown> = { link: url };
+      if (waType === 'document') {
+        mediaObject.filename = filename;
+      }
+      if (sanitizedMessage && (waType === 'image' || waType === 'video' || waType === 'document')) {
+        mediaObject.caption = sanitizedMessage;
+      }
+
+      waPayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: sanitizedRecipient,
+        type: waType,
+        [waType]: mediaObject,
+      };
+    } else {
+      waPayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: sanitizedRecipient,
+        type: 'text',
+        text: { body: sanitizedMessage },
+      };
+    }
 
     const waResponse = await fetch(
       `https://graph.facebook.com/v22.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
@@ -126,35 +167,34 @@ serve(async (req) => {
           'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: sanitizedRecipient,
-          type: 'text',
-          text: { body: sanitizedMessage },
-        }),
+        body: JSON.stringify(waPayload),
       }
     );
 
     const waData = await waResponse.json();
 
     if (!waResponse.ok) {
-      console.error('WhatsApp API error:', waData?.error?.message);
+      console.error('WhatsApp API error:', JSON.stringify(waData?.error));
       throw new Error(waData?.error?.message || 'Failed to send WhatsApp message');
     }
 
-    console.log('WhatsApp message sent successfully');
+    console.log('WhatsApp message sent successfully', hasAttachment ? '(with attachment)' : '(text)');
+
+    const insertRow: Record<string, unknown> = {
+      'Sender Number': sanitizedRecipient,
+      'human_reply': sanitizedMessage || (hasAttachment ? `[${attachment.kind}] ${attachment.filename || ''}`.trim() : ''),
+      'Ai Reply': null,
+      'Sender Message': null,
+      is_human_controlled: true,
+      created_at: new Date().toISOString(),
+    };
+    if (hasAttachment) {
+      insertRow['Media'] = attachment;
+    }
 
     const { error: insertError } = await supabase
       .from('Chat History')
-      .insert({
-        'Sender Number': sanitizedRecipient,
-        'human_reply': sanitizedMessage,
-        'Ai Reply': null,
-        'Sender Message': null,
-        is_human_controlled: true,
-        created_at: new Date().toISOString(),
-      });
+      .insert(insertRow);
 
     if (insertError) {
       console.error('Error saving human reply:', insertError);
