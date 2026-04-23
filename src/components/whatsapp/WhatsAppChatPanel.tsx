@@ -197,6 +197,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
                 timestamp={msg.timestamp}
                 mediaUrl={msg.mediaUrl}
                 attachment={msg.attachment}
+                repliedByName={msg.repliedByName}
               />
             </div>
           );
