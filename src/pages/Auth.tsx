@@ -109,6 +109,12 @@ const AuthPage: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !submitting && email && password) {
+                      e.preventDefault();
+                      handleSignIn(e as unknown as React.FormEvent);
+                    }
+                  }}
                   className="pl-9"
                   autoComplete="current-password"
                 />
