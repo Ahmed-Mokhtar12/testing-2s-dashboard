@@ -15,7 +15,10 @@ const AuthPage: React.FC = () => {
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/';
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('ts_last_email') ?? '';
+  });
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -33,6 +36,7 @@ const AuthPage: React.FC = () => {
     if (error) {
       toast.error(error.message || 'Sign-in failed');
     } else {
+      try { localStorage.setItem('ts_last_email', email); } catch { /* ignore */ }
       toast.success('Welcome back');
       navigate(from, { replace: true });
     }
@@ -78,7 +82,7 @@ const AuthPage: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-9"
                   placeholder="you@2seasonshotels.com"
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </div>
             </div>
