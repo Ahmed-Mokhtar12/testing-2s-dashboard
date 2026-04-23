@@ -1,9 +1,19 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft } from 'lucide-react';
+import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
+
+const avatarColors = [
+  'bg-[#F44336]', 'bg-[#E91E63]', 'bg-[#9C27B0]', 'bg-[#673AB7]',
+  'bg-[#3F51B5]', 'bg-[#2196F3]', 'bg-[#009688]', 'bg-[#4CAF50]',
+  'bg-[#FF9800]', 'bg-[#FF5722]', 'bg-[#795548]', 'bg-[#607D8B]',
+];
+const getAvatarColor = (key: string) => {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return avatarColors[hash % avatarColors.length];
+};
 
 const getDateLabel = (date: Date): string => {
   const now = new Date();
