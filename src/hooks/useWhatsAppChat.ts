@@ -11,7 +11,23 @@ export interface WhatsAppMessage {
   timestamp: Date;
   mediaUrl?: string;
   attachment?: UploadedAttachment;
+  repliedByName?: string;
 }
+
+// Derive a display first name from the auth user
+const deriveFirstName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null | undefined): string | undefined => {
+  if (!user) return undefined;
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const fromMeta = typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
+  if (fromMeta) return fromMeta;
+  const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+  if (fullName) return fullName.split(/\s+/)[0];
+  const email = user.email ?? '';
+  const local = email.split('@')[0] ?? '';
+  const raw = local.split(/[._-]/)[0] ?? '';
+  if (!raw) return undefined;
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+};
 
 // Get or create persistent sender number
 const getSenderNumber = () => {
