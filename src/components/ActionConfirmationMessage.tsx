@@ -28,12 +28,8 @@ const ActionConfirmationMessage: React.FC<ActionConfirmationMessageProps> = ({
 
   const getActionIcon = () => {
     switch (actionData.type) {
-      case 'email':
-        return <Mail className="w-5 h-5" />;
       case 'sms':
         return <MessageSquare className="w-5 h-5" />;
-      case 'whatsapp':
-        return <Phone className="w-5 h-5" />;
       default:
         return <MessageSquare className="w-5 h-5" />;
     }
@@ -79,8 +75,7 @@ const ActionConfirmationMessage: React.FC<ActionConfirmationMessageProps> = ({
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           {getActionIcon()}
-          {actionData.type === 'email' ? 'Send Email' : 
-           actionData.type === 'sms' ? 'Send SMS' : 'Send WhatsApp Message'}
+          Send SMS
         </CardTitle>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {getStatusIcon()}
@@ -89,42 +84,19 @@ const ActionConfirmationMessage: React.FC<ActionConfirmationMessageProps> = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-foreground">
-            {actionData.type === 'email' ? 'Email Address' : 'Phone Number'}
-          </label>
+          <label className="text-sm font-medium text-foreground">Phone Number</label>
           {canEdit ? (
             <Input
-              value={actionData.type === 'email' ? editableData.recipient : editableData.phoneNumber || ''}
-              onChange={(e) => 
-                actionData.type === 'email' 
-                  ? setEditableData(prev => ({ ...prev, recipient: e.target.value }))
-                  : setEditableData(prev => ({ ...prev, phoneNumber: e.target.value }))
-              }
+              value={editableData.phoneNumber || ''}
+              onChange={(e) => setEditableData(prev => ({ ...prev, phoneNumber: e.target.value }))}
               className="mt-1"
             />
           ) : (
             <div className="mt-1 p-2 bg-muted rounded text-sm">
-              {actionData.type === 'email' ? actionData.recipient : actionData.phoneNumber}
+              {actionData.phoneNumber}
             </div>
           )}
         </div>
-
-        {actionData.type === 'email' && (
-          <div>
-            <label className="text-sm font-medium text-foreground">Subject</label>
-            {canEdit ? (
-              <Input
-                value={editableData.subject || ''}
-                onChange={(e) => setEditableData(prev => ({ ...prev, subject: e.target.value }))}
-                className="mt-1"
-              />
-            ) : (
-              <div className="mt-1 p-2 bg-muted rounded text-sm">
-                {actionData.subject}
-              </div>
-            )}
-          </div>
-        )}
 
         <div>
           <label className="text-sm font-medium text-foreground">Message</label>
