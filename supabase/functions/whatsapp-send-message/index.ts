@@ -222,6 +222,8 @@ serve(async (req) => {
       'Sender Message': null,
       is_human_controlled: true,
       created_at: new Date().toISOString(),
+      replied_by_user_id: repliedByUserId,
+      replied_by_name: repliedByName,
     };
     if (hasAttachment) {
       insertRow['Media'] = attachment;
