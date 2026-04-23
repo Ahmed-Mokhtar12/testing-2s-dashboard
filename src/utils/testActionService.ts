@@ -30,11 +30,12 @@ export const testActionService = async () => {
     
   } catch (testError) {
     console.error('🧪 Test exception:', testError);
-    return { success: false, error: testError.message };
+    const message = testError instanceof Error ? testError.message : String(testError);
+    return { success: false, error: message };
   }
 };
 
 // Add to window for debugging in browser console
 if (typeof window !== 'undefined') {
-  (window as any).testActionService = testActionService;
+  (window as unknown as { testActionService: typeof testActionService }).testActionService = testActionService;
 }

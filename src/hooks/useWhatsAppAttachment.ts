@@ -71,7 +71,7 @@ export const useWhatsAppAttachment = () => {
 
       setIsUploading(true);
       try {
-        const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+        const safeName = file.name.replace(/[^\w.-]+/g, '_');
         const path = `${senderNumber}/${Date.now()}_${safeName}`;
 
         const { error: uploadError } = await supabase.storage

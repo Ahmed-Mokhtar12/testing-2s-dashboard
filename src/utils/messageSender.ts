@@ -42,7 +42,7 @@ export const sendMessageToAI = async (message: string, messageId: string) => {
   return data;
 };
 
-export const executeAction = async (actionData: any, messageId: string) => {
+export const executeAction = async (actionData: import('@/types/chat').ActionData, messageId: string) => {
   console.log('🚀 Executing action via Supabase edge function:', actionData);
   console.log('🔧 Message ID:', messageId);
   console.log('🔧 Supabase client configured:', !!supabase);

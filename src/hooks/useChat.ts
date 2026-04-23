@@ -69,7 +69,7 @@ export const useChat = ({
     return handleActionCancel(messageId, setMessages);
   };
 
-  const wrappedLoadSessionMessages = (sessionMessages: any[]) => {
+  const wrappedLoadSessionMessages = (sessionMessages: Message[]) => {
     return loadSessionMessages(sessionMessages, setMessages);
   };
 

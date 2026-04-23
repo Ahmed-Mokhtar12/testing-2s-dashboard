@@ -8,7 +8,7 @@ export interface ChatSession {
   title: string;
   lastMessage: string;
   timestamp: Date;
-  messages: any[];
+  messages: import('@/types/chat').Message[];
 }
 
 export const useChatSessions = () => {

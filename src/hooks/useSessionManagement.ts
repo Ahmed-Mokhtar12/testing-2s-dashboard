@@ -3,7 +3,7 @@ import { createUserMessage, createAIMessage } from '@/utils/messageSender';
 
 export const useSessionManagement = () => {
   const loadSessionMessages = (
-    sessionMessages: any[],
+    sessionMessages: Message[],
     setMessages: React.Dispatch<React.SetStateAction<Message[]>>
   ) => {
     const formattedMessages: Message[] = [];
