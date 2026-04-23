@@ -26,7 +26,8 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<DashboardShell />}>
-              <Route path="/" element={<Overview />} />
+              <Route index element={<Overview />} />
+              <Route path="/dashboard" element={<Overview />} />
               <Route path="/dashboard/reviews" element={<ReviewsPage />} />
               <Route path="/dashboard/whatsapp" element={<WhatsAppPage />} />
               <Route path="/dashboard/email" element={<EmailPage />} />
