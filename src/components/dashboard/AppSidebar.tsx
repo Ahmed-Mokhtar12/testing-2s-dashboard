@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
+import twoSeasonsLogo from '@/assets/two-seasons-logo-full.png';
 
 const items = [
   { title: 'Overview', url: '/', icon: LayoutDashboard },
