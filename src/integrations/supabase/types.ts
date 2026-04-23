@@ -154,6 +154,8 @@ export type Database = {
           Media: Json | null
           Name: string | null
           released_to_ai_at: string | null
+          replied_by_name: string | null
+          replied_by_user_id: string | null
           "Sender Message": string | null
           "Sender Number": string | null
         }
@@ -167,6 +169,8 @@ export type Database = {
           Media?: Json | null
           Name?: string | null
           released_to_ai_at?: string | null
+          replied_by_name?: string | null
+          replied_by_user_id?: string | null
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }
@@ -180,6 +184,8 @@ export type Database = {
           Media?: Json | null
           Name?: string | null
           released_to_ai_at?: string | null
+          replied_by_name?: string | null
+          replied_by_user_id?: string | null
           "Sender Message"?: string | null
           "Sender Number"?: string | null
         }
