@@ -91,7 +91,7 @@ export const RightChatPanel: React.FC = () => {
         )}
       >
         {open && (
-          <div className="flex w-full h-[calc(100%-1.5rem)] border-l border-border bg-card-gradient">
+          <div className="flex w-full h-[calc(100%-0.5rem)] border-l border-border bg-card-gradient mt-[-1rem]">
             {innerSidebar && (
               <div className="w-[200px] border-r border-border overflow-hidden">
                 <Sidebar
