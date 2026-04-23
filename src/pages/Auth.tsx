@@ -122,7 +122,7 @@ const AuthPage: React.FC = () => {
                 required
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                placeholder="you@twoseasonshotel.com"
+                placeholder="you@2seasonshotels.com"
               />
             </div>
 
