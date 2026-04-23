@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Mic, Upload } from 'lucide-react';
+import { ArrowUp, Mic, Paperclip, ChevronDown } from 'lucide-react';
 import FileAttachmentPill from './FileAttachmentPill';
 import { useFileStaging } from '@/hooks/useFileStaging';
 
@@ -24,15 +24,13 @@ const InputBar: React.FC<InputBarProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [textareaHeight, setTextareaHeight] = useState(50);
   const { stagedFiles, addFile, removeFile, clearFiles } = useFileStaging();
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 50), 200);
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 36), 160);
       textareaRef.current.style.height = `${newHeight}px`;
-      setTextareaHeight(newHeight);
     }
   }, [inputValue]);
 
@@ -61,68 +59,73 @@ const InputBar: React.FC<InputBarProps> = ({
   };
 
   const triggerFileUpload = () => fileInputRef.current?.click();
+  const canSend = (inputValue.trim() || stagedFiles.length > 0) && !isTyping;
 
   return (
-    <div className="border-t border-border bg-transparent">
-      <div className="px-4 py-4">
-        <div className="space-y-3 max-w-3xl mx-auto">
-          {stagedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {stagedFiles.map((file, index) => (
-                <FileAttachmentPill
-                  key={`${file.name}-${index}`}
-                  file={file}
-                  onRemove={() => removeFile(index)}
-                />
-              ))}
-            </div>
-          )}
+    <div className="bg-transparent px-3 pb-3 pt-2">
+      {stagedFiles.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {stagedFiles.map((file, index) => (
+            <FileAttachmentPill
+              key={`${file.name}-${index}`}
+              file={file}
+              onRemove={() => removeFile(index)}
+            />
+          ))}
+        </div>
+      )}
 
-          <div className="flex items-end gap-2">
-            <div className="flex-1 relative">
-              <div className="relative rounded-2xl bg-card/80 border border-border shadow-card-soft backdrop-blur transition-all focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/40">
-                <Textarea
-                  ref={textareaRef}
-                  value={inputValue}
-                  onChange={(e) => onInputChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask Sera anything…"
-                  className="border-0 rounded-2xl resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:ring-0 focus:outline-none min-h-[50px] max-h-[200px] pr-20 overflow-y-auto"
-                  disabled={isTyping}
-                  style={{ height: `${textareaHeight}px` }}
-                />
-                <div
-                  className="absolute right-3 flex items-center gap-1"
-                  style={{
-                    top: textareaHeight <= 50 ? '50%' : '14px',
-                    transform: textareaHeight <= 50 ? 'translateY(-50%)' : 'none',
-                  }}
-                >
-                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8 p-0">
-                    <Mic size={16} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8 p-0"
-                    onClick={triggerFileUpload}
-                    disabled={isTyping}
-                  >
-                    <Upload size={16} />
-                  </Button>
-                </div>
-              </div>
-            </div>
+      <div className="rounded-2xl bg-card/60 border border-border focus-within:border-primary/50 backdrop-blur transition-colors">
+        <Textarea
+          ref={textareaRef}
+          value={inputValue}
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask Sera a follow up question..."
+          className="border-0 rounded-2xl resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none min-h-[36px] max-h-[160px] overflow-y-auto"
+          disabled={isTyping}
+        />
+
+        <div className="flex items-center justify-between px-2 pb-2 pt-1">
+          <button
+            type="button"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground bg-background/40 hover:bg-background/60 rounded-md px-2 py-1 transition-colors"
+          >
+            Sera
+            <ChevronDown size={12} />
+          </button>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={triggerFileUpload}
+              disabled={isTyping}
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-background/60"
+            >
+              <Paperclip size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-background/60"
+            >
+              <Mic size={14} />
+            </Button>
             <Button
               onClick={handleSendMessage}
-              disabled={(!inputValue.trim() && stagedFiles.length === 0) || isTyping}
-              className="rounded-2xl h-[50px] w-[50px] p-0 bg-primary-gradient text-primary-foreground glow-primary hover:scale-105 transition-transform disabled:opacity-40 disabled:hover:scale-100"
+              disabled={!canSend}
+              className="h-7 w-7 p-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
             >
-              <Send size={18} />
+              <ArrowUp size={14} />
             </Button>
           </div>
         </div>
       </div>
+
+      <p className="text-[10px] text-muted-foreground/60 text-center mt-1.5">
+        Powered by Two Seasons Data
+      </p>
 
       <input
         type="file"

@@ -1,6 +1,6 @@
 import React from 'react';
+import { Sparkles } from 'lucide-react';
 import InputBar from './InputBar';
-import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
 interface WelcomeScreenProps {
   inputValue: string;
@@ -12,9 +12,9 @@ interface WelcomeScreenProps {
 }
 
 const SUGGESTIONS = [
-  "Show yesterday's WhatsApp conversations",
-  'Compare our rates vs competitors',
-  'Summarize latest guest reviews',
+  "Yesterday's WhatsApp conversations",
+  'Rate vs competitors',
+  'Latest guest reviews',
 ];
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
@@ -26,18 +26,26 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onFileUpload,
 }) => {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 bg-transparent">
-      <div className="text-center max-w-md mb-6">
-        <div className="w-16 h-16 rounded-full bg-card border border-primary/30 glow-primary flex items-center justify-center overflow-hidden mx-auto mb-5">
-          <img src={twoSeasonsLogo} alt="Two Seasons" className="w-12 h-12 object-contain" />
+    <div className="flex-1 flex flex-col bg-transparent min-h-0">
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="flex items-start gap-3 mb-6">
+          <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Sparkles size={14} className="text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-medium text-foreground leading-snug">Hi, I'm Sera.</p>
+            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+              Your hotel data consultant. Ask me about bookings, reviews, competitors, or guests.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-2">
+        <div className="pl-10 flex flex-col gap-1.5">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
               onClick={() => onInputChange(s)}
-              className="bg-card/60 border border-border hover:border-primary/50 hover:bg-primary/5 rounded-full px-3 py-1.5 text-xs text-foreground/80 transition-all"
+              className="text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-primary/40 rounded-lg px-3 py-2 text-left w-full transition-colors"
             >
               {s}
             </button>
@@ -45,7 +53,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         </div>
       </div>
 
-      <div className="w-full max-w-2xl">
+      <div className="shrink-0">
         <InputBar
           inputValue={inputValue}
           isTyping={isTyping}
@@ -53,12 +61,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           onSendMessage={onSendMessage}
           onKeyPress={onKeyPress}
           onSendWithFiles={(message, files) => {
-            if (files.length > 0) {
-              files.forEach((file) => onFileUpload?.(file));
-            }
-            if (message.trim()) {
-              onSendMessage();
-            }
+            if (files.length > 0) files.forEach((file) => onFileUpload?.(file));
+            if (message.trim()) onSendMessage();
           }}
         />
       </div>
