@@ -4,17 +4,17 @@ import { ConversationMemoryManager } from './conversation-memory-manager.ts';
 import { ResponseFormatter } from './response-formatter.ts';
 
 export class HumanConsultantPersonality {
-  
+
   static generatePersonalizedSystemPrompt(userHistory?: any[], currentMessage?: string): string {
-    console.log('👤 Generating personalized consultant personality with conversation context...');
-    
+    console.log('👤 Generating Sera consultant personality with conversation context...');
+
     // Analyze conversation history and extract context
     const conversationData = ConversationContextAnalyzer.analyzeConversationHistory(userHistory);
-    
+
     // Build the system prompt with the analyzed data
     const systemPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData);
-    
-    console.log('✅ Personalized consultant personality generated');
+
+    console.log('✅ Sera consultant personality generated');
     return systemPrompt;
   }
 
