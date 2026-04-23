@@ -125,7 +125,7 @@ export const RightChatPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col min-h-0 bg-background">
+              <div className="flex-1 flex flex-col min-h-0 bg-transparent">
                 {messages.length === 0 ? (
                   <WelcomeScreen
                     inputValue={inputValue}
