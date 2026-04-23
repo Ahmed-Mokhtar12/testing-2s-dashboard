@@ -16,9 +16,16 @@ import { useDateRange } from '@/contexts/DateRangeContext';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { tooltipStyle, tooltipItemStyle, tooltipLabelStyle, lineCursor } from '@/components/dashboard/chartTheme';
 
-const tile = (to: string, icon: React.ReactNode, label: string, value: string | number, hint?: string, tone: 'primary' | 'accent' | 'magenta' = 'primary') => ({
-  to, icon, label, value, hint, tone,
-});
+type TileTone = 'primary' | 'accent' | 'magenta';
+
+const tile = (
+  to: string,
+  icon: React.ReactNode,
+  label: string,
+  value: string | number,
+  hint?: string,
+  tone: TileTone = 'primary',
+) => ({ to, icon, label, value, hint, tone });
 
 const Overview: React.FC = () => {
   const { label } = useDateRange();
@@ -50,7 +57,7 @@ const Overview: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {tiles.map((t) => (
           <Link key={t.to} to={t.to} className="group">
-            <KpiCard label={t.label} value={t.value} hint={t.hint} tone={t.tone as any} />
+            <KpiCard label={t.label} value={t.value} hint={t.hint} tone={t.tone} />
           </Link>
         ))}
       </div>
