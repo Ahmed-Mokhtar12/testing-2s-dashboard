@@ -28,7 +28,15 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   isLoading,
 }) => {
   const [activeFilter, setActiveFilter] = useState('All');
-  const filters = ['All', 'Unread', 'Favourites', 'Groups'];
+
+  // Compute counters from chats
+  const unreadCount = chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0);
+  const filters: { key: string; label: string; count?: number }[] = [
+    { key: 'All', label: 'All' },
+    { key: 'Unread', label: 'Unread', count: unreadCount },
+    { key: 'Favourites', label: 'Favourites' },
+    { key: 'Groups', label: 'Groups' },
+  ];
 
   const filteredChats = chats.filter(chat => {
     const q = searchQuery.toLowerCase();
@@ -94,19 +102,28 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 px-3 py-2 overflow-x-auto">
-        {filters.map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setActiveFilter(filter)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-              activeFilter === filter
-                ? 'bg-[#E7FCE8] text-[#128C7E]'
-                : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
-            }`}
-          >
-            {filter}
-          </button>
-        ))}
+        {filters.map((filter) => {
+          const isActive = activeFilter === filter.key;
+          const showCount = filter.count !== undefined && filter.count > 0;
+          return (
+            <button
+              key={filter.key}
+              onClick={() => setActiveFilter(filter.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                isActive
+                  ? 'bg-[#D9FDD3] text-[#0a5c45]'
+                  : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
+              }`}
+            >
+              <span>{filter.label}</span>
+              {showCount && (
+                <span className={isActive ? 'text-[#0a5c45]' : 'text-[#667781]'}>
+                  {filter.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Locked Chats */}
