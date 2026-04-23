@@ -14,6 +14,7 @@ import { useSocialInsights } from '@/hooks/insights/useSocialInsights';
 import { useWelcomeInsights } from '@/hooks/insights/useWelcomeInsights';
 import { useDateRange } from '@/contexts/DateRangeContext';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { tooltipStyle, tooltipItemStyle, tooltipLabelStyle, lineCursor } from '@/components/dashboard/chartTheme';
 
 const tile = (to: string, icon: React.ReactNode, label: string, value: string | number, hint?: string, tone: 'primary' | 'accent' | 'magenta' = 'primary') => ({
   to, icon, label, value, hint, tone,
@@ -67,7 +68,7 @@ const Overview: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
               <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={lineCursor} />
               <Area type="monotone" dataKey="value" stroke="hsl(var(--chart-1))" fill="url(#ovReviews)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
@@ -85,7 +86,7 @@ const Overview: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
               <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={lineCursor} />
               <Area type="monotone" dataKey="value" stroke="hsl(var(--chart-2))" fill="url(#ovWA)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>

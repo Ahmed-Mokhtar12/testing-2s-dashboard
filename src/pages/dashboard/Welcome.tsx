@@ -8,9 +8,9 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
+import { tooltipStyle, tooltipItemStyle, tooltipLabelStyle, lineCursor } from '@/components/dashboard/chartTheme';
 
 const PALETTE = ['hsl(var(--chart-4))', 'hsl(var(--chart-5))', 'hsl(var(--chart-3))', 'hsl(var(--chart-1))'];
-const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 } as const;
 
 const WelcomePage: React.FC = () => {
   const { data, isLoading } = useWelcomeInsights();
@@ -34,7 +34,7 @@ const WelcomePage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
               <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={lineCursor} />
               <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-4))" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -46,7 +46,7 @@ const WelcomePage: React.FC = () => {
               <Pie data={data?.statusSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.statusSplit || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>
