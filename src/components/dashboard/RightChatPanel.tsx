@@ -22,6 +22,7 @@ export const RightChatPanel: React.FC = () => {
   const {
     chatSessions,
     activeSessionId,
+    setActiveSessionId,
     saveChatMessage,
     createNewSession,
     selectSession,
@@ -47,6 +48,7 @@ export const RightChatPanel: React.FC = () => {
     onSaveChatMessage: saveChatMessage,
     activeSessionId,
     createNewSessionId,
+    onSessionIdChange: setActiveSessionId,
   });
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
