@@ -1,40 +1,76 @@
 
 
-## لوحة إيموجي كاملة بأسلوب WhatsApp Web الحقيقي
+## تفعيل زر `+` لإرفاق ومشاركة المستندات في شريط المحادثة
 
-سأستبدل اللوحة الحالية المحدودة بلوحة إيموجي شاملة تطابق WhatsApp Web تماماً — كما في الصورة المرفقة.
+سأجعل زر الإضافة `+` على يسار حقل الإدخال في WhatsApp يعمل تماماً كما في WhatsApp Web الحقيقي — فتح قائمة منبثقة بخيارات إرفاق (مستند، صورة/فيديو، كاميرا) مع إمكانية اختيار الملفات وإرسالها داخل المحادثة.
 
-### ما سيراه المستخدم
-- **آلاف الإيموجي** الكاملة (وليس مجموعة محدودة).
-- **شريط تصنيفات أفقي علوي** بـ 9 فئات: Recent, Smileys & People, Animals & Nature, Food & Drink, Activities, Travel & Places, Objects, Symbols, Flags.
-- **شريط بحث** بالأعلى تحت التصنيفات (بحدود خضراء عند التركيز — لون WhatsApp).
-- **قسم "Recent"** يحفظ آخر الإيموجي المستخدمة في `localStorage`.
-- **عناوين أقسام** (Smileys & People, Animals & Nature ...) أثناء التمرير.
-- **دعم لون البشرة** (skin tone) عبر الضغط المطوّل على الإيموجي القابلة للتعديل.
-- **تخطيط الشبكة**: ~13 إيموجي في كل صف بحجم مناسب، مع تمرير سلس.
-- الأيقونة في حقل الإدخال تتلوّن بأخضر `#128C7E` عندما تكون اللوحة مفتوحة.
-- إدراج الإيموجي في موضع المؤشر داخل النص بالضبط.
+### ما سيحدث للمستخدم
+- الضغط على زر `+` يفتح قائمة منبثقة فوقه تحتوي على:
+  - 📄 **Document** — يفتح متصفح الملفات لاختيار PDF/Word/Excel/PowerPoint/TXT.
+  - 🖼️ **Photos & videos** — يفتح متصفح الملفات لاختيار صور أو فيديو.
+  - 📷 **Camera** — معطّل مع تلميح "Coming soon" (الكاميرا تتطلب صلاحيات إضافية، خارج النطاق).
+- بعد اختيار الملف:
+  - تظهر **بطاقة معاينة** فوق حقل الإدخال (اسم الملف + حجمه + أيقونة نوعه + زر × لإلغاء الإرفاق).
+  - يمكن للمستخدم كتابة تعليق نصي اختياري مع المرفق.
+  - الضغط على زر الإرسال يُرسل الرسالة + المرفق.
+- بعد الإرسال:
+  - تظهر **فقاعة رسالة** تحتوي على بطاقة المرفق (أيقونة + اسم الملف + الحجم + زر تنزيل) — مطابقة لشكل WhatsApp.
+  - الصور تُعرض كمعاينة مصغّرة قابلة للنقر.
+- أيقونة `+` تتلوّن بأخضر `#128C7E` عند فتح القائمة.
 
-### الحل التقني
-استخدام **`emoji-picker-react`** بإعدادات كاملة (وليس مختصرة):
-- `emojiStyle="native"` — يستخدم إيموجي النظام (سريع، حجم صغير، يطابق WhatsApp على Mac/Windows/Mobile).
-- `width={350}`, `height={450}` — حجم مطابق لـ WhatsApp Web.
-- `searchPlaceHolder="Search emoji"`.
-- `previewConfig={{ showPreview: false }}` — إخفاء شريط المعاينة السفلي.
-- `skinTonesDisabled={false}` — تفعيل اختيار لون البشرة.
-- `lazyLoadEmojis={true}` — تحميل تدريجي للأداء.
-- تخصيص ألوان عبر `theme` و CSS متغيّرات لتطابق هوية WhatsApp (أخضر `#128C7E` للتركيز، خلفية بيضاء، حدود رمادية ناعمة).
+### حدود الملفات
+- الحد الأقصى للحجم: **16 MB** لكل ملف (نفس حد WhatsApp).
+- الأنواع المسموحة:
+  - **مستندات**: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV.
+  - **صور/فيديو**: JPG, PNG, GIF, WEBP, MP4, MOV.
+- التحقّق من النوع والحجم قبل الإرفاق، مع رسالة `toast` خطأ واضحة عند التجاوز.
 
-### التغييرات
-**ملف واحد فقط**: `src/components/whatsapp/WhatsAppInput.tsx`
-- توسيع إعدادات `<EmojiPicker />` لعرض كل الفئات والإيموجي.
-- زيادة الحجم إلى 350×450.
-- إضافة CSS مخصّص (داخل `index.css` أو inline) لتلوين عنصر `.epr-search` بحدود خضراء مطابقة للصورة.
+### التخزين
+استخدام **Supabase Storage** (Lovable Cloud) — bucket عام جديد باسم `whatsapp-attachments`:
+- مسار التخزين: `whatsapp-attachments/{senderNumber}/{timestamp}_{filename}`.
+- الملفات تُرفع أولاً، ثم يُرسل الرابط العام (`publicUrl`) ضمن payload الرسالة إلى n8n webhook.
+- سياسات RLS: قراءة عامة (للعرض في الفقاعات)، كتابة مفتوحة عبر الـ anon key (الواجهة فقط).
 
-**ملف ثانوي**: `src/index.css`
-- إضافة كتلة CSS صغيرة لتخصيص مظهر `emoji-picker-react` ليطابق ألوان WhatsApp (الحدود الخضراء حول البحث، اللون النشط للتصنيف المختار).
+### تكامل n8n
+سيُضاف إلى payload الـ `whatsapp-web-chat` Edge Function حقول جديدة:
+```json
+{
+  "message": "النص الاختياري",
+  "senderNumber": "...",
+  "attachment": {
+    "url": "https://.../public/whatsapp-attachments/...",
+    "filename": "report.pdf",
+    "mimeType": "application/pdf",
+    "size": 1234567,
+    "kind": "document" | "image" | "video"
+  }
+}
+```
+يبقى الحقل `attachment` اختيارياً (null عند عدم وجود مرفق) — لن يكسر التدفّق الحالي.
+
+### عرض المرفقات في فقاعة الرسالة
+في `WhatsAppMessage.tsx`:
+- إذا كانت الرسالة تحوي `attachment.kind === "image"` → عرض `<img>` مصغّرة مع ضغطة لفتحها.
+- إذا كانت `kind === "document"` → بطاقة بيضاء بأيقونة نوع الملف (PDF أحمر، Word أزرق، Excel أخضر) + اسم الملف + الحجم + زر تنزيل.
+- إذا كانت `kind === "video"` → عنصر `<video controls>` مصغّر.
+
+### الملفات المعدّلة / المُنشأة
+
+**جديد**:
+1. `src/components/whatsapp/AttachmentMenu.tsx` — القائمة المنبثقة لزر `+`.
+2. `src/components/whatsapp/AttachmentPreview.tsx` — بطاقة المعاينة قبل الإرسال.
+3. `src/components/whatsapp/AttachmentBubble.tsx` — عرض المرفق داخل فقاعة الرسالة.
+4. `src/hooks/useWhatsAppAttachment.ts` — منطق الرفع لـ Supabase Storage + التحقّق.
+5. **Migration SQL** — إنشاء bucket `whatsapp-attachments` + RLS policies.
+
+**معدّل**:
+6. `src/components/whatsapp/WhatsAppInput.tsx` — لفّ زر `+` بـ `Popover` يحتوي `AttachmentMenu`، إدارة state للمرفق المختار، عرض `AttachmentPreview` فوق الحقل، تمرير المرفق إلى `onSend`.
+7. `src/components/whatsapp/WhatsAppMessage.tsx` — عرض `AttachmentBubble` عند وجود مرفق في الرسالة.
+8. `src/hooks/useWhatsAppChat.ts` — تمديد دالة الإرسال لقبول مرفق + إدراجه في `Chat History` + إرساله ضمن payload.
+9. `supabase/functions/whatsapp-web-chat/index.ts` — تمرير حقل `attachment` من الواجهة إلى webhook n8n.
 
 ### خارج النطاق
-- لن يُغيَّر أي شيء آخر في الواجهة.
-- لن تُضاف تبويبات GIF أو Stickers (المرئية في الصورة) — تتطلب تكاملات منفصلة، يمكن طلبها لاحقاً.
+- لن أُفعّل الكاميرا (تتطلب `getUserMedia` وصلاحيات).
+- لن أُضيف خيارات WhatsApp الأخرى (Sticker, Poll, Contact, Event) — يمكن في خطوات لاحقة.
+- لن أُغيّر شكل/سلوك زر الإيموجي أو الميكروفون أو الإرسال.
 
