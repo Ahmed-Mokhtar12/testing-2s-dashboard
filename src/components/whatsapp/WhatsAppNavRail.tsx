@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   MessageCircle,
   CircleDashed,
-  Megaphone,
   Users,
   Sparkles,
   Settings,
@@ -11,10 +10,11 @@ import {
   LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
+import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
 interface NavItem {
   key: string;
-  icon: LucideIcon;
+  icon: LucideIcon | 'two-seasons-logo';
   label: string;
   badge?: number;
 }
@@ -22,7 +22,7 @@ interface NavItem {
 const topItems: NavItem[] = [
   { key: 'chats', icon: MessageCircle, label: 'Chats', badge: 19 },
   { key: 'status', icon: CircleDashed, label: 'Status' },
-  { key: 'channels', icon: Megaphone, label: 'Channels' },
+  { key: 'channels', icon: 'two-seasons-logo', label: 'Two Seasons' },
   { key: 'communities', icon: Users, label: 'Communities' },
   { key: 'meta-ai', icon: Sparkles, label: 'Meta AI' },
 ];
@@ -37,8 +37,8 @@ const WhatsAppNavRail: React.FC = () => {
   const navigate = useNavigate();
 
   const renderItem = (item: NavItem) => {
-    const Icon = item.icon;
     const isActive = active === item.key;
+    const isLogo = item.icon === 'two-seasons-logo';
     return (
       <button
         key={item.key}
@@ -50,7 +50,20 @@ const WhatsAppNavRail: React.FC = () => {
             : 'text-[#54656F] hover:bg-[#E9EDEF]'
         }`}
       >
-        <Icon size={22} />
+        {isLogo ? (
+          <span className="w-7 h-7 rounded-full overflow-hidden bg-white flex items-center justify-center ring-1 ring-gray-200">
+            <img
+              src={twoSeasonsLogo}
+              alt={item.label}
+              className="w-full h-full object-cover"
+            />
+          </span>
+        ) : (
+          (() => {
+            const Icon = item.icon as LucideIcon;
+            return <Icon size={22} />;
+          })()
+        )}
         {item.badge && item.badge > 0 && (
           <span className="absolute top-1 right-1 bg-[#25D366] text-white text-[10px] font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
             {item.badge}
