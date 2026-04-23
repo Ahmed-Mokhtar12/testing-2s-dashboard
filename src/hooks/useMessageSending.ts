@@ -77,7 +77,7 @@ export const useMessageSending = ({
         // Ensure we save the actual text content, not any wrapper objects
         const cleanUserMessage = typeof userMessageContent === 'string' ? userMessageContent : 
                                 typeof userMessageContent === 'object' && userMessageContent && 'body' in userMessageContent ? 
-                                (userMessageContent as any).body : JSON.stringify(userMessageContent);
+                                (userMessageContent as { body: string }).body : JSON.stringify(userMessageContent);
         await onSaveChatMessage(cleanUserMessage, aiReply || '', sessionId || undefined);
       }
       
