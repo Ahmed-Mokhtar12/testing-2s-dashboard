@@ -25,7 +25,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       </span>
     ));
 
-  if (message.hasAction && message.actionData) {
+  if (message.hasAction && message.actionData && message.actionData.type === 'sms') {
     return (
       <div className="py-3">
         <ActionConfirmationMessage
