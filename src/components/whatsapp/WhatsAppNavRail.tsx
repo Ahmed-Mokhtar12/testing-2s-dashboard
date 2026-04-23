@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MessageCircle,
   CircleDashed,
@@ -7,6 +8,7 @@ import {
   Sparkles,
   Settings,
   User,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
 
