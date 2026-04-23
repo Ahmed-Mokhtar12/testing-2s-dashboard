@@ -28,7 +28,15 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   isLoading,
 }) => {
   const [activeFilter, setActiveFilter] = useState('All');
-  const filters = ['All', 'Unread', 'Favourites', 'Groups'];
+
+  // Compute counters from chats
+  const unreadCount = chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0);
+  const filters: { key: string; label: string; count?: number }[] = [
+    { key: 'All', label: 'All' },
+    { key: 'Unread', label: 'Unread', count: unreadCount },
+    { key: 'Favourites', label: 'Favourites' },
+    { key: 'Groups', label: 'Groups' },
+  ];
 
   const filteredChats = chats.filter(chat => {
     const q = searchQuery.toLowerCase();
