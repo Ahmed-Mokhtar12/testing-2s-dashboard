@@ -37,8 +37,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent className="bg-sidebar">
         <div className="px-3 py-5 flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-primary-gradient flex items-center justify-center glow-primary shrink-0">
-            <span className="font-display font-bold text-primary-foreground text-sm">2S</span>
+          <div className="h-9 w-9 rounded-xl bg-white flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-border">
+            <img src={twoSeasonsLogo} alt="Two Seasons" className="w-full h-full object-contain p-0.5" />
           </div>
           {!collapsed && (
             <div className="flex flex-col">
