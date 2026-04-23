@@ -1,113 +1,122 @@
 
 
-## إعادة تصميم شات Sera بنمط "Lovable AI Assistant" (الصورة المرفقة)
+## تبسيط Sera prompt + ربطها بجداول Two Seasons فقط
 
-الصورة المرفقة تُظهر مساعد Lovable على يمين الشاشة: لوحة عمودية نظيفة، header بسيط بأيقونة + اسم + قائمة، رسائل بدون فقاعات ثقيلة (نص مباشر مع توهج خفيف)، حالات سير عمل (Ran search_docs ✓ / Reasoned ⓘ)، وصندوق إدخال سفلي بسيط مع dropdown للموديل.  
-سنطبّق نفس النمط على لوحة Sera مع الحفاظ على هويتنا (نيون بنفسجي + شعار Two Seasons).
-
-### الملفات التي ستُعدَّل
-1. `src/components/dashboard/RightChatPanel.tsx` — Header اللوحة
-2. `src/components/WelcomeScreen.tsx` — شاشة البداية
-3. `src/components/ChatMessage.tsx` — شكل الرسائل (إزالة الفقاعات الثقيلة)
-4. `src/components/InputBar.tsx` — صندوق إدخال أنحف + dropdown
-5. `src/components/TypingIndicator.tsx` — استبداله بـ "Reasoning…" بنمط Lovable
-6. `src/components/ChatFooter.tsx` — حذفه أو دمج نصه داخل الـ input footer
+### الجداول المعتمدة (11)
+**بيانات Dashboard:** `reviews`, `Chat History`, `email_threads`, `Two Seasons Competitor Hotel room Rates`, `info_email_audit_log`, `social_engagement_logs`, `welcome_message_success_log`  
+**معرفة مساندة:** `N8N_2S`, `Sop`, `Conducted Training`, `LongTermMemory`  
+**مستثنى:** `khaldia_reviews`, جميع `website_*`, `burst_*`, `n8n_chat_histories`, `conducted_training` (lowercase)
 
 ---
 
-### 1) Header اللوحة (RightChatPanel)
-نمط مطابق للصورة:
+### 1) إعادة كتابة `system-prompt-builder.ts`
+استبدال الـ prompt الحالي (110 سطر) بنسخة مبسّطة (~50 سطر):
+
 ```
-[★ logo]  Sera  ⌄              [+]  [⚙]  [✕]
+You are Sera, Senior Hotel Management Consultant for Two Seasons Hotel, Dubai.
+Professional, data-driven, concise. Respond in the user's language (English default).
+
+⏰ Timezone: Dubai (GMT+4) for all dates/times.
+
+📊 YOUR DATA SOURCES (Two Seasons only — never reference other properties):
+
+Dashboard data:
+- reviews — Guest reviews & ratings (TripAdvisor, Booking, Google, etc.)
+- Chat History — WhatsApp guest conversations
+- email_threads — Email conversations with guests
+- Two Seasons Competitor Hotel room Rates — Daily competitor pricing (AED)
+- info_email_audit_log — info@ inbox classification & routing log
+- social_engagement_logs — Social media DMs & replies (IG, FB, TikTok)
+- welcome_message_success_log — Arrival welcome messages sent to guests
+
+Knowledge base:
+- N8N_2S — Uploaded documents (SOPs, PDFs, embeddings)
+- Sop — Standard Operating Procedures by department
+- Conducted Training — Past staff training summaries
+- LongTermMemory — Persistent conversation memory
+
+🔒 STRICT BOUNDARIES:
+- ONLY use the tables listed above. Never query or reference other database tables.
+- For anything outside these tables → use web search or admit you don't have it.
+- Never fabricate data. If a metric isn't in these tables, say so clearly.
+
+🔧 RETRIEVAL PRIORITY:
+1. Tables above (primary source)
+2. 2seasonshotels.com (search_web with site: filter) for current hotel info
+3. General web search for industry trends, news, external context
+4. General knowledge as last resort with disclaimer
+
+💬 STYLE:
+- Lead with concrete numbers from the data
+- Short, scannable answers (bullets when listing, prose when explaining)
+- Reference previous conversation context naturally
+- Ask for clarification only when truly needed
+- Suggest follow-up actions/questions when valuable
+
+🎯 CAPABILITIES:
+- Analyze reviews, conversations, competitor rates, welcome messages
+- Send emails, SMS, WhatsApp via action functions
+- Search hotel website and the web
+- Remember conversation context
+
+{conversationContext}
+{memoryContext}
 ```
-- شعار Two Seasons داخل دائرة صغيرة `w-7 h-7` بحدود `border-primary/40` و `glow-primary` خفيف.
-- اسم "Sera" بخط `text-sm font-medium` + سهم `ChevronDown` صغير (placeholder للقائمة لاحقاً).
-- على اليمين: زر `+` (محادثة جديدة → `clearMessages`)، زر `Settings` (placeholder)، زر `X` (إغلاق اللوحة).
-- خلفية الـ header: `bg-card/40 backdrop-blur border-b border-border` بدون gradient ثقيل.
-- حذف الـ subtitle "Hotel Consultant" — نظافة بصرية كاملة مثل الصورة.
 
-### 2) WelcomeScreen
-- إزالة دائرة الشعار الكبيرة + الـ chips الحالية.
-- استبدالها بـ **رسالة افتتاحية واحدة** بنمط Lovable:
-  ```
-  ✦ Hi, I'm Sera.
-  Your hotel data consultant. Ask me about
-  bookings, reviews, competitors, or guests.
-  ```
-  - أيقونة ✦ (Sparkles من lucide) بلون `text-primary`.
-  - عنوان `text-base font-medium text-foreground`.
-  - وصف `text-sm text-muted-foreground`.
-  - محاذاة لليسار، padding `px-4 py-6`.
-- تحت الرسالة: 3 suggestion chips أصغر وأنحف (بدل المربعات):
-  - "Yesterday's WhatsApp conversations"
-  - "Rate vs competitors"
-  - "Latest guest reviews"
-  - تصميم: `text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-primary/40 rounded-lg px-3 py-2 text-left w-full transition-colors`
-  - مرتبة عمودياً (`flex flex-col gap-1.5`) مثل suggestions Lovable.
+- إزالة "Marcus Chen" → **Sera** في كل مكان.
+- إزالة الجمل العربية الثابتة (الردّ يتبع لغة المستخدم تلقائياً).
+- إزالة الأرقام الثابتة (1,719 / 4.24).
+- إزالة التناقض حول "no booking data" — الجداول الآن واضحة.
 
-### 3) ChatMessage — إزالة الفقاعات الثقيلة
-بنمط Lovable الرسائل تظهر كنص مباشر بدون كروت بارزة:
+### 2) تحديث `human-consultant-personality.ts`
+تغيير التعليقات من "Marcus" → "Sera". لا تغيير منطقي.
 
-- **رسالة Sera** (AI):
-  ```
-  [logo 6x6]  نص الرسالة بدون خلفية
-              بـ text-foreground/90 text-sm leading-relaxed
-              [timestamp text-foreground/40 text-[10px]]
-  ```
-  - بدون `bg-card`، بدون `border`، بدون `rounded-2xl`.
-  - فقط padding `py-3` وفاصل خفيف `border-b border-border/30` بين الرسائل (اختياري).
+### 3) تحديث `base-context-builder.ts`
+تبسيط المحتوى ليتماشى مع الـ prompt الجديد، وإزالة التكرار حول "website-first" (الأولوية الآن: tables → website → web).
 
-- **رسالة المستخدم**:
-  - تبقى فقاعة خفيفة لتمييزها لكن أنحف:  
-    `bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 text-sm text-foreground` على اليمين.
-  - بدون gradient ثقيل.
-  - بدون avatar (مثل Lovable الذي لا يُظهر avatar للمستخدم).
+### 4) تحديث `context-builder.ts`
+تغيير "Marcus Chen" → **Sera** وتقليم الـ retrieval guidelines ليطابق البنية الجديدة.
 
-- إزالة "(Dubai)" من الـ timestamp — يكفي الوقت.
+### 5) قائمة الجداول البيضاء (Whitelist)
+إضافة ثابت في `data-service.ts` و`enhanced-data-service.ts`:
 
-### 4) InputBar — صندوق إدخال بنمط Lovable
-نسخة مطابقة لصورة Lovable:
+```ts
+export const ALLOWED_TABLES = [
+  'reviews', 'Chat History', 'email_threads',
+  'Two Seasons Competitor Hotel room Rates',
+  'info_email_audit_log', 'social_engagement_logs',
+  'welcome_message_success_log',
+  'N8N_2S', 'Sop', 'Conducted Training', 'LongTermMemory',
+] as const;
 ```
-┌─────────────────────────────────────────┐
-│  Ask Sera a follow up question...       │
-│                                          │
-│  [model ⌄]              [📎] [🎤] [↑]  │
-└─────────────────────────────────────────┘
-```
-- حاوية: `rounded-2xl bg-card/60 border border-border focus-within:border-primary/50 backdrop-blur` بدون shadow ثقيل.
-- Textarea بسطر واحد افتراضياً يكبر تلقائياً، placeholder: `"Ask Sera a follow up question..."`.
-- شريط سفلي داخل نفس الحاوية:
-  - يسار: زر صغير `[Sera ⌄]` placeholder للموديل/الأداة بنمط `text-xs text-muted-foreground hover:text-foreground bg-background/40 rounded-md px-2 py-1`.
-  - يمين: 3 أزرار `Paperclip` / `Mic` / `ArrowUp` بحجم `h-7 w-7`، الزر الأخير (إرسال) `bg-primary text-primary-foreground rounded-lg` بدون gradient.
-- إزالة زر Send المربع الكبير المنفصل.
+- مراجعة استدعاءات `supabase.from(...)` في الـ edge function والتأكد أنها كلها داخل القائمة.
+- إزالة أي استعلام لجداول `khaldia_reviews` / `website_*` / `burst_*` إن وُجدت.
 
-### 5) TypingIndicator → "Reasoning indicator"
-بدل النقاط الثلاث، عرض سطر بنمط Lovable:
-```
-○ Reasoning…
-```
-- دائرة صغيرة `w-3 h-3 border border-primary border-t-transparent rounded-full animate-spin`.
-- نص `text-xs text-muted-foreground`.
-- بدون فقاعة، بدون avatar، فقط محاذاة يسار مع `pl-9` ليتماشى مع الرسائل.
-
-### 6) ChatFooter
-- حذف "Powered by Two Seasons Data" من شريط مستقل.
-- نقله كـ نص رمادي صغير جداً تحت الـ InputBar مباشرة:  
-  `text-[10px] text-muted-foreground/60 text-center mt-1.5`.
+### 6) تحديث الـ memory
+- تحديث `mem://ai/persona-and-intelligence-standards` ليعكس قائمة الجداول الـ11 وحدود Sera الجديدة.
+- إضافة `mem://ai/sera-allowed-tables` كمرجع سريع للقائمة البيضاء.
 
 ---
 
-### ملاحظات تقنية
-- جميع الألوان عبر HSL design tokens فقط.
-- لا تغييرات على المنطق (`useChat`, sessions, edge functions, n8n).
-- لا تغييرات على routing أو قاعدة البيانات.
-- الـ `+` button في الـ header يستدعي `clearMessages` الموجودة في `useChat`.
-- زر `X` في الـ header يستدعي callback إغلاق اللوحة (موجود بالفعل في `RightChatPanel` كـ prop).
+### الملفات المُعدَّلة
+1. `supabase/functions/chat-with-data/system-prompt-builder.ts` (إعادة كتابة كاملة)
+2. `supabase/functions/chat-with-data/human-consultant-personality.ts` (تنظيف)
+3. `supabase/functions/chat-with-data/base-context-builder.ts` (تبسيط)
+4. `supabase/functions/chat-with-data/context-builder.ts` (تحديث الاسم + التبسيط)
+5. `supabase/functions/chat-with-data/data-service.ts` (whitelist)
+6. `supabase/functions/chat-with-data/enhanced-data-service.ts` (whitelist)
+7. `mem://ai/persona-and-intelligence-standards` (تحديث)
+8. `mem://ai/sera-allowed-tables` (إضافة)
 
-### اختبار سريع بعد التنفيذ
-1. افتح `/dashboard/whatsapp` → افتح لوحة الشات.
-2. تأكد أن الـ header مثل الصورة: شعار + "Sera ⌄" يسار، أزرار + / ⚙ / ✕ يمين.
-3. تأكد أن الرسائل بدون فقاعات ثقيلة (نص مباشر مع شعار صغير لـ Sera).
-4. تأكد أن صندوق الإدخال موحّد: textarea + شريط سفلي بـ model selector + أزرار attach/mic/send.
-5. أرسل رسالة وتأكد أن مؤشر "Reasoning…" يظهر بدل النقاط.
+### بدون تغييرات
+- لا تعديلات على قاعدة البيانات أو RLS.
+- لا تغييرات على الـ UI.
+- لا تغييرات على routing أو n8n.
+
+### اختبار سريع
+1. افتح الشات → اسأل "How many reviews do we have?" → يجب أن يرد برقم حقيقي من جدول `reviews`.
+2. اسأل "What's our competitor pricing today?" → يستخدم `Two Seasons Competitor Hotel room Rates`.
+3. اسأل "Show me khaldia reviews" → يجب أن يرفض ويوضح أنه يخدم Two Seasons فقط.
+4. اسأل "Latest WhatsApp conversations?" → يقرأ من `Chat History`.
+5. اسأل "What's the weather in Dubai?" → يستخدم web search.
 
