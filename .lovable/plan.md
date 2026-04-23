@@ -1,57 +1,37 @@
 
 
-## إعادة تصميم الـ Sidebar داخل لوحة Sera
+## مزامنة `activeSessionId` بين `useChat` و `useSeraLocalSessions`
 
-### المشاكل الحالية
-1. **لا يوجد زر إغلاق** للـ inner sidebar — فُتح ولا طريقة لإقفاله من داخله.
-2. **لا يعرض المحادثات السابقة** بشكل صحيح — يظهر فقط الهيدر "Two Seasons GPT" + زر New Chat + أيقونة Settings، والقائمة فارغة.
-3. **زر "+ New Chat" مكرر** — موجود أصلاً في هيدر Sera الأيمن (`+`).
-4. **هيدر "Two Seasons GPT" غير ضروري** داخل لوحة Sera (تكرار بصري).
+### المشكلة
+الآن `useChat` يحتفظ بـ `currentSessionId` داخلي منفصل عن `activeSessionId` في `useSeraLocalSessions`. عند بدء محادثة جديدة من داخل `useChat` (عبر `createNewSessionId`)، الـ hook الخارجي لا يعرف بالـ session الجديد، فلا يتم تحديث `activeSessionId` ولا تظهر الجلسة كنشطة في الـ sidebar حتى يتم حفظ أول رسالة. كذلك عند إعادة render للـ `RightChatPanel`، الـ `activeSessionId` يبدأ دائمًا `null` لأنه state محلي بدون persistence.
 
-### الحل المقترح
+### الحل
 
-إنشاء مكوّن جديد مخصص للـ inner sidebar بدلاً من إعادة استخدام `Sidebar.tsx` العام (المصمم أصلاً للصفحة الكاملة `/`).
+#### 1. `src/hooks/useSeraLocalSessions.ts`
+- **Persist `activeSessionId`** في `localStorage` تحت مفتاح `sera_active_session_v1`:
+  - تهيئة الـ state عبر lazy initializer يقرأ من الـ storage.
+  - `useEffect` يكتب القيمة عند أي تغيير (يمسح المفتاح إذا كانت `null`).
+- **إضافة setter صريح** `setActiveSessionId` ضمن القيم المُرجَعة من الـ hook ليتمكن المستهلك من المزامنة من الخارج.
+- التأكد أن `createNewSession`, `selectSession`, `deleteSession` تستمر تحديث الـ state (موجود فعلاً، لكن نضمن أن الـ persistence effect يلتقطها).
 
-**ملف جديد:** `src/components/dashboard/SeraHistorySidebar.tsx`
+#### 2. `src/hooks/useChat.ts`
+- استقبال prop جديد اختياري: `onSessionIdChange?: (sessionId: string | null) => void`.
+- الإبقاء على `currentSessionId` المحلي لكن:
+  - مزامنته مع `activeSessionId` القادم من الـ props عبر `useEffect` (عند تغيّر `activeSessionId` الخارجي → تحديث الـ state الداخلي).
+  - عند تغيّر `currentSessionId` داخليًا (مثلاً بعد `createNewSessionId` في `useMessageSending`) → استدعاء `onSessionIdChange` لإبلاغ الـ parent.
 
-#### المحتوى الجديد للـ sidebar:
-
-```text
-┌──────────────────────────┐
-│ Chat History         [×] │ ← هيدر بسيط + زر إغلاق
-├──────────────────────────┤
-│ 🔍 Search conversations  │ ← (اختياري) بحث
-├──────────────────────────┤
-│ ▸ Today                  │
-│   • Rate vs competitors  │ ← المحادثات السابقة
-│   • Latest reviews    🗑 │   مع زر حذف عند hover
-│ ▸ Yesterday              │
-│   • WhatsApp summary     │
-│ ▸ Previous 7 days        │
-│   • ...                  │
-└──────────────────────────┘
-```
-
-#### المواصفات التقنية
-
-1. **زر إغلاق (×)** في الزاوية اليمنى العليا للـ sidebar — يستدعي `setInnerSidebar(false)` عبر prop جديد `onClose`.
-2. **حذف زر "+ New Chat"** ورمز Settings و LayoutDashboard و LogIn من الـ inner sidebar (تبقى موجودة في هيدر Sera الرئيسي).
-3. **حذف هيدر "Two Seasons GPT"** — نستبدله بعنوان مبسّط "Chat History".
-4. **عرض المحادثات السابقة** من `chatSessions` (آتية أصلاً من `useChatSessions`) — مع تجميع اختياري حسب التاريخ (Today / Yesterday / Previous).
-5. **تنسيق متّسق** مع ثيم لوحة Sera: `bg-card/40`, `border-border`, `text-foreground`, `text-muted-foreground` — بدون ألوان hardcoded مثل `#1E1E1E`.
-6. **تفاعل العنصر:** click → اختيار الجلسة، hover → إظهار أيقونة الحذف.
-
-#### تعديل `RightChatPanel.tsx`
-
-- استبدال `<Sidebar … />` (السطور 97–104) بـ `<SeraHistorySidebar … onClose={() => setInnerSidebar(false)} />`.
-- تمرير نفس الـ props الحالية: `chatSessions`, `activeSessionId`, `onSessionSelect`, `onDeleteSession`.
+#### 3. `src/components/dashboard/RightChatPanel.tsx`
+- استخراج `setActiveSessionId` من `useSeraLocalSessions`.
+- تمرير `onSessionIdChange={setActiveSessionId}` إلى `useChat`.
+- النتيجة: عند إنشاء session جديد من `useChat`، يُرفع للـ hook الخارجي ويُحفظ في localStorage فورًا، ويظهر highlighted في الـ sidebar حتى قبل حفظ أول رد.
 
 ### الملفات المعدّلة
-- **جديد:** `src/components/dashboard/SeraHistorySidebar.tsx`
-- **تعديل:** `src/components/dashboard/RightChatPanel.tsx` (استبدال المكوّن المستخدم في الـ inner sidebar فقط)
+- `src/hooks/useSeraLocalSessions.ts` — persistence للـ `activeSessionId` + إضافة setter.
+- `src/hooks/useChat.ts` — قبول `onSessionIdChange` ومزامنة ثنائية الاتجاه مع `activeSessionId`.
+- `src/components/dashboard/RightChatPanel.tsx` — توصيل الـ setter بين الـ hookين.
 
 ### لا تأثير على
-- `src/components/Sidebar.tsx` يبقى كما هو (مستخدم في صفحة `/` الرئيسية).
-- منطق `useChatSessions` و حفظ/تحميل المحادثات.
-- الزر العائم وهيدر Sera الرئيسي.
+- بنية الرسائل أو الـ storage الحالي للـ sessions.
+- تدفق الحفظ (`saveChatMessage`) أو حذف الجلسات.
+- الـ UI للـ sidebar أو الهيدر.
 
