@@ -20,11 +20,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Helper: ensure user_metadata.first_name exists (derived from email)
+    const ensureFirstName = (u: User | null) => {
+      if (!u) return;
+      const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+      if (typeof meta.first_name === 'string' && meta.first_name.trim().length > 0) return;
+      const email = u.email ?? '';
+      const local = email.split('@')[0] ?? '';
+      const rawFirst = local.split(/[._-]/)[0] ?? '';
+      if (!rawFirst) return;
+      const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
+      // Fire and forget — don't block auth flow
+      supabase.auth.updateUser({ data: { first_name: firstName } }).catch((err) => {
+        console.warn('Failed to set first_name on user_metadata:', err);
+      });
+    };
+
     // 1) Subscribe FIRST to avoid missing events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setLoading(false);
+      // Defer to avoid running inside the callback synchronously
+      setTimeout(() => ensureFirstName(newSession?.user ?? null), 0);
     });
 
     // 2) THEN fetch the existing session

@@ -9,13 +9,14 @@ interface WhatsAppMessageProps {
   timestamp: Date;
   mediaUrl?: string;
   attachment?: AttachmentBubbleData;
+  repliedByName?: string;
 }
 
 const isImageUrl = (url: string): boolean => {
   return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url);
 };
 
-const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHumanReply, timestamp, mediaUrl, attachment }) => {
+const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHumanReply, timestamp, mediaUrl, attachment, repliedByName }) => {
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -48,11 +49,13 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
           }`}
         />
 
-        {/* Human agent label */}
+        {/* Human agent label — show sender's first name */}
         {isHumanReply && (
           <div className="flex items-center gap-1 mb-1 pt-1 px-1">
             <UserCheck size={10} className="text-orange-500" />
-            <span className="text-[9px] text-orange-500 font-semibold uppercase tracking-wide">Human Agent</span>
+            <span className="text-[10px] text-orange-500 font-semibold tracking-wide">
+              {repliedByName || 'Agent'}
+            </span>
           </div>
         )}
 
