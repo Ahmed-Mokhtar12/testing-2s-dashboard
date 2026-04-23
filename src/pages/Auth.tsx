@@ -77,7 +77,7 @@ const AuthPage: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-9"
-                  placeholder="you@twoseasonshotel.com"
+                  placeholder="you@2seasonshotels.com"
                   autoComplete="email"
                 />
               </div>
