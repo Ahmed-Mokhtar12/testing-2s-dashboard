@@ -52,7 +52,7 @@ serve(async (req) => {
       .eq('session_id', sessionId || 'guest')
       .eq('is_archived', false)
       .order('created_at', { ascending: false })
-      .limit(10); // Last 5 exchanges (user + AI pairs)
+      .limit(30); // Last 15 exchanges (user + AI pairs)
 
     if (historyError) {
       console.warn('⚠️ Error retrieving conversation history:', historyError);
