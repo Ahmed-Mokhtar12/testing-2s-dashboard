@@ -1,47 +1,47 @@
 
 
-## تكبير شعار Two Seasons وتوضيح زر Back to Dashboard
+## استبدال أيقونة "TS" في أعلى يسار محادثة WhatsApp بشعار Two Seasons
 
-### التغييرات المطلوبة في `src/components/whatsapp/WhatsAppNavRail.tsx`
+### الموقع المستهدف
+الدائرة الذهبية المكتوب فيها "TS" في أعلى يسار نافذة المحادثة (header) في صفحة `/whatsapp`.
 
-#### 1) تكبير دائرة شعار Two Seasons
-- زيادة حجم الحاوية من `w-7 h-7` إلى `w-10 h-10` لتملأ معظم زر الـ rail (الذي حجمه `w-12 h-12`).
-- إزالة `bg-white` و `ring-1 ring-gray-200` لأن الشعار نفسه واضح ولا يحتاج إطار.
-- استخدام `object-contain` بدل `object-cover` حتى يظهر الشعار كاملاً بدون قص.
-- النتيجة: شعار أكبر وأوضح بكثير داخل دائرة نظيفة.
+### الملف الذي سيتم تعديله
+`src/components/whatsapp/WhatsAppHeader.tsx`
 
-#### 2) تحسين زر Back to Dashboard ليكون مفهوماً للمستخدم الجديد
-بدل أيقونة `LayoutDashboard` الغامضة، نستبدلها بحلّ مرئي أوضح:
+### التغييرات
 
-- **استخدام أيقونة `Home` من lucide-react** (أكثر شيوعاً وفهماً للرجوع للصفحة الرئيسية).
-- **إضافة label نصي صغير "Dashboard"** أسفل الأيقونة داخل نفس الزر.
-- **تمييز الزر بصرياً**: خلفية خضراء فاتحة دائمة `bg-[#E7FCE8]` ولون نص `text-[#128C7E]` (نفس ألوان WhatsApp البراند) ليبرز كزر إجراء مهم.
-- **توسيع الزر** من `h-12` إلى `h-14` ليستوعب الأيقونة + النص.
-- **الإبقاء على `title="Back to Dashboard"`** للـ tooltip عند hover.
-
-```text
-┌──────────┐
-│   🏠     │   ← Home icon
-│Dashboard │   ← نص صغير
-└──────────┘
+#### 1) استيراد الشعار
+إضافة:
+```tsx
+import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 ```
 
-#### 3) ترتيب نهائي للعمود السفلي (بدون تغيير منطقي)
-```text
-Back to Dashboard (الجديد بشكله الواضح)
-─────────────  (separator موجود)
-Settings
-Two Seasons logo (أكبر وأوضح)
+#### 2) استبدال الدائرة الذهبية بالشعار
+الكود الحالي:
+```tsx
+<div className="w-10 h-10 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center flex-shrink-0">
+  <span className="text-white font-bold text-sm">TS</span>
+</div>
+```
+
+سيُستبدل بـ:
+```tsx
+<div className="w-10 h-10 rounded-full overflow-hidden bg-white flex items-center justify-center flex-shrink-0">
+  <img
+    src={twoSeasonsLogo}
+    alt="Two Seasons Hotel Dubai"
+    className="w-full h-full object-contain"
+  />
+</div>
 ```
 
 ### تفاصيل تقنية
-- ملف واحد فقط: `src/components/whatsapp/WhatsAppNavRail.tsx`.
-- استيراد `Home` بدل `LayoutDashboard` من `lucide-react`.
-- لا تغييرات على الـ routing أو على باقي مكونات `/whatsapp`.
-- لا تغييرات على n8n أو Edge Functions أو قاعدة البيانات.
+- نفس الحجم `w-10 h-10` للحفاظ على تناسق الـ header.
+- `rounded-full` + `overflow-hidden` لضمان شكل دائري نظيف.
+- خلفية `bg-white` لإبراز ألوان الشعار.
+- `object-contain` لعرض الشعار كاملاً بدون قص.
+- ملف واحد فقط، بدون أي تغييرات على routing أو n8n أو قاعدة البيانات.
 
 ### اختبار سريع بعد التطبيق
-1. افتح `/whatsapp` وتأكّد أن شعار Two Seasons أكبر وأوضح في أسفل العمود الأيمن.
-2. تأكّد أن زر Back to Dashboard يظهر بأيقونة Home + كلمة "Dashboard" بخلفية خضراء فاتحة.
-3. اضغط على الزر وتأكد أنه ينقلك إلى `/dashboard`.
+افتح `/whatsapp` وتأكّد أن الدائرة الموجودة في أعلى يسار نافذة المحادثة (بجانب اسم "Two Seasons Hotel Dubai") أصبحت تعرض شعار Two Seasons بدلاً من "TS".
 
