@@ -301,6 +301,14 @@ export const useWhatsAppChat = () => {
         if (!data?.success) throw new Error(data?.error || 'Failed to send');
 
       } else {
+        // Defensive guard: re-check live human-control status before invoking AI path
+        const { data: statusData } = await supabase.functions.invoke('whatsapp-control-status', {
+          body: { senderNumber },
+        });
+        if (statusData?.isHumanControlled) {
+          throw new Error('Conversation is currently under human control. Switch to Take Over mode to reply.');
+        }
+
         // AI mode: send to n8n webhook as usual
         const { data, error } = await supabase.functions.invoke('whatsapp-web-chat', {
           body: {

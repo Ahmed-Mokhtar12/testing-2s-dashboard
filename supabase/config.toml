@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-message]
 verify_jwt = false
+
+[functions.whatsapp-control-status]
+verify_jwt = false
