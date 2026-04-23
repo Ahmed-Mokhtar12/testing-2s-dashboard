@@ -108,9 +108,9 @@ const InputBar: React.FC<InputBarProps> = ({
             <Button
               onClick={handleSendMessage}
               disabled={!canSend}
-              className="h-7 w-7 p-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+              className="h-8 w-8 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center"
             >
-              <ArrowUp size={14} />
+              <ArrowUp size={16} />
             </Button>
           </div>
         </div>
