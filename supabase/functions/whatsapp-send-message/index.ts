@@ -70,38 +70,46 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Resolve current authenticated user (for human-reply attribution)
-    let repliedByUserId: string | null = null;
+    // REQUIRE authentication — this endpoint controls WhatsApp conversations
+    // and must never be callable by anonymous users.
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: userRes, error: authErr } = await userClient.auth.getUser();
+    const authedUser = userRes?.user;
+    if (authErr || !authedUser) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let repliedByUserId: string | null = authedUser.id;
     let repliedByName: string | null = null;
-    try {
-      const authHeader = req.headers.get('Authorization') || '';
-      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-      if (token && SUPABASE_URL && SUPABASE_ANON_KEY) {
-        const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          global: { headers: { Authorization: `Bearer ${token}` } },
-        });
-        const { data: userRes } = await userClient.auth.getUser();
-        const u = userRes?.user;
-        if (u) {
-          repliedByUserId = u.id;
-          const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-          const fromMeta = typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
-          if (fromMeta) {
-            repliedByName = fromMeta;
-          } else {
-            const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
-            if (fullName) {
-              repliedByName = fullName.split(/\s+/)[0];
-            } else {
-              const local = (u.email ?? '').split('@')[0] ?? '';
-              const raw = local.split(/[._-]/)[0] ?? '';
-              if (raw) repliedByName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-            }
-          }
+    {
+      const meta = (authedUser.user_metadata ?? {}) as Record<string, unknown>;
+      const fromMeta = typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
+      if (fromMeta) {
+        repliedByName = fromMeta;
+      } else {
+        const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+        if (fullName) {
+          repliedByName = fullName.split(/\s+/)[0];
+        } else {
+          const local = (authedUser.email ?? '').split('@')[0] ?? '';
+          const raw = local.split(/[._-]/)[0] ?? '';
+          if (raw) repliedByName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
         }
       }
-    } catch (authErr) {
-      console.warn('Could not resolve user for attribution:', authErr);
     }
 
     // Handle takeover/release actions
