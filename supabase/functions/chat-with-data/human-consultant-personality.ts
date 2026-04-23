@@ -6,7 +6,7 @@ import { ResponseFormatter } from './response-formatter.ts';
 export class HumanConsultantPersonality {
 
   static generatePersonalizedSystemPrompt(userHistory?: any[], currentMessage?: string): string {
-    console.log('👤 Generating Sera consultant personality with conversation context...');
+    console.log('👤 Generating Sera Senior Hospitality Consultant personality (advisor mindset)...');
 
     // Analyze conversation history and extract context
     const conversationData = ConversationContextAnalyzer.analyzeConversationHistory(userHistory);
