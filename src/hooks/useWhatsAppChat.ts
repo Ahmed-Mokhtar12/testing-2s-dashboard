@@ -164,14 +164,26 @@ export const useWhatsAppChat = () => {
         (payload) => {
           const chat = payload.new as Record<string, unknown>;
 
-          // Extract media URL
+          // Extract attachment / media URL
           let mediaUrl: string | undefined;
+          let attachment: UploadedAttachment | undefined;
           if (chat['Media']) {
             if (typeof chat['Media'] === 'string') {
               mediaUrl = chat['Media'] as string;
             } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
-              const mediaObj = chat['Media'] as Record<string, unknown>;
-              mediaUrl = (mediaObj.url || mediaObj.link || mediaObj.src) as string | undefined;
+              const m = chat['Media'] as Record<string, unknown>;
+              const url = (m.url || m.link || m.src) as string | undefined;
+              if (url && typeof m.kind === 'string') {
+                attachment = {
+                  url,
+                  filename: (m.filename as string) || 'file',
+                  mimeType: (m.mimeType as string) || '',
+                  size: (m.size as number) || 0,
+                  kind: m.kind as UploadedAttachment['kind'],
+                };
+              } else {
+                mediaUrl = url;
+              }
             }
           }
 
@@ -186,6 +198,7 @@ export const useWhatsAppChat = () => {
               isUser: true,
               timestamp,
               mediaUrl,
+              attachment,
             });
           }
 
