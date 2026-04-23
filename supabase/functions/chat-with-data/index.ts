@@ -27,11 +27,20 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Hoist these so they remain accessible in the catch block for error logging
+  let message: string | undefined;
+  let messageId: string | undefined;
+  let sessionId: string | undefined;
+  let userHistory: any = null;
+
   try {
     PerformanceMonitor.startTimer('total_request');
     console.log('🚀 Enhanced chat-with-data function starting...');
-    const { message, messageId, sessionId } = await req.json();
-    
+    const body = await req.json();
+    message = body.message;
+    messageId = body.messageId;
+    sessionId = body.sessionId;
+
     console.log('📩 Received message:', { message, messageId, sessionId });
 
     // Initialize Supabase with enhanced error handling
@@ -46,13 +55,14 @@ serve(async (req) => {
 
     // Enhanced conversation context retrieval with session support
     console.log('📚 Retrieving conversation history for session:', sessionId);
-    const { data: userHistory, error: historyError } = await supabase
+    const { data: history, error: historyError } = await supabase
       .from('website_chats')
       .select('*')
       .eq('session_id', sessionId || 'guest')
       .eq('is_archived', false)
       .order('created_at', { ascending: false })
       .limit(30); // Last 15 exchanges (user + AI pairs)
+    userHistory = history;
 
     if (historyError) {
       console.warn('⚠️ Error retrieving conversation history:', historyError);

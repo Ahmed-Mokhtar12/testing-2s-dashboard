@@ -65,6 +65,15 @@ export class OpenAIClient {
       ? 'https://ai.gateway.lovable.dev/v1/chat/completions'
       : 'https://api.openai.com/v1/chat/completions';
 
+    // GPT-5.x family requires max_completion_tokens; legacy models use max_tokens
+    const isGpt5Family = this.config.model.includes('gpt-5');
+    const tokenParam = isGpt5Family
+      ? { max_completion_tokens: this.config.maxTokens }
+      : { max_tokens: this.config.maxTokens };
+
+    // GPT-5.x only supports default temperature (1) — omit the param
+    const tempParam = isGpt5Family ? {} : { temperature: this.config.temperature };
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -74,8 +83,8 @@ export class OpenAIClient {
       body: JSON.stringify({
         model: this.config.model,
         messages,
-        temperature: this.config.temperature,
-        max_tokens: this.config.maxTokens,
+        ...tempParam,
+        ...tokenParam,
         tools: tools?.map(tool => ({
           type: 'function',
           function: tool
