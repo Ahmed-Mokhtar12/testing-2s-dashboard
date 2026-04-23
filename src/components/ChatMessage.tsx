@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { Message, ActionData } from '@/types/chat';
 import ActionConfirmationMessage from './ActionConfirmationMessage';
-import { Button } from '@/components/ui/button';
-import { Copy, RotateCcw, Edit3, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatChatTimestamp } from '@/utils/timezone';
+import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
 interface ChatMessageProps {
   message: Message;
@@ -15,64 +14,31 @@ interface ChatMessageProps {
   onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ 
-  message, 
-  onActionConfirm, 
-  onActionCancel, 
-  onRegenerateMessage, 
-  onEditMessage 
+const ChatMessage: React.FC<ChatMessageProps> = ({
+  message,
+  onActionConfirm,
+  onActionCancel,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(message.content);
+  const [, setIsEditing] = useState(false);
   const { toast } = useToast();
 
-  // Copy message content
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(message.content);
-      toast({
-        title: "تم النسخ",
-        description: "تم نسخ الرسالة إلى الحافظة",
-      });
-    } catch (err) {
-      toast({
-        title: "خطأ",
-        description: "فشل في نسخ الرسالة",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Handle edit submit
-  const handleEditSubmit = () => {
-    if (editContent.trim() !== message.content) {
-      onEditMessage?.(message.id, editContent.trim());
-    }
-    setIsEditing(false);
-  };
-
-  // Enhanced formatting for text content
-  const formatContent = (content: string) => {
-    // Add better line breaks and spacing for text
-    return content
-      .split('\n')
-      .map((line, index) => (
-        <span key={index}>
-          {line}
-          {index < content.split('\n').length - 1 && <br />}
-        </span>
-      ));
-  };
+  const formatContent = (content: string) =>
+    content.split('\n').map((line, index, arr) => (
+      <span key={index}>
+        {line}
+        {index < arr.length - 1 && <br />}
+      </span>
+    ));
 
   return (
     <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6`}>
       <div className="flex items-start gap-3 max-w-[85%] relative">
         {!message.isUser && (
-          <div className="w-8 h-8 bg-gradient-to-br from-[#C8A351] to-[#B8934A] rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-            <span className="text-white font-bold text-xs">TS</span>
+          <div className="w-8 h-8 rounded-full bg-card border border-primary/40 glow-primary overflow-hidden flex items-center justify-center flex-shrink-0 mt-1">
+            <img src={twoSeasonsLogo} alt="Sera" className="w-6 h-6 object-contain" />
           </div>
         )}
-        
+
         {message.hasAction && message.actionData ? (
           <ActionConfirmationMessage
             actionData={message.actionData}
@@ -82,25 +48,24 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           />
         ) : (
           <div
-            className={`rounded-2xl px-4 py-3 shadow-sm ${
+            className={`rounded-2xl px-4 py-3 shadow-card-soft ${
               message.isUser
-                ? 'bg-gradient-to-r from-[#C8A351] to-[#B8934A] text-white ml-3'
-                : 'bg-white border border-gray-200 text-gray-900'
+                ? 'bg-primary-gradient text-primary-foreground rounded-tr-md ml-2'
+                : 'bg-card border border-border text-card-foreground rounded-tl-md'
             }`}
           >
             <div className={`whitespace-pre-wrap leading-relaxed ${message.isUser ? 'text-right' : 'text-left'}`}>
               {formatContent(message.content)}
             </div>
-            <div className={`text-xs mt-3 ${message.isUser ? 'text-white/70' : 'text-gray-500'} text-left`}>
-              {formatChatTimestamp(message.timestamp)} <span className="opacity-60">(Dubai Time)</span>
+            <div className={`text-[10px] mt-2 ${message.isUser ? 'text-primary-foreground/70' : 'text-foreground/50'} text-left`}>
+              {formatChatTimestamp(message.timestamp)} <span className="opacity-60">(Dubai)</span>
             </div>
           </div>
         )}
 
-
         {message.isUser && (
-          <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-            <span className="text-white font-bold text-xs">You</span>
+          <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/40 text-accent flex items-center justify-center flex-shrink-0 mt-1">
+            <User size={14} />
           </div>
         )}
       </div>

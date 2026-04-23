@@ -8,6 +8,7 @@ import DocumentProcessingProgress from '@/components/DocumentProcessingProgress'
 import { useChat } from '@/hooks/useChat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { cn } from '@/lib/utils';
+import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
 /**
  * RightChatPanel — collapsible right-side AI chat (Sera).
@@ -106,8 +107,8 @@ export const RightChatPanel: React.FC = () => {
             <div className="flex-1 flex flex-col min-w-0">
               <div className="h-12 px-4 flex items-center justify-between border-b border-border shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-primary-gradient flex items-center justify-center glow-primary">
-                    <span className="text-[11px] font-bold text-primary-foreground">S</span>
+                  <div className="h-8 w-8 rounded-full bg-card border border-primary/40 glow-primary overflow-hidden flex items-center justify-center">
+                    <img src={twoSeasonsLogo} alt="Sera" className="w-6 h-6 object-contain" />
                   </div>
                   <div>
                     <p className="font-display font-semibold text-sm leading-none">Sera</p>
@@ -124,7 +125,7 @@ export const RightChatPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col min-h-0 bg-background">
+              <div className="flex-1 flex flex-col min-h-0 bg-transparent">
                 {messages.length === 0 ? (
                   <WelcomeScreen
                     inputValue={inputValue}
