@@ -273,6 +273,30 @@ export const useWhatsAppChat = () => {
   }, [isHumanControlled, senderNumber]);
 
   const sendMessage = useCallback(async (content: string, attachment?: UploadedAttachment) => {
+    // Pre-flight: if AI mode in UI, verify live human-control status BEFORE adding the outgoing bubble.
+    // If human control is active server-side, show guidance instead of attempting to send.
+    if (!isHumanControlled) {
+      try {
+        const { data: statusData } = await supabase.functions.invoke('whatsapp-control-status', {
+          body: { senderNumber },
+        });
+        if (statusData?.isHumanControlled) {
+          const guidance: WhatsAppMessage = {
+            id: `guard-${Date.now()}`,
+            content:
+              '⚠️ The AI is currently handling this conversation. Please click the **Take Over** button at the top to start replying to the guest manually.\n\n⚠️ الذكاء الاصطناعي يدير هذه المحادثة حالياً. اضغط زر **Take Over** في الأعلى للرد على الضيف يدوياً.',
+            isUser: false,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, guidance]);
+          setIsHumanControlled(true);
+          return;
+        }
+      } catch (preflightErr) {
+        console.warn('Pre-flight control-status check failed, proceeding:', preflightErr);
+      }
+    }
+
     // Add outgoing message immediately to UI
     const outgoingMessage: WhatsAppMessage = {
       id: `out-${Date.now()}`,
@@ -301,15 +325,7 @@ export const useWhatsAppChat = () => {
         if (!data?.success) throw new Error(data?.error || 'Failed to send');
 
       } else {
-        // Defensive guard: re-check live human-control status before invoking AI path
-        const { data: statusData } = await supabase.functions.invoke('whatsapp-control-status', {
-          body: { senderNumber },
-        });
-        if (statusData?.isHumanControlled) {
-          throw new Error('Conversation is currently under human control. Switch to Take Over mode to reply.');
-        }
-
-        // AI mode: send to n8n webhook as usual
+        // AI mode: send to n8n webhook
         const { data, error } = await supabase.functions.invoke('whatsapp-web-chat', {
           body: {
             message: content,
@@ -333,22 +349,13 @@ export const useWhatsAppChat = () => {
     } catch (error) {
       console.error('Error sending message:', error);
 
-      const errMsg = error instanceof Error ? error.message : String(error);
-      const isGuardBlock = errMsg.toLowerCase().includes('human control');
-
-      let content: string;
-      if (isGuardBlock) {
-        content =
-          '⚠️ The AI is currently handling this conversation. Please click the **Take Over** button at the top to start replying to the guest manually.\n\n⚠️ الذكاء الاصطناعي يدير هذه المحادثة حالياً. اضغط زر **Take Over** في الأعلى للرد على الضيف يدوياً.';
-      } else if (isHumanControlled) {
-        content = 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.';
-      } else {
-        content = 'Sorry, there was an error processing your message. Please try again.';
-      }
+      const errContent: string = isHumanControlled
+        ? 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.'
+        : 'Sorry, there was an error processing your message. Please try again.';
 
       const errorMessage: WhatsAppMessage = {
         id: `error-${Date.now()}`,
-        content,
+        content: errContent,
         isUser: false,
         timestamp: new Date(),
       };
