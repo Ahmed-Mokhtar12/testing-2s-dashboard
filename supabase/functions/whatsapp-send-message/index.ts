@@ -207,8 +207,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in whatsapp-send-message:', error);
+    const msg = error instanceof Error ? error.message : 'Internal server error';
     return new Response(
-      JSON.stringify({ success: false, error: 'Internal server error' }),
+      JSON.stringify({ success: false, error: msg }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
