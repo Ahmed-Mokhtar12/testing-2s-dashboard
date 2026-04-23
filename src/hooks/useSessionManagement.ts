@@ -1,9 +1,16 @@
 import { Message } from '@/types/chat';
 import { createUserMessage, createAIMessage } from '@/utils/messageSender';
 
+export interface StoredSessionMessage {
+  id: string | number;
+  userMessage?: string;
+  aiReply?: string;
+  timestamp: Date;
+}
+
 export const useSessionManagement = () => {
   const loadSessionMessages = (
-    sessionMessages: Message[],
+    sessionMessages: StoredSessionMessage[],
     setMessages: React.Dispatch<React.SetStateAction<Message[]>>
   ) => {
     const formattedMessages: Message[] = [];

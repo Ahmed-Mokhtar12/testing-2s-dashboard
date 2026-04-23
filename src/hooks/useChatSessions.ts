@@ -8,7 +8,7 @@ export interface ChatSession {
   title: string;
   lastMessage: string;
   timestamp: Date;
-  messages: import('@/types/chat').Message[];
+  messages: import('./useSessionManagement').StoredSessionMessage[];
 }
 
 export const useChatSessions = () => {
