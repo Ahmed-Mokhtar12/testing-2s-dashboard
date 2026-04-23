@@ -40,12 +40,13 @@ export const DashboardShell: React.FC = () => {
               </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto p-6">
-              <Outlet />
-            </main>
+            <div className="flex-1 flex min-h-0">
+              <main className="flex-1 overflow-y-auto p-6">
+                <Outlet />
+              </main>
+              <RightChatPanel />
+            </div>
           </div>
-
-          <RightChatPanel />
         </div>
       </SidebarProvider>
     </DateRangeProvider>
