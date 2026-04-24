@@ -24,10 +24,11 @@ const ResetPasswordPage: React.FC = () => {
     const init = async () => {
       try {
         const url = new URL(window.location.href);
-        const code = url.searchParams.get('code');
+        const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+
         const errorDescription =
           url.searchParams.get('error_description') ||
-          new URLSearchParams(url.hash.replace(/^#/, '')).get('error_description');
+          hashParams.get('error_description');
 
         if (errorDescription) {
           if (!cancelled) {
@@ -37,8 +38,28 @@ const ResetPasswordPage: React.FC = () => {
           return;
         }
 
-        // PKCE flow: ?code=... — exchange it for a session
-        if (code) {
+        const code = url.searchParams.get('code');
+        const tokenHash = url.searchParams.get('token_hash') || hashParams.get('token_hash');
+        const type = url.searchParams.get('type') || hashParams.get('type');
+
+        // 1) New recovery flow: ?token_hash=...&type=recovery
+        if (tokenHash && type) {
+          const { error } = await supabase.auth.verifyOtp({
+            type: type as 'recovery',
+            token_hash: tokenHash,
+          });
+          if (error) {
+            console.error('verifyOtp failed:', error);
+            if (!cancelled) {
+              setExchangeError(error.message);
+              setReady(true);
+            }
+            return;
+          }
+          window.history.replaceState({}, '', url.pathname);
+        }
+        // 2) PKCE flow: ?code=...
+        else if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             console.error('exchangeCodeForSession failed:', error);
@@ -48,14 +69,22 @@ const ResetPasswordPage: React.FC = () => {
             }
             return;
           }
-          // Clean the URL
           window.history.replaceState({}, '', url.pathname);
         }
 
-        // Implicit flow (#access_token=...) is auto-handled by supabase-js detectSessionInUrl.
+        // 3) Implicit flow (#access_token=...) is auto-handled by supabase-js detectSessionInUrl.
         // Give it a tick to settle, then check the session.
-        await new Promise((r) => setTimeout(r, 200));
-        if (!cancelled) setReady(true);
+        await new Promise((r) => setTimeout(r, 250));
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!cancelled) {
+          if (!session && !code && !tokenHash && !hashParams.get('access_token')) {
+            setExchangeError(
+              'This reset link is missing the recovery token. It may have been opened in a different browser, or the link is malformed. Please request a new password reset link.'
+            );
+          }
+          setReady(true);
+        }
       } catch (err) {
         console.error('Reset password init error:', err);
         if (!cancelled) {
