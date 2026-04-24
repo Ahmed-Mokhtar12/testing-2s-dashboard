@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -154,9 +155,8 @@ const ResetPasswordPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="new-password">New password</Label>
-            <Input
+            <PasswordInput
               id="new-password"
-              type="password"
               required
               minLength={8}
               value={password}
@@ -167,9 +167,8 @@ const ResetPasswordPage: React.FC = () => {
 
           <div className="space-y-2">
             <Label htmlFor="confirm-password">Confirm password</Label>
-            <Input
+            <PasswordInput
               id="confirm-password"
-              type="password"
               required
               minLength={8}
               value={confirm}
