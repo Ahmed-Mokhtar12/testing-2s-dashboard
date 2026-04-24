@@ -43,6 +43,10 @@ export function UserMenu() {
 
   const handleSubmitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentPassword) {
+      toast.error('Please enter your current password');
+      return;
+    }
     if (newPassword.length < 8) {
       toast.error('Password must be at least 8 characters');
       return;
@@ -51,7 +55,21 @@ export function UserMenu() {
       toast.error('Passwords do not match');
       return;
     }
+    if (currentPassword === newPassword) {
+      toast.error('New password must be different from current password');
+      return;
+    }
     setSubmitting(true);
+    // Verify current password by re-authenticating
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email!,
+      password: currentPassword,
+    });
+    if (signInError) {
+      setSubmitting(false);
+      toast.error('Current password is incorrect');
+      return;
+    }
     const { error } = await updatePassword(newPassword);
     setSubmitting(false);
     if (error) {
@@ -59,6 +77,7 @@ export function UserMenu() {
       return;
     }
     toast.success('Password updated');
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setDialogOpen(false);
