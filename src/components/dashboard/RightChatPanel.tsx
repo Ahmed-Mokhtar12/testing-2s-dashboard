@@ -89,7 +89,7 @@ export const RightChatPanel: React.FC = () => {
       {/* Side panel — pushes layout */}
       <aside
         className={cn(
-          'mt-6 self-start shrink-0 h-[calc(100%-1.5rem)] overflow-hidden transition-[width] duration-300 ease-out flex',
+          'dark mt-6 self-start shrink-0 h-[calc(100%-1.5rem)] overflow-hidden transition-[width] duration-300 ease-out flex bg-background text-foreground',
           open ? 'w-[420px]' : 'w-0'
         )}
       >
