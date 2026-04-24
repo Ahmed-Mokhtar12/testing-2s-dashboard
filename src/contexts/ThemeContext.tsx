@@ -25,16 +25,17 @@ function applyThemeClass(resolved: 'light' | 'dark') {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'system';
+    if (typeof window === 'undefined') return 'light';
     const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
-    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'dark';
+    if (typeof window === 'undefined') return 'light';
     const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
     if (stored === 'light' || stored === 'dark') return stored;
-    return getSystemTheme();
+    if (stored === 'system') return getSystemTheme();
+    return 'light';
   });
 
   // Apply class whenever resolved theme changes
