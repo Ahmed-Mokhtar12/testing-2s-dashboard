@@ -1,54 +1,47 @@
 
 
-## إصلاح: Reset link بيعمل auto-login + Sign out مش شغال
+## إضافة خيار إظهار/إخفاء كلمة المرور
 
-### السبب الجذري (مشكلة واحدة بتسبب الاتنين)
+### الفكرة
+إضافة أيقونة عين (👁 / 👁‍🗨) داخل كل حقل password، عند الضغط عليها تتبدّل بين `type="password"` و `type="text"`.
 
-الـ Site URL في Supabase دلوقتي = preview domain اللي بيتغير. اللينك في الإيميل بيروح على `/verify` في Supabase، وده بيستبدل الـ recovery token بـ **session كاملة** ويرجّع المستخدم للـ root `/` بدل `/reset-password`.
+### الأماكن اللي هيتم تعديلها
 
-النتيجة:
-1. **Auto-login** — Supabase أنشأت session فعلاً، فالـ `AuthProvider` بيلاقي user موجود ويوديك على الـ dashboard مباشرة بدون ما تدخل كلمة سر.
-2. **Sign out مش شغال** — الـ session دي مش متخزنة في الـ `localStorage` بتاع المتصفح الحالي بشكل صحيح (شايف في الـ logs: `session id ... doesn't exist` مع `403` على `/logout`)، فلما تضغط Sign out، Supabase ترفض لأن الـ session ID مش موجودة عندها.
+كل الحقول دي محتاجة الميزة:
 
-السبب التاني للـ logout: في `signOut()` مفيش معالجة للأخطاء ولا تنظيف local state، فلما الـ API ترجع 403 الـ UI مبيعرفش يحدّث.
+1. **`src/pages/Auth.tsx`** — حقل Password في شاشة تسجيل الدخول
+2. **`src/pages/ResetPassword.tsx`** — حقلين: New password + Confirm password
+3. **`src/components/UserMenu.tsx`** — 3 حقول في dialog تغيير كلمة المرور: Current, New, Confirm
 
----
+### طريقة التنفيذ
 
-### الحل
+**إنشاء component جديد قابل لإعادة الاستخدام:**
+- `src/components/ui/password-input.tsx`
+- يلفّ `<Input>` الموجود ويضيف زرار عين على اليمين
+- يحتفظ بـ state داخلي `showPassword` (افتراضياً false = مخفية)
+- يستخدم أيقونتي `Eye` و `EyeOff` من `lucide-react`
+- يقبل نفس props بتاع `<Input>` العادي (value, onChange, required, autoComplete, إلخ)
+- زرار العين يكون `type="button"` عشان ميعملش submit للفورم
+- مع `aria-label` مناسب للـ accessibility
 
-#### 1) `src/contexts/AuthContext.tsx` — تقوية `signOut`
-- استخدام `supabase.auth.signOut({ scope: 'local' })` كـ fallback لما الـ remote session مش موجودة، عشان نضمن إن الـ tokens المحلية تتمسح حتى لو الـ server رفض.
-- مسح `user` و `session` من الـ state يدوياً بعد الـ signOut عشان الـ UI يحدّث فوراً حتى لو حصل error.
-- إرجاع error من `signOut` عشان `UserMenu` يقدر يعرضه.
+**استبدال الحقول:**
+استبدال كل `<Input type="password" ... />` في الملفات الأربعة بـ `<PasswordInput ... />` مع الحفاظ على نفس الأيقونة الموجودة على الشمال (مثل `Lock` icon في صفحة Auth).
 
-#### 2) `src/pages/ResetPassword.tsx` — منع الـ auto-login redirect
-المشكلة: لما المستخدم بيوصل للصفحة من اللينك، Supabase خلاص عملت session. الـ `ProtectedRoute` و `Auth.tsx` بيشوفوا user موجود ويعملوا redirect بعيد عن `/reset-password`.
+### الشكل النهائي
+```
+┌─────────────────────────────────────┐
+│ 🔒  ••••••••••              👁     │
+└─────────────────────────────────────┘
+```
+لما يضغط على العين:
+```
+┌─────────────────────────────────────┐
+│ 🔒  MyPassword123          👁‍🗨    │
+└─────────────────────────────────────┘
+```
 
-الإصلاح:
-- صفحة `/reset-password` نفسها مش محمية، بس المشكلة إن اللينك بيرجّع المستخدم على `/#` (الـ root) مش على `/reset-password`. ده معناه إن الـ **redirect URL** اللي Supabase بتستخدمه مش `/reset-password`.
-- نضيف **تحقق إجباري** في `Auth.tsx` و `Overview` redirect: لو الـ URL فيه `type=recovery` أو `code=` أو `#access_token` مع `type=recovery`، نعمل redirect على `/reset-password` بدل ما نسيب المستخدم يدخل الـ dashboard.
-- نضيف نفس المنطق في `ProtectedRoute`: لو فيه recovery token في الـ URL، redirect على `/reset-password`.
-
-#### 3) `src/contexts/AuthContext.tsx` — كشف PASSWORD_RECOVERY event
-Supabase بترسل event اسمه `PASSWORD_RECOVERY` لما يتم استخدام recovery link. نضيف flag `isRecovering` في الـ context، ولما يكون true:
-- `ProtectedRoute` يعمل redirect على `/reset-password` تلقائي
-- `Auth.tsx` ميعملش auto-redirect بعيد
-
-#### 4) إعدادات Supabase (المستخدم يعملها يدوياً)
-في Supabase Dashboard → Authentication → URL Configuration:
-- تأكد إن الـ **Redirect URLs** فيها اللينك الكامل `.../reset-password` (مش بس wildcard `/**`)
-- الـ Site URL يفضل ثابت على preview domain الحالي
-
----
-
-### الملفات اللي هتتعدل
-- `src/contexts/AuthContext.tsx` — كشف PASSWORD_RECOVERY + تقوية signOut
-- `src/components/ProtectedRoute.tsx` — redirect لو recovery flow
-- `src/pages/Auth.tsx` — منع auto-redirect لو recovery flow
-- `src/components/UserMenu.tsx` — التعامل مع error من signOut
-
-### مش هيتعمل
-- مفيش تعديل على الـ database أو RLS
-- مفيش edge functions جديدة
-- مفيش تغيير في `/reset-password` page نفسها (شغالة صح)
+### ملاحظات
+- كل حقل له toggle مستقل (إظهار حقل New password ميأثرش على Confirm password)
+- الافتراضي دائماً = مخفية (للأمان)
+- مفيش تعديلات على backend أو database
 
