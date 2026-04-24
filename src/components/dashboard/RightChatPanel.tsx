@@ -94,7 +94,7 @@ export const RightChatPanel: React.FC = () => {
         )}
       >
         {open && (
-          <div className="flex w-full h-full border-l border-border bg-card-gradient">
+          <div className="flex w-full h-full border-l border-black/10 bg-white text-black [&_*]:border-black/10">
             {innerSidebar && (
               <div className="w-[220px] border-r border-border overflow-hidden">
                 <SeraHistorySidebar
