@@ -6,8 +6,9 @@ interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isRecovering: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
 }
@@ -18,8 +19,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecovering, setIsRecovering] = useState(false);
 
   useEffect(() => {
+    // Detect recovery flow from URL on initial load — covers cases where Supabase
+    // redirects to "/" with recovery tokens in the hash/query before the
+    // PASSWORD_RECOVERY event fires.
+    try {
+      const url = new URL(window.location.href);
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+      const type = url.searchParams.get('type') || hashParams.get('type');
+      const hasRecoveryToken =
+        type === 'recovery' ||
+        url.searchParams.has('code') ||
+        hashParams.has('access_token');
+      if (type === 'recovery' || (hasRecoveryToken && type === 'recovery')) {
+        setIsRecovering(true);
+      }
+    } catch { /* ignore */ }
+
     // Helper: ensure user_metadata.first_name exists (derived from email)
     const ensureFirstName = (u: User | null) => {
       if (!u) return;
@@ -30,18 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const rawFirst = local.split(/[._-]/)[0] ?? '';
       if (!rawFirst) return;
       const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
-      // Fire and forget — don't block auth flow
       supabase.auth.updateUser({ data: { first_name: firstName } }).catch((err) => {
         console.warn('Failed to set first_name on user_metadata:', err);
       });
     };
 
     // 1) Subscribe FIRST to avoid missing events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setLoading(false);
-      // Defer to avoid running inside the callback synchronously
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovering(true);
+      }
       setTimeout(() => ensureFirstName(newSession?.user ?? null), 0);
     });
 
@@ -60,13 +79,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = async (): Promise<{ error: Error | null }> => {
+    let outError: Error | null = null;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        // Server rejected (e.g. session not found / 403). Fall back to local cleanup
+        // so the UI doesn't get stuck logged-in.
+        console.warn('Global signOut failed, falling back to local:', error.message);
+        const { error: localError } = await supabase.auth.signOut({ scope: 'local' });
+        if (localError) {
+          outError = localError;
+        }
+      }
+    } catch (err) {
+      console.warn('signOut threw, attempting local cleanup:', err);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (e) {
+        outError = e instanceof Error ? e : new Error('Sign out failed');
+      }
+    }
+
+    // Force-clear local state regardless — UI must reflect signed-out state.
+    setUser(null);
+    setSession(null);
+    setIsRecovering(false);
+
+    // As a last-resort cleanup, clear any lingering Supabase auth keys in storage.
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('sb-') || k.includes('supabase.auth'))) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+
+    return { error: outError };
   };
 
   const resetPassword = async (email: string) => {
-    // Prefer an explicitly configured reset URL (stable across preview/publish),
-    // fall back to current origin so it still works in any environment.
     const envResetUrl = (import.meta.env.VITE_PASSWORD_RESET_URL as string | undefined)?.trim();
     const redirectTo = envResetUrl && envResetUrl.length > 0
       ? envResetUrl
@@ -83,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signOut, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, loading, isRecovering, signIn, signOut, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
