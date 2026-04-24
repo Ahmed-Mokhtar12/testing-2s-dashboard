@@ -1,37 +1,58 @@
 
+إصلاح مسار “Forgot password” بحيث يعمل فعلاً في بيئة Lovable الحالية ويقود المستخدم إلى صفحة تعيين كلمة المرور الصحيحة.
 
-## Add "Change password" to user menu
+### السبب المرجّح
+الزر الحالي يرسل رابط الاسترجاع باستخدام:
+`window.location.origin + '/reset-password'`
 
-Add a third item to the user dropdown (between email label and Sign out) that opens a modal letting the signed-in user set a new password.
+وهذا يعني أن الرابط يتغيّر حسب الدومين الذي فتحت منه التطبيق. حالياً التطبيق يعمل من دومين المعاينة الحي:
+`https://49de85bc-6404-41e8-860f-758b01b147d6.lovableproject.com`
 
-### UX
-- Click avatar/email → dropdown shows: email · **Change password** · Sign out
-- "Change password" opens a centered Dialog with three fields:
-  - New password (min 8 chars)
-  - Confirm new password
-  - Submit button "Update password"
-- On success: toast "Password updated" + close dialog
-- On error: toast with Supabase error message
+بينما إعدادات Supabase التي تم ضبطها كانت على:
+`https://id-preview--49de85bc-6404-41e8-860f-758b01b147d6.lovable.app/reset-password`
 
-### Technical changes
+لذلك رابط الاسترجاع قد يخرج بدومين غير مسموح به أو غير متطابق مع البيئة الفعلية.
 
-**1. `src/components/UserMenu.tsx`** — extend existing dropdown
-- Add `KeyRound` icon import from lucide-react
-- Add local state: `dialogOpen`, `newPassword`, `confirmPassword`, `submitting`
-- Insert new `<DropdownMenuItem>` "Change password" before the Sign out item, which sets `dialogOpen = true`
-- Render a `<Dialog>` (shadcn) controlled by `dialogOpen` containing the form
-- On submit:
-  - Validate length ≥ 8 and match
-  - Call `updatePassword(newPassword)` from `useAuth()` (already exposed in `AuthContext`)
-  - On success: toast, reset fields, close dialog
-- Reuse existing shadcn primitives: `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `Input`, `Label`, `Button`
+### الخطة
 
-**2. No other files need changes**
-- `useAuth().updatePassword` already exists and wraps `supabase.auth.updateUser({ password })`
-- No new routes, no migrations, no backend work
-- Works for the currently authenticated session (different from the existing `/reset-password` page which handles recovery links)
+#### 1) توحيد رابط إعادة التعيين في الإعدادات
+تحديث إعدادات Supabase بحيث تسمح بكل الروابط المطلوبة لمسار إعادة التعيين، وأهمها:
+- `https://49de85bc-6404-41e8-860f-758b01b147d6.lovableproject.com/reset-password`
+- `https://id-preview--49de85bc-6404-41e8-860f-758b01b147d6.lovable.app/reset-password`
 
-### Out of scope
-- No "current password" re-verification (Supabase doesn't require it for an active session; can add later if you want extra security via re-authentication)
-- No changes to the existing `/reset-password` recovery flow
+وإبقاء أي رابط published أو custom domain لاحقاً ضمن القائمة أيضاً.
 
+#### 2) تقوية الكود حتى لا يعتمد على دومين المعاينة المتغيّر فقط
+تعديل `src/contexts/AuthContext.tsx` بحيث لا يعتمد `resetPassword()` مباشرة على `window.location.origin` فقط، بل يستخدم رابطاً ثابتاً ومقصوداً لإعادة التعيين عندما يكون متوفراً، مع fallback آمن عند الحاجة.
+
+الهدف من هذا التعديل:
+- منع كسر الاسترجاع عند تغيّر دومين المعاينة
+- جعل روابط reset أكثر استقراراً بين preview / publish
+
+#### 3) تحسين صفحة `/reset-password`
+مراجعة `src/pages/ResetPassword.tsx` وتدعيمها للتعامل بوضوح مع:
+- روابط PKCE التي تحتوي `?code=...`
+- أي أخطاء قادمة من `error_description`
+- حالات عدم تكوين session بعد الرجوع من البريد
+- رسالة أوضح للمستخدم لو كان الرابط صحيح لكن البيئة غير معتمدة
+
+#### 4) التحقق النهائي
+بعد التنفيذ:
+- تجربة “Forgot password” من داخل التطبيق الحالي
+- فتح الرابط القادم من البريد
+- التأكد أن المستخدم يصل إلى نموذج إدخال كلمة المرور الجديدة بدل صفحة “Invalid or expired link”
+- ثم اختبار نفس المسار على رابط منشور ثابت عند توفره
+
+### ملاحظة مهمة
+إذا بقيت المشكلة تظهر فقط داخل بيئة preview بينما تعمل على رابط منشور ثابت، فالمشكلة ستكون مرتبطة ببيئة المعاينة نفسها وليس بمنطق الاسترجاع داخل التطبيق. في هذه الحالة لن نغيّر منطق المصادقة أكثر من اللازم، وسنعتبر التنفيذ صحيحاً بعد نجاحه على البيئة المنشورة.
+
+### تفاصيل تقنية
+- الملفات الأساسية:
+  - `src/contexts/AuthContext.tsx`
+  - `src/pages/ResetPassword.tsx`
+- لا حاجة لتعديلات قاعدة بيانات
+- لا حاجة لتغييرات RLS
+- المطلوب فعلياً هو:
+  - ضبط redirect URLs بشكل صحيح
+  - جعل redirectTo في reset password أكثر ثباتاً
+  - تحسين التعامل مع session exchange في صفحة إعادة التعيين
