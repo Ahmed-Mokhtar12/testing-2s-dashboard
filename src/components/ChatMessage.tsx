@@ -41,9 +41,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   if (message.isUser) {
     return (
       <div className="flex justify-end py-2">
-        <div className="max-w-[85%] bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 text-sm text-foreground">
+        <div className="max-w-[85%] bg-primary/15 border border-primary/30 rounded-xl px-3 py-2 text-sm text-foreground">
           <div className="whitespace-pre-wrap leading-relaxed">{formatContent(message.content)}</div>
-          <div className="text-[10px] mt-1 text-foreground/40 text-right">
+          <div className="text-[10px] mt-1 text-muted-foreground text-right">
             {formatChatTimestamp(message.timestamp)}
           </div>
         </div>
@@ -57,10 +57,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         <img src={twoSeasonsLogo} alt="Sera" className="w-full h-full object-cover" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="whitespace-pre-wrap leading-relaxed text-sm text-foreground/90">
+        <div className="whitespace-pre-wrap leading-relaxed text-sm text-foreground">
           {formatContent(message.content)}
         </div>
-        <div className="text-[10px] mt-1.5 text-foreground/40">
+        <div className="text-[10px] mt-1.5 text-muted-foreground">
           {formatChatTimestamp(message.timestamp)}
         </div>
       </div>
