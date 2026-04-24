@@ -24,14 +24,14 @@ const toneMap = {
 export const KpiCard: React.FC<KpiCardProps> = ({ label, value, hint, icon: Icon, tone = 'primary', loading }) => {
   const t = toneMap[tone];
   return (
-    <Card className="bg-card-gradient border border-border/60 shadow-card-soft p-5 relative overflow-hidden animate-fade-in">
+    <Card className="bg-white text-black border border-black/10 shadow-card-soft p-5 relative overflow-hidden animate-fade-in">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-          <p className="font-display font-bold text-3xl mt-2 tabular-nums text-foreground">
+          <p className="text-xs uppercase tracking-wider text-black/60 font-medium">{label}</p>
+          <p className="font-display font-bold text-3xl mt-2 tabular-nums text-black">
             {loading ? '—' : value}
           </p>
-          {hint && <p className="text-xs text-muted-foreground mt-1.5">{hint}</p>}
+          {hint && <p className="text-xs text-black/60 mt-1.5">{hint}</p>}
         </div>
         {Icon && (
           <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center border shrink-0', t.bg, t.border)}>

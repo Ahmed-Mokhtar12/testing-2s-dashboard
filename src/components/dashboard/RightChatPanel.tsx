@@ -94,7 +94,25 @@ export const RightChatPanel: React.FC = () => {
         )}
       >
         {open && (
-          <div className="flex w-full h-full border-l border-border bg-card-gradient">
+          <div
+            className="flex w-full h-full border-l border-black/10 bg-white text-black"
+            style={{
+              ['--background' as string]: '0 0% 100%',
+              ['--foreground' as string]: '0 0% 0%',
+              ['--card' as string]: '0 0% 100%',
+              ['--card-foreground' as string]: '0 0% 0%',
+              ['--popover' as string]: '0 0% 100%',
+              ['--popover-foreground' as string]: '0 0% 0%',
+              ['--muted' as string]: '0 0% 96%',
+              ['--muted-foreground' as string]: '0 0% 35%',
+              ['--border' as string]: '0 0% 88%',
+              ['--input' as string]: '0 0% 88%',
+              ['--secondary' as string]: '0 0% 96%',
+              ['--secondary-foreground' as string]: '0 0% 0%',
+              ['--accent' as string]: '0 0% 96%',
+              ['--accent-foreground' as string]: '0 0% 0%',
+            } as React.CSSProperties}
+          >
             {innerSidebar && (
               <div className="w-[220px] border-r border-border overflow-hidden">
                 <SeraHistorySidebar
