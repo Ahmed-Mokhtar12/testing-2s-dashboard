@@ -84,7 +84,7 @@
     --popover: 256 38% 13%;
     --popover-foreground: 250 30% 94%;
     --muted: 255 28% 18%;
-    --muted-foreground: 250 15% 65%;
+    --muted-foreground: 250 20% 75%;
     --primary: 258 90% 76%;
     --primary-foreground: 257 47% 8%;
     --secondary: 255 28% 20%;
@@ -124,10 +124,10 @@
 }
 
 @layer utilities {
-  .glow-primary { filter: drop-shadow(0 0 12px hsl(258 90% 76% / 0.45)); }
-  .glow-accent  { filter: drop-shadow(0 0 12px hsl(187 92% 69% / 0.45)); }
-  .glow-magenta { filter: drop-shadow(0 0 12px hsl(292 91% 81% / 0.45)); }
-  .text-glow-primary { text-shadow: 0 0 18px hsl(258 90% 76% / 0.55); }
+  .glow-primary { filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.35)); }
+  .glow-accent  { filter: drop-shadow(0 0 8px hsl(var(--accent) / 0.35)); }
+  .glow-magenta { filter: drop-shadow(0 0 8px hsl(var(--magenta) / 0.35)); }
+  .text-glow-primary { text-shadow: 0 0 6px hsl(var(--primary) / 0.25); }
   .bg-card-gradient { background: var(--gradient-card); }
   .bg-primary-gradient { background: var(--gradient-primary); }
   .bg-accent-gradient { background: var(--gradient-accent); }
