@@ -70,7 +70,6 @@ const WhatsAppPage: React.FC = () => {
         </ResponsiveContainer>
       </ChartCard>
     </div>
-    </div>
   );
 };
 
