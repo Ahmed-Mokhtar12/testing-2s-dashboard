@@ -36,8 +36,13 @@ export function UserMenu() {
   if (!user) return null;
 
   const handleSignOut = async () => {
-    await signOut();
-    toast.success('Signed out');
+    const { error } = await signOut();
+    if (error) {
+      // Local cleanup already happened in AuthContext — warn but still navigate.
+      toast.warning(`Signed out locally (${error.message})`);
+    } else {
+      toast.success('Signed out');
+    }
     navigate('/auth', { replace: true });
   };
 

@@ -11,10 +11,21 @@ import { Checkbox } from '@/components/ui/checkbox';
 import twoSeasonsLogo from '@/assets/two-seasons-logo-full.png';
 
 const AuthPage: React.FC = () => {
-  const { user, loading, signIn, resetPassword } = useAuth();
+  const { user, loading, isRecovering, signIn, resetPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/';
+
+  // Detect recovery tokens in URL (in case the user landed on /auth with one)
+  const hasRecoveryInUrl = (() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const url = new URL(window.location.href);
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+      const type = url.searchParams.get('type') || hashParams.get('type');
+      return type === 'recovery';
+    } catch { return false; }
+  })();
 
   const [email, setEmail] = useState(() => {
     if (typeof window === 'undefined') return '';
@@ -30,8 +41,13 @@ const AuthPage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!loading && user) navigate(from, { replace: true });
-  }, [loading, user, navigate, from]);
+    if (loading) return;
+    if (isRecovering || hasRecoveryInUrl) {
+      navigate('/reset-password', { replace: true });
+      return;
+    }
+    if (user) navigate(from, { replace: true });
+  }, [loading, user, navigate, from, isRecovering, hasRecoveryInUrl]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
