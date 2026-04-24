@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 
 export function UserMenu() {
   const { user, signOut, updatePassword } = useAuth();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -115,6 +116,21 @@ export function UserMenu() {
             <KeyRound className="h-4 w-4 mr-2" />
             Change password
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-normal">
+            Theme
+          </DropdownMenuLabel>
+          {([
+            { value: 'light' as Theme, label: 'Light', Icon: Sun },
+            { value: 'dark' as Theme, label: 'Dark', Icon: Moon },
+            { value: 'system' as Theme, label: 'System', Icon: Monitor },
+          ]).map(({ value, label, Icon }) => (
+            <DropdownMenuItem key={value} onClick={() => setTheme(value)}>
+              <Icon className="h-4 w-4 mr-2" />
+              <span className="flex-1">{label}</span>
+              {theme === value && <Check className="h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
             <LogOut className="h-4 w-4 mr-2" />
