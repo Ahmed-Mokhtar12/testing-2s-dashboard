@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LogOut, User as UserIcon, KeyRound } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
