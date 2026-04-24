@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { LogOut, User as UserIcon, KeyRound } from 'lucide-react';
+import { LogOut, User as UserIcon, KeyRound, Sun, Moon, Monitor, Check } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme, type Theme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
