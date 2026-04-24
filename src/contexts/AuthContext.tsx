@@ -65,8 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
+    // Prefer an explicitly configured reset URL (stable across preview/publish),
+    // fall back to current origin so it still works in any environment.
+    const envResetUrl = (import.meta.env.VITE_PASSWORD_RESET_URL as string | undefined)?.trim();
+    const redirectTo = envResetUrl && envResetUrl.length > 0
+      ? envResetUrl
+      : `${window.location.origin}/reset-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo,
     });
     return { error };
   };
