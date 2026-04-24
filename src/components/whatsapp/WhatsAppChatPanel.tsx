@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Search, MoreVertical, UserCheck, Bot, Loader2 } from 'lucide-react';
+import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
@@ -42,6 +42,7 @@ interface WhatsAppChatPanelProps {
   isTogglingControl: boolean;
   onSendMessage: (message: string, attachment?: UploadedAttachment) => void;
   onToggleHumanControl: () => void;
+  onBack?: () => void;
 }
 
 const formatPhoneNumber = (number: string) => {
@@ -60,6 +61,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   isTogglingControl,
   onSendMessage,
   onToggleHumanControl,
+  onBack,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -77,7 +79,16 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-[#F0F2F5] border-b border-gray-200 min-w-0">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-1 -ml-1 text-[#128C7E] hover:bg-black/5 rounded-full shrink-0"
+              aria-label="Back"
+            >
+              <ArrowLeft size={22} />
+            </button>
+          )}
           {/* Avatar with status badge */}
           <div className="relative shrink-0">
             <div

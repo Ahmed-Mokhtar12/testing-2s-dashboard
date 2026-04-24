@@ -3,7 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import WhatsAppNavRail from './WhatsAppNavRail';
 import WhatsAppSidebar from './WhatsAppSidebar';
 import WhatsAppChatPanel from './WhatsAppChatPanel';
+import WhatsAppMobileSidebar from './WhatsAppMobileSidebar';
+import WhatsAppMobileTabBar from './WhatsAppMobileTabBar';
 import { useWhatsAppChat } from '@/hooks/useWhatsAppChat';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ChatPreview {
   senderNumber: string;
@@ -17,6 +20,8 @@ const WhatsAppChat: React.FC = () => {
   const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const { 
     messages, 
@@ -128,6 +133,49 @@ const WhatsAppChat: React.FC = () => {
     return () => { supabase.removeChannel(channel); };
   }, [buildTimestamp]);
 
+  // ========= MOBILE LAYOUT =========
+  if (isMobile) {
+    const handleSelectMobile = (num: string) => {
+      changeSenderNumber(num);
+      setMobileChatOpen(true);
+    };
+
+    return (
+      <div className="flex flex-col h-full w-full bg-white overflow-hidden">
+        {mobileChatOpen ? (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <WhatsAppChatPanel
+              messages={messages}
+              senderNumber={senderNumber}
+              isLoading={isLoading}
+              isLoadingHistory={isLoadingHistory}
+              isHumanControlled={isHumanControlled}
+              isTogglingControl={isTogglingControl}
+              onSendMessage={sendMessage}
+              onToggleHumanControl={toggleHumanControl}
+              onBack={() => setMobileChatOpen(false)}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 min-h-0">
+              <WhatsAppMobileSidebar
+                chats={chatPreviews}
+                selectedNumber={senderNumber}
+                onSelectChat={handleSelectMobile}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                isLoading={isLoadingChats}
+              />
+            </div>
+            <WhatsAppMobileTabBar active="chats" />
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ========= DESKTOP / TABLET LAYOUT (untouched) =========
   return (
     <div className="flex h-full w-full bg-[#111B21] overflow-hidden">
       {/* Navigation Rail - far left like WhatsApp Web */}
