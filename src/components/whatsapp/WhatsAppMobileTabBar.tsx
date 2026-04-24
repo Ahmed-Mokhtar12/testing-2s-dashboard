@@ -1,10 +1,10 @@
 import React from 'react';
-import { CircleDashed, Phone, Users, MessageCircle, Settings } from 'lucide-react';
+import { CircleDashed, Phone, Users, MessageCircle, Settings, type LucideIcon } from 'lucide-react';
 
 interface TabItem {
   key: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   badge?: number;
 }
 
