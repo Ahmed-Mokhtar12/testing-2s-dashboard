@@ -10,69 +10,69 @@
 
 @layer base {
   :root {
-    /* Surfaces — deep indigo midnight */
-    --background: 257 47% 8%;          /* #0f0a1f */
-    --foreground: 250 30% 92%;
+    /* Light theme — soft off-white with a faint violet tint, keeps neon-soft brand */
+    --background: 250 40% 98%;          /* #f7f5fb */
+    --foreground: 257 35% 14%;
 
-    --card: 256 38% 13%;               /* #1a1430 */
-    --card-foreground: 250 30% 94%;
+    --card: 0 0% 100%;
+    --card-foreground: 257 35% 14%;
 
-    --popover: 256 38% 13%;
-    --popover-foreground: 250 30% 94%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 257 35% 14%;
 
-    --muted: 255 28% 18%;
-    --muted-foreground: 250 15% 65%;
+    --muted: 250 25% 94%;
+    --muted-foreground: 256 15% 42%;
 
-    /* Brand — soft neon */
-    --primary: 258 90% 76%;            /* #a78bfa purple soft */
-    --primary-foreground: 257 47% 8%;
+    /* Brand — neon, darkened slightly for AA contrast on light bg */
+    --primary: 258 70% 56%;             /* #7c5cf0 */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 255 28% 20%;
-    --secondary-foreground: 250 30% 92%;
+    --secondary: 250 25% 94%;
+    --secondary-foreground: 257 35% 14%;
 
-    --accent: 187 92% 69%;             /* #67e8f9 cyan soft */
-    --accent-foreground: 257 47% 8%;
+    --accent: 187 75% 42%;              /* darker cyan for contrast */
+    --accent-foreground: 0 0% 100%;
 
-    --magenta: 292 91% 81%;            /* #f0abfc */
-    --magenta-foreground: 257 47% 8%;
+    --magenta: 292 70% 55%;
+    --magenta-foreground: 0 0% 100%;
 
-    --success: 152 76% 60%;
-    --warning: 38 95% 65%;
-    --destructive: 0 75% 65%;
-    --destructive-foreground: 250 30% 94%;
+    --success: 152 60% 40%;
+    --warning: 38 90% 48%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 256 28% 22%;             /* #2a2348 */
-    --input: 256 28% 22%;
-    --ring: 258 90% 76%;
+    --border: 256 25% 88%;
+    --input: 256 25% 88%;
+    --ring: 258 70% 56%;
 
     --radius: 0.875rem;
 
-    /* Chart palette */
-    --chart-1: 258 90% 76%;
-    --chart-2: 187 92% 69%;
-    --chart-3: 292 91% 81%;
-    --chart-4: 152 76% 60%;
-    --chart-5: 38 95% 65%;
-    --chart-6: 217 91% 70%;
+    /* Chart palette — kept vivid but slightly deeper for light bg */
+    --chart-1: 258 70% 56%;
+    --chart-2: 187 75% 42%;
+    --chart-3: 292 70% 55%;
+    --chart-4: 152 60% 40%;
+    --chart-5: 38 90% 48%;
+    --chart-6: 217 80% 55%;
 
     /* Gradients & shadows */
-    --gradient-primary: linear-gradient(135deg, hsl(258 90% 76% / 0.9), hsl(292 91% 81% / 0.85));
-    --gradient-accent: linear-gradient(135deg, hsl(187 92% 69% / 0.9), hsl(258 90% 76% / 0.85));
-    --gradient-card: linear-gradient(180deg, hsl(256 38% 14%), hsl(256 38% 11%));
-    --glow-primary: 0 0 24px hsl(258 90% 76% / 0.3);
-    --glow-accent: 0 0 24px hsl(187 92% 69% / 0.3);
-    --glow-magenta: 0 0 24px hsl(292 91% 81% / 0.3);
-    --shadow-card: 0 8px 32px -12px hsl(257 47% 4% / 0.6);
+    --gradient-primary: linear-gradient(135deg, hsl(258 70% 56% / 0.95), hsl(292 70% 55% / 0.9));
+    --gradient-accent: linear-gradient(135deg, hsl(187 75% 42% / 0.95), hsl(258 70% 56% / 0.9));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(250 30% 97%));
+    --glow-primary: 0 0 24px hsl(258 70% 56% / 0.18);
+    --glow-accent: 0 0 24px hsl(187 75% 42% / 0.18);
+    --glow-magenta: 0 0 24px hsl(292 70% 55% / 0.18);
+    --shadow-card: 0 8px 24px -12px hsl(257 35% 30% / 0.18);
 
-    /* Sidebar */
-    --sidebar-background: 257 47% 6%;
-    --sidebar-foreground: 250 20% 78%;
-    --sidebar-primary: 258 90% 76%;
-    --sidebar-primary-foreground: 257 47% 8%;
-    --sidebar-accent: 256 32% 14%;
-    --sidebar-accent-foreground: 250 30% 94%;
-    --sidebar-border: 256 28% 16%;
-    --sidebar-ring: 258 90% 76%;
+    /* Sidebar — light */
+    --sidebar-background: 250 35% 96%;
+    --sidebar-foreground: 257 25% 28%;
+    --sidebar-primary: 258 70% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 250 30% 92%;
+    --sidebar-accent-foreground: 257 35% 14%;
+    --sidebar-border: 256 22% 86%;
+    --sidebar-ring: 258 70% 56%;
   }
 
   /* Same tokens for .dark — app is dark by default */
