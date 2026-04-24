@@ -28,7 +28,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ label, value, hint, icon: Icon
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-          <p className={cn('font-display font-bold text-3xl mt-2 tabular-nums', t.text, t.glow !== '' && 'text-glow-primary')}>
+          <p className="font-display font-bold text-3xl mt-2 tabular-nums text-foreground">
             {loading ? '—' : value}
           </p>
           {hint && <p className="text-xs text-muted-foreground mt-1.5">{hint}</p>}
