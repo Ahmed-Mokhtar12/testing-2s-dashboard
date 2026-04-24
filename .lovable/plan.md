@@ -1,31 +1,37 @@
 
 
-## خطة: تذكّر آخر بريد مُستخدم في صفحة تسجيل الدخول
+## Add "Change password" to user menu
 
-الهدف: عند فتح `/auth` مرة أخرى، يظهر آخر بريد استخدمه المستخدم على **هذا الموقع تحديداً** بدلاً من اقتراحات المتصفح العامة (مثل `ahmed.mokhtar12@gmail.com` من Gmail).
+Add a third item to the user dropdown (between email label and Sign out) that opens a modal letting the signed-in user set a new password.
 
----
+### UX
+- Click avatar/email → dropdown shows: email · **Change password** · Sign out
+- "Change password" opens a centered Dialog with three fields:
+  - New password (min 8 chars)
+  - Confirm new password
+  - Submit button "Update password"
+- On success: toast "Password updated" + close dialog
+- On error: toast with Supabase error message
 
-### السلوك الجديد
+### Technical changes
 
-1. عند نجاح تسجيل الدخول → نحفظ البريد في `localStorage` تحت مفتاح `ts_last_email`.
-2. عند فتح صفحة `/auth` → نملأ حقل البريد تلقائياً من `localStorage` (إن وُجد).
-3. نُغيّر `autoComplete="email"` إلى `autoComplete="username"` على حقل البريد، و `autoComplete="current-password"` يبقى كما هو على كلمة المرور — هذا يقلّل اقتراحات المتصفح للإيميلات غير المرتبطة بهذا الموقع، ويبقي على ميزة "حفظ كلمة المرور" مرتبطة بالبريد الصحيح.
+**1. `src/components/UserMenu.tsx`** — extend existing dropdown
+- Add `KeyRound` icon import from lucide-react
+- Add local state: `dialogOpen`, `newPassword`, `confirmPassword`, `submitting`
+- Insert new `<DropdownMenuItem>` "Change password" before the Sign out item, which sets `dialogOpen = true`
+- Render a `<Dialog>` (shadcn) controlled by `dialogOpen` containing the form
+- On submit:
+  - Validate length ≥ 8 and match
+  - Call `updatePassword(newPassword)` from `useAuth()` (already exposed in `AuthContext`)
+  - On success: toast, reset fields, close dialog
+- Reuse existing shadcn primitives: `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `Input`, `Label`, `Button`
 
----
+**2. No other files need changes**
+- `useAuth().updatePassword` already exists and wraps `supabase.auth.updateUser({ password })`
+- No new routes, no migrations, no backend work
+- Works for the currently authenticated session (different from the existing `/reset-password` page which handles recovery links)
 
-### الملفات المتأثرة
-
-**`src/pages/Auth.tsx`** فقط:
-- في `useState` للـ `email`: قراءة القيمة الابتدائية من `localStorage.getItem('ts_last_email')`.
-- في `handleSignIn` بعد النجاح: `localStorage.setItem('ts_last_email', email)`.
-- تغيير `autoComplete="email"` → `autoComplete="username"` على input البريد.
-
----
-
-### ملاحظات
-
-- **الخصوصية:** يُحفظ البريد فقط (لا كلمة المرور) في `localStorage` الخاص بالمتصفح والجهاز. لا يُرسل لأي خادم.
-- **مسح الذاكرة:** إن أراد المستخدم نسيان البريد، يمسح بيانات الموقع من إعدادات المتصفح، أو يمكننا إضافة زر "نسيان البريد" لاحقاً (لم أُضِفه الآن لتبسيط الواجهة).
-- **اقتراحات المتصفح:** ستبقى ممكنة (لا يمكن تعطيلها كلياً بشكل موثوق)، لكن سيكون البريد الصحيح مملوءاً مسبقاً قبل أي اقتراح.
+### Out of scope
+- No "current password" re-verification (Supabase doesn't require it for an active session; can add later if you want extra security via re-authentication)
+- No changes to the existing `/reset-password` recovery flow
 
