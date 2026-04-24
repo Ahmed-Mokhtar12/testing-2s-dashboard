@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,12 +16,59 @@ const ResetPasswordPage: React.FC = () => {
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Supabase auto-handles `type=recovery` hash and signs the user in temporarily.
-    // Wait briefly for session to settle.
-    const t = setTimeout(() => setReady(true), 300);
-    return () => clearTimeout(t);
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        const errorDescription =
+          url.searchParams.get('error_description') ||
+          new URLSearchParams(url.hash.replace(/^#/, '')).get('error_description');
+
+        if (errorDescription) {
+          if (!cancelled) {
+            setExchangeError(errorDescription);
+            setReady(true);
+          }
+          return;
+        }
+
+        // PKCE flow: ?code=... — exchange it for a session
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('exchangeCodeForSession failed:', error);
+            if (!cancelled) {
+              setExchangeError(error.message);
+              setReady(true);
+            }
+            return;
+          }
+          // Clean the URL
+          window.history.replaceState({}, '', url.pathname);
+        }
+
+        // Implicit flow (#access_token=...) is auto-handled by supabase-js detectSessionInUrl.
+        // Give it a tick to settle, then check the session.
+        await new Promise((r) => setTimeout(r, 200));
+        if (!cancelled) setReady(true);
+      } catch (err) {
+        console.error('Reset password init error:', err);
+        if (!cancelled) {
+          setExchangeError(err instanceof Error ? err.message : 'Failed to verify reset link');
+          setReady(true);
+        }
+      }
+    };
+
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,7 +105,11 @@ const ResetPasswordPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md p-8 text-center">
           <h2 className="font-display font-semibold mb-2">Invalid or expired link</h2>
-          <p className="text-sm text-muted-foreground mb-4">Please request a new password reset link.</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {exchangeError
+              ? exchangeError
+              : 'Please request a new password reset link.'}
+          </p>
           <Button onClick={() => navigate('/auth')}>Back to sign in</Button>
         </Card>
       </div>
