@@ -105,7 +105,11 @@ const ResetPasswordPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md p-8 text-center">
           <h2 className="font-display font-semibold mb-2">Invalid or expired link</h2>
-          <p className="text-sm text-muted-foreground mb-4">Please request a new password reset link.</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {exchangeError
+              ? exchangeError
+              : 'Please request a new password reset link.'}
+          </p>
           <Button onClick={() => navigate('/auth')}>Back to sign in</Button>
         </Card>
       </div>
