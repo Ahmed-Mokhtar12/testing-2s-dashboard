@@ -119,6 +119,7 @@ export function UserMenu() {
       <Dialog open={dialogOpen} onOpenChange={(open) => {
         setDialogOpen(open);
         if (!open) {
+          setCurrentPassword('');
           setNewPassword('');
           setConfirmPassword('');
         }
@@ -127,10 +128,21 @@ export function UserMenu() {
           <DialogHeader>
             <DialogTitle>Change password</DialogTitle>
             <DialogDescription>
-              Enter a new password for your account. Minimum 8 characters.
+              Enter your current password, then choose a new one (minimum 8 characters).
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmitPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="new-password">New password</Label>
               <Input
