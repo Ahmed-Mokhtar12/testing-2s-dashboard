@@ -74,6 +74,7 @@ export const RightChatPanel: React.FC = () => {
   };
 
   return (
+    <div className="dark contents">
     <>
       {/* Floating trigger */}
       {!open && (
