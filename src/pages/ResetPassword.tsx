@@ -155,9 +155,8 @@ const ResetPasswordPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="new-password">New password</Label>
-            <Input
+            <PasswordInput
               id="new-password"
-              type="password"
               required
               minLength={8}
               value={password}
@@ -168,9 +167,8 @@ const ResetPasswordPage: React.FC = () => {
 
           <div className="space-y-2">
             <Label htmlFor="confirm-password">Confirm password</Label>
-            <Input
+            <PasswordInput
               id="confirm-password"
-              type="password"
               required
               minLength={8}
               value={confirm}
