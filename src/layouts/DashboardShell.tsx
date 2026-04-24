@@ -23,7 +23,7 @@ export const DashboardShell: React.FC = () => {
                 <SidebarTrigger className="hover:bg-muted/50" />
                 <div className="hidden sm:flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                  <span className="text-xs text-muted-foreground">Live data · Dubai (GMT+4)</span>
+                  <span className="text-xs text-muted-foreground">Live data · Dubai </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
