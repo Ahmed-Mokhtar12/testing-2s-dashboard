@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LogOut, User as UserIcon, KeyRound } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -27,6 +28,7 @@ export function UserMenu() {
   const { user, signOut, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +43,10 @@ export function UserMenu() {
 
   const handleSubmitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentPassword) {
+      toast.error('Please enter your current password');
+      return;
+    }
     if (newPassword.length < 8) {
       toast.error('Password must be at least 8 characters');
       return;
@@ -49,7 +55,21 @@ export function UserMenu() {
       toast.error('Passwords do not match');
       return;
     }
+    if (currentPassword === newPassword) {
+      toast.error('New password must be different from current password');
+      return;
+    }
     setSubmitting(true);
+    // Verify current password by re-authenticating
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email!,
+      password: currentPassword,
+    });
+    if (signInError) {
+      setSubmitting(false);
+      toast.error('Current password is incorrect');
+      return;
+    }
     const { error } = await updatePassword(newPassword);
     setSubmitting(false);
     if (error) {
@@ -57,6 +77,7 @@ export function UserMenu() {
       return;
     }
     toast.success('Password updated');
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setDialogOpen(false);
@@ -98,6 +119,7 @@ export function UserMenu() {
       <Dialog open={dialogOpen} onOpenChange={(open) => {
         setDialogOpen(open);
         if (!open) {
+          setCurrentPassword('');
           setNewPassword('');
           setConfirmPassword('');
         }
@@ -106,10 +128,21 @@ export function UserMenu() {
           <DialogHeader>
             <DialogTitle>Change password</DialogTitle>
             <DialogDescription>
-              Enter a new password for your account. Minimum 8 characters.
+              Enter your current password, then choose a new one (minimum 8 characters).
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmitPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="new-password">New password</Label>
               <Input
