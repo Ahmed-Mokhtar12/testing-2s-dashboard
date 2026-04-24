@@ -16,7 +16,6 @@ const WhatsAppPage: React.FC = () => {
   const { data, isLoading } = useWhatsAppInsights();
 
   return (
-    <div className="dark bg-background text-foreground -m-4 p-4 md:-m-6 md:p-6 rounded-lg">
     <div className="space-y-6">
       <SectionHeader title="WhatsApp" subtitle="Guest conversations on WhatsApp" />
 
