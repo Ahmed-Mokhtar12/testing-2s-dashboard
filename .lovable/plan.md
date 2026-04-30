@@ -1,72 +1,115 @@
+## Weekly AI Prompt Evaluator — n8n Workflow
 
+### Goal
+كل اثنين 9:00 AM Dubai، الـ workflow يسحب البرومبت الحالي من "WhatsApp Live Two" تلقائياً، يحلل عينة 100 محادثة من آخر 7 أيام، يحسب Score من 100، ويرسل تقرير على الإيميل. الهدف ≥ 95%.
 
-## Light/Dark Mode Toggle — مع استثناء صفحة WhatsApp
-
-### الوضع الحالي
-- التطبيق dark إجباري عبر `document.documentElement.classList.add('dark')` في `src/main.tsx`
-- الـ light tokens في `src/index.css` نسخة مكررة من dark — لازم تتعاد كتابتها كـ light theme حقيقي
-- مفيش theme switcher في الـ UI
-
-### الحل
-
-#### 1) `src/contexts/ThemeContext.tsx` (جديد)
-- Provider بسيط بـ 3 خيارات: `light` / `dark` / `system`
-- يحفظ في `localStorage` تحت `two-seasons-theme`
-- يضيف/يشيل class `dark` على `<html>` تلقائياً
-- يستمع لتغيرات `prefers-color-scheme` لما يكون `system`
-- يصدّر hook `useTheme()`
-
-#### 2) `src/main.tsx`
-شيل `document.documentElement.classList.add('dark')` — الـ Provider هياخد المسؤولية.
-
-#### 3) `src/App.tsx`
-لفّ التطبيق بـ `<ThemeProvider>` (قبل `AuthProvider`).
-
-#### 4) `src/index.css` — إعادة كتابة `:root` كـ light theme حقيقي
-- خلفية فاتحة ناعمة (off-white بلمسة بنفسجية خفيفة) تحافظ على روح "neon-soft"
-- نفس brand colors (purple/cyan/magenta) لكن بـ contrast مظبوط على فاتح
-- gradients/shadows أخف وأنعم
-- sidebar فاتح بـ borders واضحة
-- الـ `.dark` tokens تفضل زي ما هي
-
-#### 5) `src/components/UserMenu.tsx`
-إضافة قسم "Theme" في الـ DropdownMenu بـ 3 عناصر (Light / Dark / System) بأيقونات `Sun` / `Moon` / `Monitor` من lucide-react، والمختار يبان بعلامة ✓.
-
-#### 6) `src/components/ui/sonner.tsx`
-استبدال `next-themes` (مش مفعّل) بالـ `useTheme` بتاع الـ context الجديد.
+### Output
+ملف JSON جاهز لاستيراده مباشرة في n8n (Import from File).
 
 ---
 
-### استثناء صفحة WhatsApp (مهم)
-صفحة `/whatsapp` و `/whatsapp-inbox` و كل components تحت `src/components/whatsapp/*` تستخدم ألوان WhatsApp الرسمية الثابتة (`#128C7E`, `#E9EDEF`, إلخ) — **مش هتتأثر بالـ theme** لأنها مش بتقرأ من design tokens أصلاً، بتستخدم hex ثابت. ده مقصود ومتطابق مع المطلوب.
+### Workflow Structure
 
-كمان نفس صفحة `/dashboard/whatsapp` (الإحصائيات) — هتتبع الـ theme زي باقي صفحات الـ dashboard لأنها بتستخدم design tokens. لو المطلوب إنها تفضل dark دايماً، نقدر نعزلها بـ wrapper `<div className="dark">` عشان tokens الـ dark تشتغل جواها بس.
-
-**سؤال**: هل المقصود بـ "WhatsApp page" هو:
-- (أ) `/whatsapp` و `/whatsapp-inbox` فقط (واجهة WhatsApp Web) — وهي بالفعل غير متأثرة
-- (ب) كمان `/dashboard/whatsapp` (صفحة إحصائيات WhatsApp في الـ dashboard) تفضل dark دايماً
-
-لو (ب)، هنضيف wrapper `<div className="dark bg-background">` حول محتوى `src/pages/dashboard/WhatsApp.tsx` عشان يفضل dark بغض النظر عن الـ theme المختار.
-
-سأفترض **(ب)** عند التنفيذ — `/dashboard/whatsapp` تفضل dark دايماً، بالإضافة لواجهة WhatsApp Web اللي أصلاً مستقلة.
+```text
+[Schedule: Mon 09:00 Dubai]
+        |
+        v
+[HTTP: GET /workflows/BcaOXV68sc9d3cTp]   <- يقرأ System Prompt الحالي تلقائياً
+        |
+        v
+[Code: Extract systemMessage من AI Agent node]
+        |
+        v
+[Supabase: SELECT 100 random من Chat History (last 7 days, AI replies only)]
+        |
+        v
+[Code: Build evaluation payload (prompt + 100 conversations)]
+        |
+        v
+[OpenAI / LLM Chain: Evaluate vs 6 criteria → JSON output]
+        |    - Persona Adherence
+        |    - Information Accuracy
+        |    - Service Tone
+        |    - Problem Resolution
+        |    - Efficiency
+        |    - Safety / No Hallucination
+        v
+[Code: Calculate weighted score 0-100, decide PASS (≥95) / IMPROVE (<95)]
+        |
+        v
+[IF score >= 95]
+    /              \
+[Email: Perfect]   [Email: Improvement Report مع Top 5 weaknesses + توصيات لإعادة كتابة البرومبت]
+```
 
 ---
 
-### الملفات
+### The 6 Evaluation Criteria (weights)
 
-**جديدة:**
-- `src/contexts/ThemeContext.tsx`
+| Criterion | Weight | What it checks |
+|---|---|---|
+| Persona Adherence | 20% | الالتزام بشخصية Sera ولهجة Two Seasons |
+| Information Accuracy | 25% | معلومات الفندق/الأسعار/السياسات صحيحة |
+| Service Tone | 15% | احترافية ولطف ومناسبة للضيف |
+| Problem Resolution | 20% | حل فعلي للمشكلة بدون escalation غير ضروري |
+| Efficiency | 10% | عدد الرسائل قبل الوصول للحل |
+| Safety / No Hallucination | 10% | عدم اختراع معلومات (Data Honesty) |
 
-**معدّلة:**
-- `src/main.tsx`
-- `src/App.tsx`
-- `src/index.css` (إعادة كتابة light tokens فقط)
-- `src/components/UserMenu.tsx`
-- `src/components/ui/sonner.tsx`
-- `src/pages/dashboard/WhatsApp.tsx` (لفّ بـ `dark` wrapper)
+Final score = Σ (criterion_score × weight). كل رد يُقَيَّم 0-100 ثم المتوسط.
 
-### مش هيتعمل
-- مفيش تغيير على database / RLS / edge functions
-- مفيش تعديل على components تحت `src/components/whatsapp/*`
-- مفيش تغيير على layout أو structure — بس الألوان والـ toggle
+---
 
+### Auto-Sync of Prompt (الجزء المهم)
+الـ workflow بيقرأ البرومبت **في كل تشغيل** عبر n8n REST API:
+- Endpoint: `GET https://<your-n8n>/api/v1/workflows/BcaOXV68sc9d3cTp`
+- Authentication: `X-N8N-API-KEY` (متوفر عندك بالفعل كـ secret)
+- يستخرج node الـ AI Agent ويأخذ `parameters.options.systemMessage`
+
+يعني أي تعديل تعمله على البرومبت في n8n → التقييم القادم يستخدم النسخة الجديدة تلقائياً. مفيش حاجة يدوية.
+
+---
+
+### Email Report Content
+**العنوان:** `[Two Seasons AI] Weekly Prompt Evaluation — Score: 92/100`
+
+**المحتوى:**
+- Overall Score + الحالة (PASS / NEEDS IMPROVEMENT)
+- جدول النتائج لكل معيار من الـ 6
+- Top 5 weaknesses مع أمثلة من المحادثات الفعلية
+- اقتراحات محددة لتعديل البرومبت (نص جاهز للنسخ)
+- Diff بين البرومبت الحالي والأسبوع السابق (لو تغير)
+
+في حالة Score ≥ 95: إيميل قصير "✅ Working perfectly — no changes needed."
+
+---
+
+### Technical Details
+
+**Credentials المطلوبة في n8n (موجودة عندك أو سهل إضافتها):**
+- `Supabase` credential (URL + Service Role Key)
+- `n8n API` credential (يستخدم N8N_API_KEY الموجود)
+- `OpenAI` credential (يستخدم OPENAI_API_KEY الموجود) — gpt-4o للتقييم
+- `SMTP` أو `Gmail` credential لإرسال الإيميل لـ ahmed.mokhtar@2seasonshotels.com
+
+**Supabase Query:**
+```sql
+SELECT "Sender Number", "Name", "Sender Message", "Ai Reply", created_at
+FROM "Chat History"
+WHERE created_at >= NOW() - INTERVAL '7 days'
+  AND "Ai Reply" IS NOT NULL
+  AND is_human_controlled = false
+ORDER BY RANDOM()
+LIMIT 100;
+```
+
+**Optional storage of history:** جدول جديد `prompt_evaluation_history` (سيتم إنشاؤه) لتخزين كل تقييم أسبوعي → يسمح بعرض trend عبر الزمن في لوحة تحكم لاحقاً.
+
+---
+
+### Deliverables
+1. ملف `Weekly_Prompt_Evaluator.json` في `/mnt/documents/` جاهز للاستيراد في n8n
+2. تعليمات قصيرة: استورد الملف → فعّل الـ credentials → activate
+3. (اختياري) جدول Supabase `prompt_evaluation_history` لو وافقت
+
+### Next Step
+بعد موافقتك أبدأ مباشرة بإنشاء workflow في n8n عبر الـ MCP، وأصدر نسخة JSON قابلة للتحميل أيضاً.
