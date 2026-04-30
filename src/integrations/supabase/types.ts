@@ -452,6 +452,81 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_evaluation_history: {
+        Row: {
+          agent_name: string
+          conversations_evaluated: number
+          created_at: string
+          criteria_scores: Json
+          date_range_end: string | null
+          date_range_start: string | null
+          evaluated_at: string
+          evaluation_duration_ms: number | null
+          evaluator_model: string
+          id: string
+          overall_score: number
+          prompt_char_count: number
+          prompt_diff_from_previous: string | null
+          prompt_full_text: string
+          prompt_version_hash: string
+          raw_evaluator_output: Json | null
+          recommendations: Json
+          score_delta_from_previous: number | null
+          status: string
+          top_weaknesses: Json
+          workflow_id: string
+          workflow_name: string
+        }
+        Insert: {
+          agent_name?: string
+          conversations_evaluated?: number
+          created_at?: string
+          criteria_scores?: Json
+          date_range_end?: string | null
+          date_range_start?: string | null
+          evaluated_at?: string
+          evaluation_duration_ms?: number | null
+          evaluator_model?: string
+          id?: string
+          overall_score: number
+          prompt_char_count?: number
+          prompt_diff_from_previous?: string | null
+          prompt_full_text: string
+          prompt_version_hash: string
+          raw_evaluator_output?: Json | null
+          recommendations?: Json
+          score_delta_from_previous?: number | null
+          status: string
+          top_weaknesses?: Json
+          workflow_id: string
+          workflow_name: string
+        }
+        Update: {
+          agent_name?: string
+          conversations_evaluated?: number
+          created_at?: string
+          criteria_scores?: Json
+          date_range_end?: string | null
+          date_range_start?: string | null
+          evaluated_at?: string
+          evaluation_duration_ms?: number | null
+          evaluator_model?: string
+          id?: string
+          overall_score?: number
+          prompt_char_count?: number
+          prompt_diff_from_previous?: string | null
+          prompt_full_text?: string
+          prompt_version_hash?: string
+          raw_evaluator_output?: Json | null
+          recommendations?: Json
+          score_delta_from_previous?: number | null
+          status?: string
+          top_weaknesses?: Json
+          workflow_id?: string
+          workflow_name?: string
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           Author: string | null
