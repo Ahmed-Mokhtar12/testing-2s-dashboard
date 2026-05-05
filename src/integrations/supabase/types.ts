@@ -473,6 +473,7 @@ export type Database = {
           recommendations: Json
           score_delta_from_previous: number | null
           status: string
+          summary: string | null
           top_weaknesses: Json
           workflow_id: string
           workflow_name: string
@@ -497,6 +498,7 @@ export type Database = {
           recommendations?: Json
           score_delta_from_previous?: number | null
           status: string
+          summary?: string | null
           top_weaknesses?: Json
           workflow_id: string
           workflow_name: string
@@ -521,6 +523,7 @@ export type Database = {
           recommendations?: Json
           score_delta_from_previous?: number | null
           status?: string
+          summary?: string | null
           top_weaknesses?: Json
           workflow_id?: string
           workflow_name?: string
