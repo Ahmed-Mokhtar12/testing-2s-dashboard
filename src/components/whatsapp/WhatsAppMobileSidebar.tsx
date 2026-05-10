@@ -98,7 +98,7 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
             placeholder="Ask Meta AI or Search"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="bg-transparent flex-1 text-[15px] text-[#111B21] placeholder-[#8696A0] focus:outline-none"
+            className="min-h-[44px] bg-transparent flex-1 text-[15px] text-[#111B21] placeholder-[#8696A0] focus:outline-none"
           />
         </div>
       </div>
@@ -111,7 +111,7 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
             <button
               key={f.key}
               onClick={() => setActiveFilter(f.key)}
-              className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap border transition-colors ${
+              className={`flex items-center gap-1 px-3.5 py-2.5 rounded-full text-[13px] font-medium whitespace-nowrap border transition-colors ${
                 isActive
                   ? 'bg-[#D9FDD3] text-[#0a5c45] border-[#D9FDD3]'
                   : 'bg-white text-[#54656F] border-[#E9EDEF]'

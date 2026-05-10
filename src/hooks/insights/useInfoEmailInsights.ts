@@ -1,13 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useDateRange } from '@/contexts/DateRangeContext';
+import { useDateRange } from '@/contexts/useDateRange';
 import { countBy } from './utils';
+
+const QUERY_STALE_TIME = 5 * 60 * 1000;
+const QUERY_GC_TIME = 10 * 60 * 1000;
 
 export function useInfoEmailInsights() {
   const { fromISO, toISO } = useDateRange();
 
   return useQuery({
     queryKey: ['insights', 'info-email', fromISO, toISO],
+    staleTime: QUERY_STALE_TIME,
+    gcTime: QUERY_GC_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('info_email_audit_log')
@@ -17,18 +22,38 @@ export function useInfoEmailInsights() {
         .order('created_at', { ascending: false })
         .limit(1000);
       if (error) throw error;
+
       const rows = data || [];
+      const stats = rows.reduce(
+        (acc, row) => {
+          const action = (row.action || '').toLowerCase();
+          if (action.includes('forward')) acc.forwarded += 1;
+          if (action.includes('delet')) acc.deleted += 1;
+          if (row.override) acc.overridden += 1;
+          return acc;
+        },
+        { forwarded: 0, deleted: 0, overridden: 0 }
+      );
 
-      const total = rows.length;
-      const forwarded = rows.filter((r) => (r.action || '').toLowerCase().includes('forward')).length;
-      const deleted = rows.filter((r) => (r.action || '').toLowerCase().includes('delet')).length;
-      const overridden = rows.filter((r) => r.override).length;
+      const actions = countBy(rows, (row) => row.action as string);
+      const departments = countBy(
+        rows.filter((row) => (row.action || '').toLowerCase().includes('forward')),
+        (row) => row.department as string
+      );
+      const confidence = countBy(rows, (row) => row.confidence as string);
 
-      const actions = countBy(rows, (r) => r.action as string);
-      const departments = countBy(rows.filter((r) => (r.action || '').toLowerCase().includes('forward')), (r) => r.department as string);
-      const confidence = countBy(rows, (r) => r.confidence as string);
-
-      return { rows, kpis: { total, forwarded, deleted, overridden }, actions, departments, confidence };
+      return {
+        rows,
+        kpis: {
+          total: rows.length,
+          forwarded: stats.forwarded,
+          deleted: stats.deleted,
+          overridden: stats.overridden,
+        },
+        actions,
+        departments,
+        confidence,
+      };
     },
   });
 }

@@ -3,6 +3,7 @@ import { Instagram, MessageSquare, Facebook, Hash } from 'lucide-react';
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { ChartCard } from '@/components/dashboard/ChartCard';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useSocialInsights } from '@/hooks/insights/useSocialInsights';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -12,7 +13,10 @@ import { tooltipStyle, tooltipItemStyle, tooltipLabelStyle, barCursor } from '@/
 const PALETTE = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
 const SocialPage: React.FC = () => {
+  const isMobile = useIsMobile();
   const { data, isLoading } = useSocialInsights();
+  const chartHeight = isMobile ? 180 : 280;
+  const axisFontSize = isMobile ? 9 : 11;
 
   return (
     <div className="space-y-6">
@@ -27,7 +31,7 @@ const SocialPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Platform split">
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <PieChart>
               <Pie data={data?.platformSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.platformSplit || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -39,7 +43,7 @@ const SocialPage: React.FC = () => {
         </ChartCard>
 
         <ChartCard title="Event type">
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <PieChart>
               <Pie data={data?.eventSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.eventSplit || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -52,11 +56,11 @@ const SocialPage: React.FC = () => {
       </div>
 
       <ChartCard title="Conversation nature" description="Inferred from notes / status / message text">
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
           <BarChart data={data?.natureSplit || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-            <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+            <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={barCursor} />
             <Bar dataKey="value" fill="hsl(var(--chart-3))" radius={[6, 6, 0, 0]} />
           </BarChart>

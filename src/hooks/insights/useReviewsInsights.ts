@@ -1,13 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useDateRange } from '@/contexts/DateRangeContext';
+import { useDateRange } from '@/contexts/useDateRange';
 import { dailySeriesByDateKey, countBy, safeNum } from './utils';
+
+const QUERY_STALE_TIME = 5 * 60 * 1000;
+const QUERY_GC_TIME = 10 * 60 * 1000;
 
 export function useReviewsInsights() {
   const { fromDateKey, toDateKey } = useDateRange();
 
   return useQuery({
     queryKey: ['insights', 'reviews', fromDateKey, toDateKey],
+    staleTime: QUERY_STALE_TIME,
+    gcTime: QUERY_GC_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reviews')
@@ -17,27 +22,56 @@ export function useReviewsInsights() {
         .order('Date', { ascending: false })
         .limit(10000);
       if (error) throw error;
+
       const rows = data || [];
-
-      const total = rows.length;
-      const scores = rows.map((r) => safeNum(r.Score)).filter((n) => n > 0);
-      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-      const positive = scores.filter((s) => s >= 4).length;
-      const negative = scores.filter((s) => s <= 2.5).length;
-
-      const trend = dailySeriesByDateKey(fromDateKey, toDateKey, rows, (r) =>
-        r.Date ? String(r.Date) : null
+      const stats = rows.reduce(
+        (acc, row) => {
+          const score = safeNum(row.Score);
+          if (score > 0) {
+            acc.scoreSum += score;
+            acc.scoreCount += 1;
+            if (score >= 4) acc.positive += 1;
+            if (score <= 2.5) acc.negative += 1;
+            if (score < 1.5) acc.distribution[0].value += 1;
+            else if (score < 2.5) acc.distribution[1].value += 1;
+            else if (score < 3.5) acc.distribution[2].value += 1;
+            else if (score < 4.5) acc.distribution[3].value += 1;
+            else acc.distribution[4].value += 1;
+          }
+          return acc;
+        },
+        {
+          scoreSum: 0,
+          scoreCount: 0,
+          positive: 0,
+          negative: 0,
+          distribution: [
+            { name: '0–1', value: 0 },
+            { name: '1.5–2.5', value: 0 },
+            { name: '2.5–3.5', value: 0 },
+            { name: '3.5–4.5', value: 0 },
+            { name: '4.5–5', value: 0 },
+          ],
+        }
       );
-      const sources = countBy(rows, (r) => r.Source as string);
-      const distribution = [
-        { name: '0–1', value: scores.filter((s) => s < 1.5).length },
-        { name: '1.5–2.5', value: scores.filter((s) => s >= 1.5 && s < 2.5).length },
-        { name: '2.5–3.5', value: scores.filter((s) => s >= 2.5 && s < 3.5).length },
-        { name: '3.5–4.5', value: scores.filter((s) => s >= 3.5 && s < 4.5).length },
-        { name: '4.5–5', value: scores.filter((s) => s >= 4.5).length },
-      ];
 
-      return { rows, kpis: { total, avg, positive, negative }, trend, sources, distribution };
+      const trend = dailySeriesByDateKey(fromDateKey, toDateKey, rows, (row) =>
+        row.Date ? String(row.Date) : null
+      );
+      const sources = countBy(rows, (row) => row.Source as string);
+
+      return {
+        rows,
+        kpis: {
+          total: rows.length,
+          avg: stats.scoreCount ? stats.scoreSum / stats.scoreCount : 0,
+          positive: stats.positive,
+          negative: stats.negative,
+        },
+        trend,
+        sources,
+        distribution: stats.distribution,
+      };
     },
   });
 }

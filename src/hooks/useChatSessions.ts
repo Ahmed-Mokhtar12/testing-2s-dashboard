@@ -62,7 +62,7 @@ export const useChatSessions = () => {
 
       setChatSessions(Array.from(sessionMap.values()));
     } catch (error) {
-      console.error('Error loading chat sessions:', error);
+      if (import.meta.env.DEV) console.error('Error loading chat sessions:', error);
       toast({
         title: "Error",
         description: "Failed to load chat history",
@@ -98,7 +98,7 @@ export const useChatSessions = () => {
       // Reload sessions to reflect the new message
       await loadChatSessions();
     } catch (error) {
-      console.error('Error saving chat message:', error);
+      if (import.meta.env.DEV) console.error('Error saving chat message:', error);
       toast({
         title: "Error",
         description: "Failed to save chat message",
@@ -149,7 +149,7 @@ export const useChatSessions = () => {
         description: "Conversation archived successfully"
       });
     } catch (error) {
-      console.error('Error archiving chat session:', error);
+      if (import.meta.env.DEV) console.error('Error archiving chat session:', error);
       toast({
         title: "Error",
         description: "Failed to archive conversation",

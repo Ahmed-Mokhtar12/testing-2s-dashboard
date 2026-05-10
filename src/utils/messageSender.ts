@@ -1,79 +1,78 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/chat';
+import { getErrorMessage } from '@/utils/errorUtils';
 
 export const createUserMessage = (content: string): Message => ({
-  id: Date.now().toString(),
+  id: crypto.randomUUID(),
   content,
   isUser: true,
   timestamp: new Date(),
 });
 
 export const createAIMessage = (content: string): Message => ({
-  id: (Date.now() + 1).toString(),
+  id: crypto.randomUUID(),
   content,
   isUser: false,
   timestamp: new Date(),
 });
 
 export const createErrorMessage = (customMessage?: string): Message => ({
-  id: (Date.now() + 1).toString(),
+  id: crypto.randomUUID(),
   content: customMessage || "I'm unable to answer based on the current data. Please try again.",
   isUser: false,
   timestamp: new Date(),
 });
 
 export const sendMessageToAI = async (message: string, messageId: string) => {
-  console.log('Sending message to Supabase edge function:', message);
-  
   const { data, error } = await supabase.functions.invoke('chat-with-data', {
     body: {
       message,
-      messageId
-    }
+      messageId,
+    },
   });
 
   if (error) {
     throw error;
   }
 
-  console.log('Received response from edge function:', data);
-  
   return data;
 };
 
-export const executeAction = async (actionData: import('@/types/chat').ActionData, messageId: string) => {
-  console.log('🚀 Executing action via Supabase edge function:', actionData);
-  console.log('🔧 Message ID:', messageId);
-  console.log('🔧 Supabase client configured:', !!supabase);
-  
+export const executeAction = async (
+  actionData: import('@/types/chat').ActionData,
+  messageId: string
+) => {
   try {
     const { data, error } = await supabase.functions.invoke('execute-n8n-action', {
       body: {
         ...actionData,
-        messageId
-      }
+        messageId,
+      },
     });
 
-    console.log('📤 Supabase functions.invoke response - data:', data);
-    console.log('📤 Supabase functions.invoke response - error:', error);
-
     if (error) {
-      console.error('❌ Supabase functions.invoke error:', error);
-      
-      // Enhanced error handling with specific guidance
+      if (import.meta.env.DEV) console.error('Supabase functions.invoke error:', error);
+
       let enhancedError = new Error(error.message || 'Unknown error occurred');
-      
+
       if (error.message?.includes('fetch')) {
-        enhancedError = new Error('Network error: Could not connect to the action service. Please check your internet connection and try again.');
+        enhancedError = new Error(
+          'Network error: Could not connect to the action service. Please check your internet connection and try again.'
+        );
       } else if (error.message?.includes('timeout')) {
-        enhancedError = new Error('Request timeout: The action service is taking too long to respond. Please try again.');
+        enhancedError = new Error(
+          'Request timeout: The action service is taking too long to respond. Please try again.'
+        );
       } else if (error.message?.includes('404')) {
-        enhancedError = new Error('Service unavailable: The action service endpoint was not found. Please contact support.');
+        enhancedError = new Error(
+          'Service unavailable: The action service endpoint was not found. Please contact support.'
+        );
       } else if (error.message?.includes('500')) {
-        enhancedError = new Error('Server error: The action service encountered an internal error. Please try again later.');
+        enhancedError = new Error(
+          'Server error: The action service encountered an internal error. Please try again later.'
+        );
       }
-      
+
       throw enhancedError;
     }
 
@@ -85,18 +84,16 @@ export const executeAction = async (actionData: import('@/types/chat').ActionDat
       throw new Error(data.error || 'Action execution failed');
     }
 
-    console.log('✅ Action execution successful:', data);
     return data;
-    
   } catch (networkError) {
-    console.error('🚨 Network/Client error in executeAction:', networkError);
-    
-    // Handle client-side network errors
-    if (networkError.name === 'TypeError' && networkError.message.includes('fetch')) {
-      throw new Error('Unable to connect to the action service. Please check your internet connection and try again.');
+    if (import.meta.env.DEV) console.error('Network/client error in executeAction:', networkError);
+
+    if (networkError instanceof TypeError && networkError.message.includes('fetch')) {
+      throw new Error(
+        'Unable to connect to the action service. Please check your internet connection and try again.'
+      );
     }
-    
-    // Re-throw the error with additional context
-    throw new Error(`Action execution failed: ${networkError.message}`);
+
+    throw new Error(`Action execution failed: ${getErrorMessage(networkError)}`);
   }
 };

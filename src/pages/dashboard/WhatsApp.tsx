@@ -3,6 +3,7 @@ import { MessageCircle, Users, UserCog, Archive } from 'lucide-react';
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { ChartCard } from '@/components/dashboard/ChartCard';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useWhatsAppInsights } from '@/hooks/insights/useWhatsAppInsights';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -13,7 +14,10 @@ import { tooltipStyle, tooltipItemStyle, tooltipLabelStyle, barCursor, lineCurso
 const PALETTE = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
 const WhatsAppPage: React.FC = () => {
+  const isMobile = useIsMobile();
   const { data, isLoading } = useWhatsAppInsights();
+  const chartHeight = isMobile ? 180 : 280;
+  const axisFontSize = isMobile ? 9 : 11;
 
   return (
     <div className="space-y-6">
@@ -28,7 +32,7 @@ const WhatsAppPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ChartCard title="Messages per day" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <AreaChart data={data?.trend || []}>
               <defs>
                 <linearGradient id="wa" x1="0" y1="0" x2="0" y2="1">
@@ -37,8 +41,8 @@ const WhatsAppPage: React.FC = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-              <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+              <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={lineCursor} />
               <Area type="monotone" dataKey="value" stroke="hsl(var(--chart-2))" fill="url(#wa)" strokeWidth={2} />
             </AreaChart>
@@ -46,7 +50,7 @@ const WhatsAppPage: React.FC = () => {
         </ChartCard>
 
         <ChartCard title="Reply mix">
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <PieChart>
               <Pie data={data?.replyMix || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.replyMix || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -59,11 +63,11 @@ const WhatsAppPage: React.FC = () => {
       </div>
 
       <ChartCard title="Top guests by message volume">
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={isMobile ? 220 : 300}>
           <BarChart data={data?.topGuests || []} layout="vertical" margin={{ left: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-            <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-            <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} width={120} />
+            <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
+            <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} width={120} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={barCursor} />
             <Bar dataKey="value" fill="hsl(var(--chart-3))" radius={[0, 6, 6, 0]} />
           </BarChart>

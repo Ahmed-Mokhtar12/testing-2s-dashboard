@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail, MessageSquare, Phone, Check, X, Clock, AlertCircle } from 'lucide-react';
+import { MessageSquare, Check, X, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { ActionData } from '@/types/chat';
 
 interface ActionConfirmationMessageProps {
@@ -69,6 +69,8 @@ const ActionConfirmationMessage: React.FC<ActionConfirmationMessageProps> = ({
   };
 
   const canEdit = actionStatus === 'pending_confirmation';
+  const canConfirm = actionStatus === 'pending_confirmation';
+  const showActions = actionStatus === 'pending_confirmation' || actionStatus === 'executing';
 
   return (
     <Card className="max-w-md border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
@@ -113,13 +115,17 @@ const ActionConfirmationMessage: React.FC<ActionConfirmationMessageProps> = ({
           )}
         </div>
 
-        {canEdit && (
+        {showActions && (
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleConfirm} className="flex-1">
-              <Check className="w-4 h-4 mr-2" />
-              Confirm & Send
+            <Button onClick={handleConfirm} className="flex-1" disabled={!canConfirm}>
+              {actionStatus === 'executing' ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              {actionStatus === 'executing' ? 'Sending...' : 'Confirm & Send'}
             </Button>
-            <Button variant="outline" onClick={onCancel} className="flex-1">
+            <Button variant="outline" onClick={onCancel} className="flex-1" disabled={!canEdit}>
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>

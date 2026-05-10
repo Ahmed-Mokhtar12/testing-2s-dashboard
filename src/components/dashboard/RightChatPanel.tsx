@@ -8,16 +8,14 @@ import ChatContainer from '@/components/ChatContainer';
 import DocumentProcessingProgress from '@/components/DocumentProcessingProgress';
 import { useChat } from '@/hooks/useChat';
 import { useSeraLocalSessions } from '@/hooks/useSeraLocalSessions';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import twoSeasonsLogo from '@/assets/two-seasons-logo.png';
 
-/**
- * RightChatPanel — collapsible right-side AI chat (Sera).
- * Pushes content (no overlay) when open.
- */
 export const RightChatPanel: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [innerSidebar, setInnerSidebar] = useState(false);
+  const isMobile = useIsMobile();
 
   const {
     chatSessions,
@@ -66,6 +64,9 @@ export const RightChatPanel: React.FC = () => {
   const handleSessionSelect = (sessionId: string) => {
     const sessionMessages = selectSession(sessionId);
     loadSessionMessages(sessionMessages);
+    if (isMobile) {
+      setInnerSidebar(false);
+    }
   };
 
   const handleDeleteSession = (sessionId: string) => {
@@ -73,9 +74,137 @@ export const RightChatPanel: React.FC = () => {
     if (activeSessionId === sessionId || currentSessionId === sessionId) clearMessages();
   };
 
+  const panelContent = (
+    <div
+      className="flex w-full h-full border-l border-black/10 bg-white text-black"
+      style={{
+        ['--background' as string]: '0 0% 100%',
+        ['--foreground' as string]: '0 0% 0%',
+        ['--card' as string]: '0 0% 100%',
+        ['--card-foreground' as string]: '0 0% 0%',
+        ['--popover' as string]: '0 0% 100%',
+        ['--popover-foreground' as string]: '0 0% 0%',
+        ['--muted' as string]: '0 0% 96%',
+        ['--muted-foreground' as string]: '0 0% 35%',
+        ['--border' as string]: '0 0% 88%',
+        ['--input' as string]: '0 0% 88%',
+        ['--secondary' as string]: '0 0% 96%',
+        ['--secondary-foreground' as string]: '0 0% 0%',
+        ['--accent' as string]: '0 0% 96%',
+        ['--accent-foreground' as string]: '0 0% 0%',
+      } as React.CSSProperties}
+    >
+      {innerSidebar && (
+        <div className={cn('border-r border-border overflow-hidden', isMobile ? 'w-full' : 'w-[220px]')}>
+          <SeraHistorySidebar
+            chatSessions={chatSessions}
+            activeSessionId={activeSessionId || currentSessionId}
+            onSessionSelect={handleSessionSelect}
+            onDeleteSession={handleDeleteSession}
+            onClose={() => setInnerSidebar(false)}
+          />
+        </div>
+      )}
+
+      {(!innerSidebar || !isMobile) && (
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="h-12 px-2 flex items-center justify-between border-b border-border shrink-0 bg-card/40 backdrop-blur">
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'h-8 w-8 relative text-muted-foreground hover:text-foreground hover:bg-background/40',
+                        innerSidebar && 'bg-background/50 text-foreground'
+                      )}
+                      onClick={() => setInnerSidebar((v) => !v)}
+                      aria-label="Chat history"
+                    >
+                      <PanelLeft className="h-4 w-4" />
+                      {!innerSidebar && chatSessions.length > 0 && (
+                        <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {innerSidebar ? 'Hide history' : `Chat history${chatSessions.length ? ` (${chatSessions.length})` : ''}`}
+                  </TooltipContent>
+                </Tooltip>
+
+                <div className="flex items-center gap-2 px-1.5">
+                  <div className="h-7 w-7 rounded-full bg-card border border-primary/40 overflow-hidden flex items-center justify-center shrink-0">
+                    <img src={twoSeasonsLogo} alt="Sera" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex flex-col leading-tight min-w-0">
+                    <span className="text-sm font-medium text-foreground">Sera</span>
+                    <span className="text-[10px] text-muted-foreground">AI Consultant</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-0.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={startNewChat} aria-label="New chat">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">New chat</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Settings">
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Settings</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)} aria-label="Close chat">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Close</TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+          </div>
+
+          <div className="flex-1 flex flex-col min-h-0 bg-transparent">
+            {messages.length === 0 ? (
+              <WelcomeScreen
+                inputValue={inputValue}
+                isTyping={isTyping}
+                onInputChange={setInputValue}
+                onSendMessage={handleSendMessage}
+                onKeyPress={handleKeyPress}
+                onFileUpload={handleFileUpload}
+              />
+            ) : (
+              <ChatContainer
+                messages={messages}
+                inputValue={inputValue}
+                isTyping={isTyping}
+                onInputChange={setInputValue}
+                onSendMessage={handleSendMessage}
+                onKeyPress={handleKeyPress}
+                onFileUpload={handleFileUpload}
+                onActionConfirm={handleActionConfirm}
+                onActionCancel={handleActionCancel}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
-      {/* Floating trigger */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
@@ -86,140 +215,30 @@ export const RightChatPanel: React.FC = () => {
         </button>
       )}
 
-      {/* Side panel — pushes layout */}
-      <aside
-        className={cn(
-          'mt-6 self-start shrink-0 h-[calc(100%-1.5rem)] overflow-hidden transition-[width] duration-300 ease-out flex',
-          open ? 'w-[420px]' : 'w-0'
-        )}
-      >
-        {open && (
-          <div
-            className="flex w-full h-full border-l border-black/10 bg-white text-black"
-            style={{
-              ['--background' as string]: '0 0% 100%',
-              ['--foreground' as string]: '0 0% 0%',
-              ['--card' as string]: '0 0% 100%',
-              ['--card-foreground' as string]: '0 0% 0%',
-              ['--popover' as string]: '0 0% 100%',
-              ['--popover-foreground' as string]: '0 0% 0%',
-              ['--muted' as string]: '0 0% 96%',
-              ['--muted-foreground' as string]: '0 0% 35%',
-              ['--border' as string]: '0 0% 88%',
-              ['--input' as string]: '0 0% 88%',
-              ['--secondary' as string]: '0 0% 96%',
-              ['--secondary-foreground' as string]: '0 0% 0%',
-              ['--accent' as string]: '0 0% 96%',
-              ['--accent-foreground' as string]: '0 0% 0%',
-            } as React.CSSProperties}
-          >
-            {innerSidebar && (
-              <div className="w-[220px] border-r border-border overflow-hidden">
-                <SeraHistorySidebar
-                  chatSessions={chatSessions}
-                  activeSessionId={activeSessionId || currentSessionId}
-                  onSessionSelect={handleSessionSelect}
-                  onDeleteSession={handleDeleteSession}
-                  onClose={() => setInnerSidebar(false)}
-                />
-              </div>
-            )}
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="h-12 px-2 flex items-center justify-between border-b border-border shrink-0 bg-card/40 backdrop-blur">
-                <TooltipProvider delayDuration={200}>
-                  <div className="flex items-center gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            'h-8 w-8 relative text-muted-foreground hover:text-foreground hover:bg-background/40',
-                            innerSidebar && 'bg-background/50 text-foreground'
-                          )}
-                          onClick={() => setInnerSidebar((v) => !v)}
-                          aria-label="Chat history"
-                        >
-                          <PanelLeft className="h-4 w-4" />
-                          {!innerSidebar && chatSessions.length > 0 && (
-                            <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        {innerSidebar ? 'Hide history' : `Chat history${chatSessions.length ? ` (${chatSessions.length})` : ''}`}
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <div className="flex items-center gap-2 px-1.5">
-                      <div className="h-7 w-7 rounded-full bg-card border border-primary/40 overflow-hidden flex items-center justify-center shrink-0">
-                        <img src={twoSeasonsLogo} alt="Sera" className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex flex-col leading-tight">
-                        <span className="text-sm font-medium text-foreground">Sera</span>
-                        <span className="text-[10px] text-muted-foreground">AI Consultant</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-0.5">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={startNewChat} aria-label="New chat">
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">New chat</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Settings">
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">Settings</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)} aria-label="Close chat">
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">Close</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </TooltipProvider>
-              </div>
-
-
-              <div className="flex-1 flex flex-col min-h-0 bg-transparent">
-                {messages.length === 0 ? (
-                  <WelcomeScreen
-                    inputValue={inputValue}
-                    isTyping={isTyping}
-                    onInputChange={setInputValue}
-                    onSendMessage={handleSendMessage}
-                    onKeyPress={handleKeyPress}
-                    onFileUpload={handleFileUpload}
-                  />
-                ) : (
-                  <ChatContainer
-                    messages={messages}
-                    inputValue={inputValue}
-                    isTyping={isTyping}
-                    onInputChange={setInputValue}
-                    onSendMessage={handleSendMessage}
-                    onKeyPress={handleKeyPress}
-                    onFileUpload={handleFileUpload}
-                    onActionConfirm={handleActionConfirm}
-                    onActionCancel={handleActionCancel}
-                  />
-                )}
-              </div>
-            </div>
+      {isMobile ? (
+        open && (
+          <div className="fixed inset-0 z-50 flex items-end">
+            <button
+              type="button"
+              aria-label="Close chat overlay"
+              className="absolute inset-0 bg-black/35"
+              onClick={() => setOpen(false)}
+            />
+            <aside className="relative z-10 flex h-[min(82vh,760px)] w-full flex-col overflow-hidden rounded-t-3xl border border-border bg-white shadow-2xl">
+              {panelContent}
+            </aside>
           </div>
-        )}
-      </aside>
+        )
+      ) : (
+        <aside
+          className={cn(
+            'mt-6 self-start shrink-0 h-[calc(100%-1.5rem)] overflow-hidden transition-[width] duration-300 ease-out flex',
+            open ? 'w-full sm:w-[420px]' : 'w-0'
+          )}
+        >
+          {open && panelContent}
+        </aside>
+      )}
 
       {processingProgress && (
         <DocumentProcessingProgress

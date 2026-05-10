@@ -1,13 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useDateRange } from '@/contexts/DateRangeContext';
+import { useDateRange } from '@/contexts/useDateRange';
 import { dailySeriesByDateKey, countBy } from './utils';
+
+const QUERY_STALE_TIME = 5 * 60 * 1000;
+const QUERY_GC_TIME = 10 * 60 * 1000;
 
 export function useWelcomeInsights() {
   const { fromDateKey, toDateKey } = useDateRange();
 
   return useQuery({
     queryKey: ['insights', 'welcome', fromDateKey, toDateKey],
+    staleTime: QUERY_STALE_TIME,
+    gcTime: QUERY_GC_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('welcome_message_success_log')
@@ -17,22 +22,40 @@ export function useWelcomeInsights() {
         .order('sent_at', { ascending: false })
         .limit(10000);
       if (error) throw error;
+
       const rows = data || [];
-
-      const sent = rows.length;
-      const successful = rows.filter((r) => (r.status || '').toLowerCase() === 'sent').length;
-      const arrivals = new Set(
-        rows.map((r) => `${r.arrival_date || ''}|${r.guest_id || r.mobile_number || ''}`)
-      ).size;
-      const uniqueGuests = new Set(rows.map((r) => r.guest_id || r.mobile_number).filter(Boolean)).size;
-      const successRate = sent ? Math.round((successful / sent) * 100) : 0;
-
-      const trend = dailySeriesByDateKey(fromDateKey, toDateKey, rows, (r) =>
-        r.sent_date ? String(r.sent_date) : null
+      const stats = rows.reduce(
+        (acc, row) => {
+          if ((row.status || '').toLowerCase() === 'sent') acc.successful += 1;
+          acc.arrivals.add(`${row.arrival_date || ''}|${row.guest_id || row.mobile_number || ''}`);
+          const guestKey = row.guest_id || row.mobile_number;
+          if (guestKey) acc.uniqueGuests.add(String(guestKey));
+          return acc;
+        },
+        {
+          successful: 0,
+          arrivals: new Set<string>(),
+          uniqueGuests: new Set<string>(),
+        }
       );
-      const statusSplit = countBy(rows, (r) => r.status as string);
 
-      return { rows, kpis: { arrivals, sent, successful, uniqueGuests, successRate }, trend, statusSplit };
+      const trend = dailySeriesByDateKey(fromDateKey, toDateKey, rows, (row) =>
+        row.sent_date ? String(row.sent_date) : null
+      );
+      const statusSplit = countBy(rows, (row) => row.status as string);
+
+      return {
+        rows,
+        kpis: {
+          arrivals: stats.arrivals.size,
+          sent: rows.length,
+          successful: stats.successful,
+          uniqueGuests: stats.uniqueGuests.size,
+          successRate: rows.length ? Math.round((stats.successful / rows.length) * 100) : 0,
+        },
+        trend,
+        statusSplit,
+      };
     },
   });
 }

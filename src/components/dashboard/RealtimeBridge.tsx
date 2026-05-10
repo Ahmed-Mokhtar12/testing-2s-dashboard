@@ -2,36 +2,43 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-/**
- * Mounts once inside DashboardShell. Subscribes to Supabase Realtime on the
- * three enabled tables and invalidates the matching React Query caches so
- * KPIs auto-refresh without a page reload.
- */
+const TABLE_TO_QUERY_KEY: Record<string, string[]> = {
+  reviews: ['insights', 'reviews'],
+  'Chat History': ['insights', 'whatsapp'],
+  welcome_message_success_log: ['insights', 'welcome'],
+};
+
 export const RealtimeBridge: React.FC = () => {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const subs = [
-      { table: 'reviews', key: ['insights', 'reviews'] },
-      { table: 'Chat History', key: ['insights', 'whatsapp'] },
-      { table: 'welcome_message_success_log', key: ['insights', 'welcome'] },
-    ] as const;
+    const tables = Object.keys(TABLE_TO_QUERY_KEY);
 
-    const channels = subs.map(({ table, key }) =>
+    const channels = tables.map((table) =>
       supabase
         .channel(`rt-${table}`)
         .on(
           'postgres_changes' as never,
           { event: '*', schema: 'public', table } as never,
-          () => qc.invalidateQueries({ queryKey: key as unknown as readonly unknown[] }),
+          () => {
+            const queryKey = TABLE_TO_QUERY_KEY[table];
+            queryClient.invalidateQueries({ queryKey });
+          }
         )
-        .subscribe(),
+        .subscribe((status, error) => {
+          if (error && import.meta.env.DEV) {
+            console.error(`Realtime subscription error for ${table}:`, status, error);
+          }
+        })
     );
 
     return () => {
-      channels.forEach((c) => supabase.removeChannel(c));
+      channels.forEach((channel) => {
+        channel.unsubscribe();
+        supabase.removeChannel(channel);
+      });
     };
-  }, [qc]);
+  }, [queryClient]);
 
   return null;
 };

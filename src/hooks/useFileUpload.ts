@@ -1,16 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Message } from '@/types/chat';
-import { 
-  createEnhancedFileUploadMessage, 
-  processFileUpload, 
-  createFileUploadErrorMessage 
+import {
+  createEnhancedFileUploadMessage,
+  processFileUpload,
+  createFileUploadErrorMessage,
 } from '@/utils/enhancedFileUploadHandler';
 import { ProcessingProgress } from '@/utils/clientSideDocumentProcessor';
 
 export const useFileUpload = () => {
   const { toast } = useToast();
   const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current) {
+        clearTimeout(progressTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleFileUpload = async (
     file: File,
@@ -18,50 +27,46 @@ export const useFileUpload = () => {
     setIsTyping: React.Dispatch<React.SetStateAction<boolean>>,
     sessionId?: string
   ) => {
-    console.log('📎 Enhanced file upload started:', file.name, file.type, file.size);
-    
     const userMessage = createEnhancedFileUploadMessage(file);
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);
 
     try {
       const aiMessage = await processFileUpload(
-        file, 
-        sessionId, 
+        file,
+        sessionId,
         (progress) => setProcessingProgress(progress)
       );
-      
-      setMessages(prev => [...prev, aiMessage]);
-      
+
+      setMessages((prev) => [...prev, aiMessage]);
+
       toast({
-        title: "تم معالجة الملف",
-        description: `تم تحليل ${file.name} بنجاح`,
+        title: 'File processed',
+        description: `${file.name} was analyzed successfully.`,
       });
 
-      // Clear progress after a delay
-      setTimeout(() => setProcessingProgress(null), 3000);
-
+      progressTimerRef.current = setTimeout(() => setProcessingProgress(null), 3000);
     } catch (error) {
-      console.error('❌ Enhanced file upload error:', error);
-      
+      if (import.meta.env.DEV) console.error('Enhanced file upload error:', error);
+
       const errorMessage = createFileUploadErrorMessage();
-      setMessages(prev => [...prev, errorMessage]);
-      
+      setMessages((prev) => [...prev, errorMessage]);
+
       toast({
-        title: "خطأ في الرفع",
-        description: "حدث خطأ أثناء معالجة الملف.",
-        variant: "destructive",
+        title: 'Upload failed',
+        description: 'There was a problem while processing the file.',
+        variant: 'destructive',
       });
-      
+
       setProcessingProgress(null);
     } finally {
       setIsTyping(false);
     }
   };
 
-  return { 
-    handleFileUpload, 
+  return {
+    handleFileUpload,
     processingProgress,
-    clearProgress: () => setProcessingProgress(null)
+    clearProgress: () => setProcessingProgress(null),
   };
 };

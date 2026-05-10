@@ -7,10 +7,10 @@ interface SectionHeaderProps {
 }
 
 export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, right }) => (
-  <div className="flex items-end justify-between gap-4 mb-6">
-    <div>
-      <h1 className="font-display text-3xl font-bold tracking-tight text-glow-primary">{title}</h1>
-      {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-6">
+    <div className="min-w-0">
+      <h1 className="font-display text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-glow-primary">{title}</h1>
+      {subtitle && <p className="mt-1 text-xs sm:text-sm text-muted-foreground">{subtitle}</p>}
     </div>
     {right}
   </div>

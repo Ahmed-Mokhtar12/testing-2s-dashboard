@@ -101,6 +101,31 @@ interface DocumentProcessingRequest {
   sessionId: string;
 }
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+const matchesMagicSignature = (bytes: Uint8Array, signature: number[]) =>
+  signature.every((value, index) => bytes[index] === value);
+
+const validateServerFileSignature = (mimeType: string, bytes: Uint8Array) => {
+  if (mimeType === 'application/pdf') {
+    return matchesMagicSignature(bytes, [0x25, 0x50, 0x44, 0x46]);
+  }
+
+  if (mimeType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+    return matchesMagicSignature(bytes, [0x50, 0x4b]);
+  }
+
+  if (mimeType === 'image/jpeg') {
+    return matchesMagicSignature(bytes, [0xff, 0xd8, 0xff]);
+  }
+
+  if (mimeType === 'image/png') {
+    return matchesMagicSignature(bytes, [0x89, 0x50, 0x4e, 0x47]);
+  }
+
+  return true;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -115,6 +140,11 @@ serve(async (req) => {
     body = {};
   }
 
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
   try {
     
     // Health check endpoint
@@ -128,11 +158,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
     const { documentId, sessionId }: DocumentProcessingRequest = body;
     console.log('🔄 Processing document:', documentId);
@@ -161,6 +186,15 @@ serve(async (req) => {
 
     if (downloadError || !fileData) {
       throw new Error(`Failed to download file: ${downloadError?.message}`);
+    }
+
+    if (document.file_size > MAX_UPLOAD_BYTES) {
+      throw new Error('File exceeds the 10MB server-side upload limit');
+    }
+
+    const fileBytes = new Uint8Array(await fileData.arrayBuffer());
+    if (!validateServerFileSignature(document.mime_type, fileBytes)) {
+      throw new Error(`Declared file type does not match file signature for ${document.original_filename}`);
     }
 
     // Extract text content based on file type

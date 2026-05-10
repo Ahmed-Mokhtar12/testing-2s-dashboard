@@ -3,6 +3,7 @@ import { TrendingUp, Trophy, Building2, Percent } from 'lucide-react';
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { ChartCard } from '@/components/dashboard/ChartCard';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useCompetitorsInsights } from '@/hooks/insights/useCompetitorsInsights';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -13,8 +14,11 @@ const PALETTE = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-
 const fmt = (n: number) => n ? `AED ${Math.round(n).toLocaleString()}` : '—';
 
 const CompetitorsPage: React.FC = () => {
+  const isMobile = useIsMobile();
   const { data, isLoading } = useCompetitorsInsights();
   const k = data?.kpis;
+  const chartHeight = isMobile ? 220 : 300;
+  const axisFontSize = isMobile ? 9 : 11;
 
   return (
     <div className="space-y-6">
@@ -35,11 +39,11 @@ const CompetitorsPage: React.FC = () => {
       </div>
 
       <ChartCard title="Rate trend per hotel" description="Daily AED price across the period">
-        <ResponsiveContainer width="100%" height={320}>
+        <ResponsiveContainer width="100%" height={isMobile ? 220 : 320}>
           <LineChart data={data?.trend || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-            <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+            <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={lineCursor} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {(data?.hotels || []).map((h, i) => (
@@ -51,11 +55,11 @@ const CompetitorsPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Average price per hotel">
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data?.hotelAvgs || []} layout="vertical" margin={{ left: 90 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} width={140} />
+              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
+              <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={isMobile ? 9 : 10} width={140} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={barCursor} formatter={(v: number) => `AED ${Math.round(v).toLocaleString()}`} />
               <Bar dataKey="avg" fill="hsl(var(--chart-1))" radius={[0, 6, 6, 0]} />
             </BarChart>
@@ -63,11 +67,11 @@ const CompetitorsPage: React.FC = () => {
         </ChartCard>
 
         <ChartCard title="Days as lowest price">
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data?.lowestDaysArr || []} layout="vertical" margin={{ left: 90 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} width={140} />
+              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
+              <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={isMobile ? 9 : 10} width={140} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={barCursor} />
               <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[0, 6, 6, 0]} />
             </BarChart>

@@ -8,9 +8,9 @@ import { Loader2 } from "lucide-react";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import DashboardShell from "./layouts/DashboardShell";
 
-// Lazy-load route pages so the initial bundle stays small.
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
 const ReviewsPage = lazy(() => import("./pages/dashboard/Reviews"));
 const WhatsAppPage = lazy(() => import("./pages/dashboard/WhatsApp"));
@@ -24,7 +24,15 @@ const AuthPage = lazy(() => import("./pages/Auth"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      retry: 1,
+    },
+  },
+});
 
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -41,55 +49,53 @@ function App() {
           <Sonner />
           <BrowserRouter>
             <AuthProvider>
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                {/* Public routes */}
-                <Route path="/auth" element={<AuthPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <ErrorBoundary>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route path="/auth" element={<AuthPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                {/* Protected dashboard */}
-                <Route
-                  element={
-                    <ProtectedRoute>
-                      <DashboardShell />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route index element={<Overview />} />
-                  <Route path="/dashboard" element={<Overview />} />
-                  <Route path="/dashboard/reviews" element={<ReviewsPage />} />
-                  <Route path="/dashboard/whatsapp" element={<WhatsAppPage />} />
-                  <Route path="/dashboard/email" element={<EmailPage />} />
-                  <Route path="/dashboard/competitors" element={<CompetitorsPage />} />
-                  <Route path="/dashboard/info-email" element={<InfoEmailPage />} />
-                  <Route path="/dashboard/social" element={<SocialPage />} />
-                  <Route path="/dashboard/welcome" element={<WelcomePage />} />
-                </Route>
+                    <Route
+                      element={
+                        <ProtectedRoute>
+                          <DashboardShell />
+                        </ProtectedRoute>
+                      }
+                    >
+                      <Route index element={<Overview />} />
+                      <Route path="/dashboard" element={<Overview />} />
+                      <Route path="/dashboard/reviews" element={<ReviewsPage />} />
+                      <Route path="/dashboard/whatsapp" element={<WhatsAppPage />} />
+                      <Route path="/dashboard/email" element={<EmailPage />} />
+                      <Route path="/dashboard/competitors" element={<CompetitorsPage />} />
+                      <Route path="/dashboard/info-email" element={<InfoEmailPage />} />
+                      <Route path="/dashboard/social" element={<SocialPage />} />
+                      <Route path="/dashboard/welcome" element={<WelcomePage />} />
+                    </Route>
 
-                {/* Standalone WhatsApp Web clone (also protected) */}
-                <Route
-                  path="/whatsapp-inbox"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppLanding />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppLanding />
-                    </ProtectedRoute>
-                  }
-                />
+                    <Route
+                      path="/whatsapp-inbox"
+                      element={
+                        <ProtectedRoute>
+                          <WhatsAppLanding />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/whatsapp"
+                      element={
+                        <ProtectedRoute>
+                          <WhatsAppLanding />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </AuthProvider>
-        </BrowserRouter>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </ErrorBoundary>
+            </AuthProvider>
+          </BrowserRouter>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

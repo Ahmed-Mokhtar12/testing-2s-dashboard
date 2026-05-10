@@ -2,7 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' 'unsafe-eval';
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+               font-src 'self' https://fonts.gstatic.com data:;
+               connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;
+               img-src 'self' data: blob: https://*.supabase.co https://lovable.dev;
+               worker-src 'self' blob: https://cdnjs.cloudflare.com;
+               frame-ancestors 'none';
+               object-src 'none';
+               base-uri 'self';"
+    />
     <title>Two Seasons Insights — Hotel Operations Dashboard</title>
     <meta name="description" content="Real-time insights dashboard for Two Seasons Hotel: reviews, WhatsApp, email, competitor rates, and guest engagement." />
     <meta name="author" content="Two Seasons" />

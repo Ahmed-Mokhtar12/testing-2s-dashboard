@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { encryptData, decryptData } from '@/utils/secureStorage';
 
 export interface ChatSession {
   id: string;
@@ -31,45 +32,30 @@ type StoredSession = Omit<ChatSession, 'timestamp' | 'messages'> & {
   }>;
 };
 
-const readStorage = (storageKey: string): ChatSession[] => {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return [];
-    const parsed: StoredSession[] = JSON.parse(raw);
-    return parsed.map((s) => ({
-      ...s,
-      timestamp: new Date(s.timestamp),
-      messages: s.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })),
-    }));
-  } catch (e) {
-    console.warn('Failed to read Sera sessions from storage', e);
-    return [];
-  }
-};
-
-const writeStorage = (storageKey: string, sessions: ChatSession[]) => {
-  try {
-    const serializable: StoredSession[] = sessions.slice(0, MAX_SESSIONS).map((s) => ({
-      ...s,
-      timestamp: s.timestamp.toISOString(),
-      messages: s.messages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })),
-    }));
-    localStorage.setItem(storageKey, JSON.stringify(serializable));
-  } catch (e) {
-    console.warn('Failed to persist Sera sessions', e);
-  }
-};
-
-const readActiveId = (activeKey: string): string | null => {
-  try {
-    return localStorage.getItem(activeKey);
-  } catch {
-    return null;
-  }
-};
-
 const truncate = (text: string, len: number) =>
   !text ? '' : text.length > len ? `${text.slice(0, len)}…` : text;
+
+const serializeSessions = (sessions: ChatSession[]): StoredSession[] =>
+  sessions.slice(0, MAX_SESSIONS).map((session) => ({
+    ...session,
+    timestamp: session.timestamp.toISOString(),
+    messages: session.messages.map((message) => ({
+      ...message,
+      timestamp: message.timestamp.toISOString(),
+    })),
+  }));
+
+const deserializeSessions = (raw: string): ChatSession[] => {
+  const parsed: StoredSession[] = JSON.parse(raw);
+  return parsed.map((session) => ({
+    ...session,
+    timestamp: new Date(session.timestamp),
+    messages: session.messages.map((message) => ({
+      ...message,
+      timestamp: new Date(message.timestamp),
+    })),
+  }));
+};
 
 export const useSeraLocalSessions = () => {
   const { user } = useAuth();
@@ -78,27 +64,109 @@ export const useSeraLocalSessions = () => {
   const activeKey = useMemo(() => keyFor(ACTIVE_PREFIX, userId), [userId]);
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(() => readActiveId(activeKey));
+  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Reload sessions whenever the active user changes
-  useEffect(() => {
-    setChatSessions(readStorage(storageKey).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
-    setActiveSessionIdState(readActiveId(activeKey));
-  }, [storageKey, activeKey]);
+  const persistSessions = useCallback(
+    async (sessions: ChatSession[]) => {
+      if (!userId) return;
 
-  // Persist activeSessionId whenever it changes
-  useEffect(() => {
-    try {
-      if (activeSessionId) {
-        localStorage.setItem(activeKey, activeSessionId);
-      } else {
-        localStorage.removeItem(activeKey);
+      try {
+        const encrypted = await encryptData(
+          JSON.stringify(serializeSessions(sessions)),
+          userId
+        );
+        localStorage.setItem(storageKey, encrypted);
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn('Failed to persist Sera sessions', error);
       }
-    } catch (e) {
-      console.warn('Failed to persist active session id', e);
-    }
-  }, [activeSessionId, activeKey]);
+    },
+    [storageKey, userId]
+  );
+
+  const persistActiveSessionId = useCallback(
+    async (sessionId: string | null) => {
+      if (!userId) return;
+
+      try {
+        if (!sessionId) {
+          localStorage.removeItem(activeKey);
+          return;
+        }
+
+        const encrypted = await encryptData(sessionId, userId);
+        localStorage.setItem(activeKey, encrypted);
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn('Failed to persist active session id', error);
+      }
+    },
+    [activeKey, userId]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      if (!userId) {
+        setChatSessions([]);
+        setActiveSessionIdState(null);
+        return;
+      }
+
+      try {
+        const encryptedSessions = localStorage.getItem(storageKey);
+        const encryptedActiveId = localStorage.getItem(activeKey);
+
+        let sessions: ChatSession[] = [];
+        let nextActiveSessionId: string | null = null;
+
+        if (encryptedSessions) {
+          try {
+            const decryptedSessions = await decryptData(encryptedSessions, userId);
+            sessions = deserializeSessions(decryptedSessions).sort(
+              (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+            );
+          } catch (error) {
+            if (import.meta.env.DEV) console.warn('Failed to read Sera sessions from storage', error);
+            localStorage.removeItem(storageKey);
+          }
+        }
+
+        if (encryptedActiveId) {
+          try {
+            nextActiveSessionId = await decryptData(encryptedActiveId, userId);
+          } catch (error) {
+            if (import.meta.env.DEV) console.warn('Failed to read active session id from storage', error);
+            localStorage.removeItem(activeKey);
+          }
+        }
+
+        if (!cancelled) {
+          setChatSessions(sessions);
+          setActiveSessionIdState(nextActiveSessionId);
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn('Failed to initialize encrypted session storage', error);
+        if (!cancelled) {
+          setChatSessions([]);
+          setActiveSessionIdState(null);
+        }
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeKey, storageKey, userId]);
+
+  useEffect(() => {
+    void persistSessions(chatSessions);
+  }, [chatSessions, persistSessions]);
+
+  useEffect(() => {
+    void persistActiveSessionId(activeSessionId);
+  }, [activeSessionId, persistActiveSessionId]);
 
   const setActiveSessionId = useCallback((id: string | null) => {
     setActiveSessionIdState((prev) => (prev === id ? prev : id));
@@ -118,9 +186,9 @@ export const useSeraLocalSessions = () => {
       const now = new Date();
 
       setChatSessions((prev) => {
-        const existing = prev.find((s) => s.id === finalId);
+        const existing = prev.find((session) => session.id === finalId);
         const newMessage = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: crypto.randomUUID(),
           userMessage,
           aiReply,
           timestamp: now,
@@ -128,41 +196,43 @@ export const useSeraLocalSessions = () => {
 
         let next: ChatSession[];
         if (existing) {
-          next = prev.map((s) =>
-            s.id === finalId
+          next = prev.map((session) =>
+            session.id === finalId
               ? {
-                  ...s,
+                  ...session,
                   lastMessage: truncate(aiReply, 100),
                   timestamp: now,
-                  messages: [...s.messages, newMessage],
+                  messages: [...session.messages, newMessage],
                 }
-              : s
+              : session
           );
         } else {
-          const newSession: ChatSession = {
-            id: finalId,
-            title: truncate(userMessage || 'New Chat', 50),
-            lastMessage: truncate(aiReply, 100),
-            timestamp: now,
-            messages: [newMessage],
-          };
-          next = [newSession, ...prev];
+          next = [
+            {
+              id: finalId,
+              title: truncate(userMessage || 'New Chat', 50),
+              lastMessage: truncate(aiReply, 100),
+              timestamp: now,
+              messages: [newMessage],
+            },
+            ...prev,
+          ];
         }
 
-        next.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        writeStorage(storageKey, next);
-        return next;
+        return [...next].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       });
 
-      if (activeSessionId !== finalId) setActiveSessionIdState(finalId);
+      if (activeSessionId !== finalId) {
+        setActiveSessionIdState(finalId);
+      }
     },
-    [activeSessionId, createNewSessionId, storageKey]
+    [activeSessionId, createNewSessionId]
   );
 
   const selectSession = useCallback(
     (sessionId: string) => {
       setActiveSessionIdState(sessionId);
-      const session = chatSessions.find((s) => s.id === sessionId);
+      const session = chatSessions.find((item) => item.id === sessionId);
       return session?.messages || [];
     },
     [chatSessions]
@@ -170,15 +240,11 @@ export const useSeraLocalSessions = () => {
 
   const deleteSession = useCallback(
     (sessionId: string) => {
-      setChatSessions((prev) => {
-        const next = prev.filter((s) => s.id !== sessionId);
-        writeStorage(storageKey, next);
-        return next;
-      });
+      setChatSessions((prev) => prev.filter((session) => session.id !== sessionId));
       if (activeSessionId === sessionId) setActiveSessionIdState(null);
       toast({ title: 'Conversation removed' });
     },
-    [activeSessionId, toast, storageKey]
+    [activeSessionId, toast]
   );
 
   return {

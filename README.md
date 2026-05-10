@@ -1,73 +1,79 @@
-# Welcome to your Lovable project
+# Two Seasons Insights Dashboard
 
-## Project info
+Operational dashboard for Two Seasons Hotel built with Vite, React, TypeScript, Tailwind, shadcn/ui, and Supabase.
 
-**URL**: https://lovable.dev/projects/49de85bc-6404-41e8-860f-758b01b147d6
+## Requirements
 
-## How can I edit this code?
+- Node.js 20 or newer
+- npm 10 or newer
+- A Supabase project with the required tables, auth configuration, and edge functions
 
-There are several ways of editing your application.
+## Environment Variables
 
-**Use Lovable**
+Copy `.env.example` to `.env` and replace the placeholder values.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/49de85bc-6404-41e8-860f-758b01b147d6) and start prompting.
+- `VITE_SUPABASE_PROJECT_ID`
+  Supabase project reference used by the frontend.
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+  Public anon/publishable key used for browser auth and data access.
+- `VITE_SUPABASE_URL`
+  Base HTTPS URL for the Supabase project.
+- `VITE_WA_DEFAULT_NUMBER`
+  Default WhatsApp sender number shown in the dashboard when no user-selected number is stored.
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Local Setup
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+npm install
+cp .env.example .env
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Fill in `.env`, then start the app:
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Available Scripts
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```sh
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
 
-**Use GitHub Codespaces**
+## Security Notes
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The app uses a document-level Content Security Policy in `index.html` with these core directives:
 
-## What technologies are used for this project?
+- `default-src 'self'`
+  Restricts all unspecified resource types to the same origin by default.
+- `script-src 'self' 'unsafe-eval'`
+  Allows local scripts and the current Vite/Recharts toolchain behavior. `unsafe-eval` is retained for current build/runtime compatibility and should be revisited if dependencies change.
+- `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
+  Allows app styles plus Google Fonts stylesheets.
+- `font-src 'self' https://fonts.gstatic.com data:`
+  Allows locally bundled fonts, Google-hosted font files, and data URLs when needed.
+- `connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*`
+  Permits Supabase API/realtime traffic and local development servers.
+- `img-src 'self' data: blob: https://*.supabase.co https://lovable.dev`
+  Allows app images, uploaded blobs, Supabase-hosted assets, and the existing Lovable Open Graph asset.
+- `worker-src 'self' blob: https://cdnjs.cloudflare.com`
+  Supports browser workers used by document-processing dependencies.
+- `frame-ancestors 'none'`
+  Prevents this app from being embedded in other sites.
+- `object-src 'none'`
+  Disables legacy plugin/object embedding.
+- `base-uri 'self'`
+  Prevents hostile `<base>` tag injection from changing relative URL resolution.
 
-This project is built with:
+## Quality Checks
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Recommended checks before release:
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/49de85bc-6404-41e8-860f-758b01b147d6) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- `npm run lint`
+- `npm run build`
+- verify auth lockout and reset flows manually
+- verify dashboard layouts at `375px`, `390px`, `768px`, and `1024px`
+- verify WebSocket cleanup and React Query cache behavior in browser DevTools

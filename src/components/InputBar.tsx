@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowUp, Mic, Paperclip, ChevronDown } from 'lucide-react';
+import { ArrowUp, Paperclip, ChevronDown } from 'lucide-react';
 import FileAttachmentPill from './FileAttachmentPill';
 import { useFileStaging } from '@/hooks/useFileStaging';
 
@@ -101,14 +101,14 @@ const InputBar: React.FC<InputBarProps> = ({
               size="sm"
               onClick={triggerFileUpload}
               disabled={isTyping}
-              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-background/60"
+              className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground hover:bg-background/60"
             >
               <Paperclip size={14} />
             </Button>
             <Button
               onClick={handleSendMessage}
               disabled={!canSend}
-              className="h-8 w-8 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center"
+              className="h-10 w-10 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center"
             >
               <ArrowUp size={16} />
             </Button>

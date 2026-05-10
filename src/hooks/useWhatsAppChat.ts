@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { UploadedAttachment } from './useWhatsAppAttachment';
+import { toast } from 'sonner';
 
 export interface WhatsAppMessage {
   id: string;
@@ -30,14 +31,42 @@ const deriveFirstName = (user: { email?: string | null; user_metadata?: Record<s
 };
 
 // Get or create persistent sender number
+const PHONE_NUMBER_REGEX = /^\+?\d{7,15}$/;
+const DEFAULT_SENDER_NUMBER = import.meta.env.VITE_WA_DEFAULT_NUMBER?.trim() ?? '';
+
+/**
+ * Accepts only dialable E.164-style sender numbers so user-controlled values
+ * cannot be reused as unsafe query input.
+ */
+const sanitizeSenderNumber = (num: string): string | null => {
+  const normalized = num.trim();
+  if (!PHONE_NUMBER_REGEX.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+};
+
 const getSenderNumber = () => {
   const stored = localStorage.getItem('whatsapp_sender_number');
-  if (stored) return stored;
-  return '971505913426';
+  const sanitizedStored = stored ? sanitizeSenderNumber(stored) : null;
+  if (sanitizedStored) return sanitizedStored;
+
+  const sanitizedDefault = sanitizeSenderNumber(DEFAULT_SENDER_NUMBER);
+  if (sanitizedDefault) return sanitizedDefault;
+
+  return '';
 };
 
 const saveSenderNumber = (number: string) => {
-  localStorage.setItem('whatsapp_sender_number', number);
+  const sanitized = sanitizeSenderNumber(number);
+  if (!sanitized) {
+    localStorage.removeItem('whatsapp_sender_number');
+    return null;
+  }
+
+  localStorage.setItem('whatsapp_sender_number', sanitized);
+  return sanitized;
 };
 
 export const useWhatsAppChat = () => {
@@ -69,17 +98,26 @@ export const useWhatsAppChat = () => {
   // Load conversation history on mount or when sender changes
   useEffect(() => {
     const loadHistory = async () => {
+      const sanitizedSenderNumber = sanitizeSenderNumber(senderNumber);
+      if (!sanitizedSenderNumber) {
+        setMessages([]);
+        setIsHumanControlled(false);
+        setIsLoadingHistory(false);
+        toast.error('Invalid WhatsApp sender number. Please choose a valid number.');
+        return;
+      }
+
       setIsLoadingHistory(true);
       try {
         const { data, error } = await supabase
           .from('Chat History')
           .select('*')
-          .eq('Sender Number', senderNumber)
+          .eq('Sender Number', sanitizedSenderNumber)
           .eq('is_archived', false)
           .order('created_at', { ascending: true });
 
         if (error) {
-          console.error('Error loading chat history:', error);
+          if (import.meta.env.DEV) console.error('Error loading chat history:', error);
           return;
         }
 
@@ -151,7 +189,7 @@ export const useWhatsAppChat = () => {
           setIsHumanControlled(false);
         }
       } catch (err) {
-        console.error('Failed to load history:', err);
+        if (import.meta.env.DEV) console.error('Failed to load history:', err);
       } finally {
         setIsLoadingHistory(false);
       }
@@ -162,6 +200,11 @@ export const useWhatsAppChat = () => {
 
   // Realtime subscription for the active conversation
   useEffect(() => {
+    const sanitizedSenderNumber = sanitizeSenderNumber(senderNumber);
+    if (!sanitizedSenderNumber) {
+      return undefined;
+    }
+
     // Unsubscribe previous channel if it exists
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
@@ -169,14 +212,14 @@ export const useWhatsAppChat = () => {
     }
 
     const channel = supabase
-      .channel(`whatsapp-chat-${senderNumber}`)
+      .channel(`whatsapp-chat-${sanitizedSenderNumber}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'Chat History',
-          filter: `Sender Number=eq.${senderNumber}`,
+          filter: `Sender Number=eq.${sanitizedSenderNumber}`,
         },
         (payload) => {
           const chat = payload.new as Record<string, unknown>;
@@ -264,12 +307,23 @@ export const useWhatsAppChat = () => {
   }, [senderNumber]);
 
   const changeSenderNumber = useCallback((number: string) => {
-    saveSenderNumber(number);
-    setSenderNumber(number);
+    const sanitized = saveSenderNumber(number);
+    if (!sanitized) {
+      toast.error('Invalid WhatsApp sender number. Use 7 to 15 digits, optionally starting with +.');
+      return;
+    }
+
+    setSenderNumber(sanitized);
   }, []);
 
   // Toggle human takeover mode
   const toggleHumanControl = useCallback(async () => {
+    const sanitizedSenderNumber = sanitizeSenderNumber(senderNumber);
+    if (!sanitizedSenderNumber) {
+      toast.error('Invalid WhatsApp sender number. Please choose a valid number.');
+      return;
+    }
+
     setIsTogglingControl(true);
     const newState = !isHumanControlled;
     
@@ -277,30 +331,36 @@ export const useWhatsAppChat = () => {
       const { error } = await supabase.functions.invoke('whatsapp-send-message', {
         body: {
           action: newState ? 'takeover' : 'release',
-          recipientNumber: senderNumber,
+          recipientNumber: sanitizedSenderNumber,
         },
       });
 
       if (error) throw error;
       setIsHumanControlled(newState);
     } catch (err) {
-      console.error('Error toggling human control:', err);
+      if (import.meta.env.DEV) console.error('Error toggling human control:', err);
     } finally {
       setIsTogglingControl(false);
     }
   }, [isHumanControlled, senderNumber]);
 
   const sendMessage = useCallback(async (content: string, attachment?: UploadedAttachment) => {
+    const sanitizedSenderNumber = sanitizeSenderNumber(senderNumber);
+    if (!sanitizedSenderNumber) {
+      toast.error('Invalid WhatsApp sender number. Please choose a valid number.');
+      return;
+    }
+
     // Pre-flight: if AI mode in UI, verify live human-control status BEFORE adding the outgoing bubble.
     // If human control is active server-side, show guidance instead of attempting to send.
     if (!isHumanControlled) {
       try {
         const { data: statusData } = await supabase.functions.invoke('whatsapp-control-status', {
-          body: { senderNumber },
+          body: { senderNumber: sanitizedSenderNumber },
         });
         if (statusData?.isHumanControlled) {
           const guidance: WhatsAppMessage = {
-            id: `guard-${Date.now()}`,
+            id: crypto.randomUUID(),
             content:
               '⚠️ The AI is currently handling this conversation. Please click the **Take Over** button at the top to start replying to the guest manually.\n\n⚠️ الذكاء الاصطناعي يدير هذه المحادثة حالياً. اضغط زر **Take Over** في الأعلى للرد على الضيف يدوياً.',
             isUser: false,
@@ -311,7 +371,7 @@ export const useWhatsAppChat = () => {
           return;
         }
       } catch (preflightErr) {
-        console.warn('Pre-flight control-status check failed, proceeding:', preflightErr);
+        if (import.meta.env.DEV) console.warn('Pre-flight control-status check failed, proceeding:', preflightErr);
       }
     }
 
@@ -321,7 +381,7 @@ export const useWhatsAppChat = () => {
 
     // Add outgoing message immediately to UI
     const outgoingMessage: WhatsAppMessage = {
-      id: `out-${Date.now()}`,
+      id: crypto.randomUUID(),
       content,
       isUser: false,
       isHumanReply: isHumanControlled,
@@ -339,7 +399,7 @@ export const useWhatsAppChat = () => {
         const { data, error } = await supabase.functions.invoke('whatsapp-send-message', {
           body: {
             message: content,
-            recipientNumber: senderNumber,
+            recipientNumber: sanitizedSenderNumber,
             attachment,
           },
         });
@@ -352,7 +412,7 @@ export const useWhatsAppChat = () => {
         const { data, error } = await supabase.functions.invoke('whatsapp-web-chat', {
           body: {
             message: content,
-            senderNumber,
+            senderNumber: sanitizedSenderNumber,
             attachment,
           },
         });
@@ -361,7 +421,7 @@ export const useWhatsAppChat = () => {
 
         // Add AI response
         const aiMessage: WhatsAppMessage = {
-          id: `ai-${Date.now()}`,
+          id: crypto.randomUUID(),
           content: data?.response || 'Sorry, I could not process your request.',
           isUser: false,
           isHumanReply: false,
@@ -370,14 +430,14 @@ export const useWhatsAppChat = () => {
         setMessages(prev => [...prev, aiMessage]);
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      if (import.meta.env.DEV) console.error('Error sending message:', error);
 
       const errContent: string = isHumanControlled
         ? 'فشل إرسال الرسالة للعميل. تحقق من إعدادات WhatsApp API.'
         : 'Please press the Take Over button above to send messages to the user';
 
       const errorMessage: WhatsAppMessage = {
-        id: `error-${Date.now()}`,
+        id: crypto.randomUUID(),
         content: errContent,
         isUser: false,
         timestamp: new Date(),

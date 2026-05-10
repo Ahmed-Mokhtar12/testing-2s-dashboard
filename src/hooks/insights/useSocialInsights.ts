@@ -1,16 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useDateRange } from '@/contexts/DateRangeContext';
+import { useDateRange } from '@/contexts/useDateRange';
 import { countBy } from './utils';
 
-function natureFromText(t: string | null | undefined): string {
-  const s = (t || '').toLowerCase();
-  if (!s) return 'Other';
-  if (s.includes('banquet') || s.includes('event') || s.includes('wedding')) return 'Banquet/Event';
-  if (s.includes('book') || s.includes('reserv')) return 'Booking';
-  if (s.includes('rate') || s.includes('price')) return 'Pricing';
-  if (s.includes('complaint') || s.includes('issue')) return 'Complaint';
-  if (s.includes('inquir') || s.includes('question') || s.includes('?')) return 'Inquiry';
+const QUERY_STALE_TIME = 5 * 60 * 1000;
+const QUERY_GC_TIME = 10 * 60 * 1000;
+
+function natureFromText(text: string | null | undefined): string {
+  const value = (text || '').toLowerCase();
+  if (!value) return 'Other';
+  if (value.includes('banquet') || value.includes('event') || value.includes('wedding')) return 'Banquet/Event';
+  if (value.includes('book') || value.includes('reserv')) return 'Booking';
+  if (value.includes('rate') || value.includes('price')) return 'Pricing';
+  if (value.includes('complaint') || value.includes('issue')) return 'Complaint';
+  if (value.includes('inquir') || value.includes('question') || value.includes('?')) return 'Inquiry';
   return 'Other';
 }
 
@@ -19,6 +22,8 @@ export function useSocialInsights() {
 
   return useQuery({
     queryKey: ['insights', 'social', fromISO, toISO],
+    staleTime: QUERY_STALE_TIME,
+    gcTime: QUERY_GC_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('social_engagement_logs')
@@ -28,29 +33,51 @@ export function useSocialInsights() {
         .order('created_at', { ascending: false })
         .limit(1000);
       if (error) throw error;
+
       const rows = data || [];
+      const stats = rows.reduce(
+        (acc, row) => {
+          const platform = `${row.platform || ''} ${row.channel || ''}`.toLowerCase();
+          const isInstagram = platform.includes('insta');
+          const isFacebook = platform.includes('facebook');
+          const isComment = (row.event_type || '').toLowerCase().includes('comment');
 
-      const isIG = (r: typeof rows[number]) => (r.platform || '').toLowerCase().includes('insta') || (r.channel || '').toLowerCase().includes('insta');
-      const isFB = (r: typeof rows[number]) => (r.platform || '').toLowerCase().includes('facebook') || (r.channel || '').toLowerCase().includes('facebook');
-      // event_type values in DB: 'reply_sent', etc. Treat comment-related event_types as comments, otherwise DM/message engagement.
-      const isComment = (r: typeof rows[number]) => (r.event_type || '').toLowerCase().includes('comment');
-      const isDM = (r: typeof rows[number]) => !isComment(r);
+          if (isInstagram && isComment) acc.igComments += 1;
+          if (isInstagram && !isComment) acc.igDMs += 1;
+          if (isFacebook && !isComment) acc.fbDMs += 1;
+          if (isInstagram) acc.platformSplit[0].value += 1;
+          else if (isFacebook) acc.platformSplit[1].value += 1;
+          else acc.platformSplit[2].value += 1;
 
-      const igComments = rows.filter((r) => isIG(r) && isComment(r)).length;
-      const igDMs = rows.filter((r) => isIG(r) && isDM(r)).length;
-      const fbDMs = rows.filter((r) => isFB(r) && isDM(r)).length;
-      const totalDMs = igDMs + fbDMs;
+          return acc;
+        },
+        {
+          igComments: 0,
+          igDMs: 0,
+          fbDMs: 0,
+          platformSplit: [
+            { name: 'Instagram', value: 0 },
+            { name: 'Facebook', value: 0 },
+            { name: 'Other', value: 0 },
+          ],
+        }
+      );
 
-      const platformSplit = [
-        { name: 'Instagram', value: rows.filter(isIG).length },
-        { name: 'Facebook', value: rows.filter(isFB).length },
-        { name: 'Other', value: rows.filter((r) => !isIG(r) && !isFB(r)).length },
-      ].filter((x) => x.value > 0);
+      const eventSplit = countBy(rows, (row) => row.event_type as string);
+      const natureSplit = countBy(rows, (row) => natureFromText(row.notes || row.guest_message_text || row.status));
 
-      const eventSplit = countBy(rows, (r) => r.event_type as string);
-      const natureSplit = countBy(rows, (r) => natureFromText(r.notes || r.guest_message_text || r.status));
-
-      return { rows, kpis: { igComments, totalDMs, igDMs, fbDMs }, platformSplit, eventSplit, natureSplit };
+      return {
+        rows,
+        kpis: {
+          igComments: stats.igComments,
+          totalDMs: stats.igDMs + stats.fbDMs,
+          igDMs: stats.igDMs,
+          fbDMs: stats.fbDMs,
+        },
+        platformSplit: stats.platformSplit.filter((item) => item.value > 0),
+        eventSplit,
+        natureSplit,
+      };
     },
   });
 }

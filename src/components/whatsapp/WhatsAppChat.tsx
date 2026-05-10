@@ -20,14 +20,14 @@ const WhatsAppChat: React.FC = () => {
   const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const isMobile = useIsMobile();
 
-  const { 
-    messages, 
-    isLoading, 
-    isLoadingHistory, 
-    sendMessage, 
+  const {
+    messages,
+    isLoading,
+    isLoadingHistory,
+    sendMessage,
     senderNumber,
     changeSenderNumber,
     isHumanControlled,
@@ -47,7 +47,6 @@ const WhatsAppChat: React.FC = () => {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }, []);
 
-  // Load all chat previews
   useEffect(() => {
     const loadChatPreviews = async () => {
       setIsLoadingChats(true);
@@ -58,7 +57,10 @@ const WhatsAppChat: React.FC = () => {
           .eq('is_archived', false)
           .order('created_at', { ascending: false });
 
-        if (error) { console.error('Error loading chats:', error); return; }
+        if (error) {
+          if (import.meta.env.DEV) console.error('Error loading chats:', error);
+          return;
+        }
 
         const chatMap = new Map<string, ChatPreview>();
         data?.forEach((chat) => {
@@ -75,7 +77,7 @@ const WhatsAppChat: React.FC = () => {
         });
         setChatPreviews(Array.from(chatMap.values()));
       } catch (err) {
-        console.error('Failed to load chat previews:', err);
+        if (import.meta.env.DEV) console.error('Failed to load chat previews:', err);
       } finally {
         setIsLoadingChats(false);
       }
@@ -83,7 +85,6 @@ const WhatsAppChat: React.FC = () => {
     loadChatPreviews();
   }, [buildTimestamp]);
 
-  // Realtime: update sidebar when any new message arrives
   useEffect(() => {
     const channel = supabase
       .channel('whatsapp-sidebar-realtime')
@@ -95,7 +96,6 @@ const WhatsAppChat: React.FC = () => {
           const num = chat['Sender Number'] as string | undefined;
           if (!num) return;
 
-          // Skip system marker rows (release/auto-release) — no message content
           const hasContent =
             chat['Sender Message'] || chat['Ai Reply'] || chat['human_reply'];
           if (!hasContent) return;
@@ -109,13 +109,11 @@ const WhatsAppChat: React.FC = () => {
           setChatPreviews((prev) => {
             const exists = prev.find((p) => p.senderNumber === num);
             if (exists) {
-              // Move to top and update last message
               return [
                 { ...exists, lastMessage, timestamp },
                 ...prev.filter((p) => p.senderNumber !== num),
               ];
             }
-            // New conversation
             return [
               {
                 senderNumber: num,
@@ -130,19 +128,20 @@ const WhatsAppChat: React.FC = () => {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [buildTimestamp]);
 
-  // ========= MOBILE LAYOUT =========
   if (isMobile) {
     const handleSelectMobile = (num: string) => {
       changeSenderNumber(num);
-      setMobileChatOpen(true);
+      setMobileView('chat');
     };
 
     return (
       <div className="flex flex-col h-full w-full bg-white overflow-hidden">
-        {mobileChatOpen ? (
+        {mobileView === 'chat' ? (
           <div className="flex-1 min-h-0 flex flex-col">
             <WhatsAppChatPanel
               messages={messages}
@@ -153,7 +152,7 @@ const WhatsAppChat: React.FC = () => {
               isTogglingControl={isTogglingControl}
               onSendMessage={sendMessage}
               onToggleHumanControl={toggleHumanControl}
-              onBack={() => setMobileChatOpen(false)}
+              onBack={() => setMobileView('list')}
             />
           </div>
         ) : (
@@ -175,13 +174,10 @@ const WhatsAppChat: React.FC = () => {
     );
   }
 
-  // ========= DESKTOP / TABLET LAYOUT (untouched) =========
   return (
     <div className="flex h-full w-full bg-[#111B21] overflow-hidden">
-      {/* Navigation Rail - far left like WhatsApp Web */}
       <WhatsAppNavRail />
 
-      {/* Sidebar - fixed left like WhatsApp Web */}
       <div className="w-[30%] min-w-[300px] max-w-[500px] h-full shrink-0">
         <WhatsAppSidebar
           chats={chatPreviews}
@@ -193,7 +189,6 @@ const WhatsAppChat: React.FC = () => {
         />
       </div>
 
-      {/* Chat Panel */}
       <div className="flex-1 min-w-0 h-full">
         <WhatsAppChatPanel
           messages={messages}

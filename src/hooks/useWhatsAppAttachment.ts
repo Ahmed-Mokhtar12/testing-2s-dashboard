@@ -90,7 +90,7 @@ export const useWhatsAppAttachment = () => {
           kind: validation.kind,
         };
       } catch (err) {
-        console.error('Upload failed:', err);
+        if (import.meta.env.DEV) console.error('Upload failed:', err);
         toast({
           title: 'Upload failed',
           description: err instanceof Error ? err.message : 'Could not upload file.',

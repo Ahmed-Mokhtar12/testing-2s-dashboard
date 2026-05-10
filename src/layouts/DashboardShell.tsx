@@ -43,7 +43,7 @@ export const DashboardShell: React.FC = () => {
             </header>
 
             <div className="flex-1 flex min-h-0">
-              <main className="flex-1 overflow-y-auto p-6">
+              <main className="flex-1 overflow-y-auto p-3 sm:p-6">
                 <Outlet />
               </main>
               <RightChatPanel />

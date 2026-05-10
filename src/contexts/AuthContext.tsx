@@ -1,19 +1,7 @@
-import React, { createContext, useEffect, useState, ReactNode } from 'react';
+import React, { useEffect, useState, ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-
-interface AuthContextValue {
-  user: User | null;
-  session: Session | null;
-  loading: boolean;
-  isRecovering: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signOut: () => Promise<{ error: Error | null }>;
-  resetPassword: (email: string) => Promise<{ error: Error | null }>;
-  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
-}
-
-export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+import { AuthContext } from './auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -49,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!rawFirst) return;
       const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
       supabase.auth.updateUser({ data: { first_name: firstName } }).catch((err) => {
-        console.warn('Failed to set first_name on user_metadata:', err);
+        if (import.meta.env.DEV) console.warn('Failed to set first_name on user_metadata:', err);
       });
     };
 
@@ -86,14 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         // Server rejected (e.g. session not found / 403). Fall back to local cleanup
         // so the UI doesn't get stuck logged-in.
-        console.warn('Global signOut failed, falling back to local:', error.message);
+        if (import.meta.env.DEV) console.warn('Global signOut failed, falling back to local:', error.message);
         const { error: localError } = await supabase.auth.signOut({ scope: 'local' });
         if (localError) {
           outError = localError;
         }
       }
     } catch (err) {
-      console.warn('signOut threw, attempting local cleanup:', err);
+      if (import.meta.env.DEV) console.warn('signOut threw, attempting local cleanup:', err);
       try {
         await supabase.auth.signOut({ scope: 'local' });
       } catch (e) {

@@ -1,14 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { validatePasswordStrength } from '@/utils/passwordStrength';
+import { getErrorMessage } from '@/utils/errorUtils';
+
+const strengthToProgress = {
+  weak: 30,
+  medium: 65,
+  strong: 100,
+} as const;
+
+const strengthToTone = {
+  weak: 'text-destructive',
+  medium: 'text-amber-600',
+  strong: 'text-emerald-600',
+} as const;
 
 const ResetPasswordPage: React.FC = () => {
   const { user, updatePassword } = useAuth();
@@ -18,6 +32,8 @@ const ResetPasswordPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+
+  const strength = useMemo(() => validatePasswordStrength(password), [password]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,14 +59,13 @@ const ResetPasswordPage: React.FC = () => {
         const tokenHash = url.searchParams.get('token_hash') || hashParams.get('token_hash');
         const type = url.searchParams.get('type') || hashParams.get('type');
 
-        // 1) New recovery flow: ?token_hash=...&type=recovery
         if (tokenHash && type) {
           const { error } = await supabase.auth.verifyOtp({
             type: type as 'recovery',
             token_hash: tokenHash,
           });
           if (error) {
-            console.error('verifyOtp failed:', error);
+            if (import.meta.env.DEV) console.error('verifyOtp failed:', error);
             if (!cancelled) {
               setExchangeError(error.message);
               setReady(true);
@@ -58,12 +73,10 @@ const ResetPasswordPage: React.FC = () => {
             return;
           }
           window.history.replaceState({}, '', url.pathname);
-        }
-        // 2) PKCE flow: ?code=...
-        else if (code) {
+        } else if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            console.error('exchangeCodeForSession failed:', error);
+            if (import.meta.env.DEV) console.error('exchangeCodeForSession failed:', error);
             if (!cancelled) {
               setExchangeError(error.message);
               setReady(true);
@@ -73,11 +86,11 @@ const ResetPasswordPage: React.FC = () => {
           window.history.replaceState({}, '', url.pathname);
         }
 
-        // 3) Implicit flow (#access_token=...) is auto-handled by supabase-js detectSessionInUrl.
-        // Give it a tick to settle, then check the session.
         await new Promise((r) => setTimeout(r, 250));
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!cancelled) {
           if (!session && !code && !tokenHash && !hashParams.get('access_token')) {
             setExchangeError(
@@ -87,7 +100,7 @@ const ResetPasswordPage: React.FC = () => {
           setReady(true);
         }
       } catch (err) {
-        console.error('Reset password init error:', err);
+        if (import.meta.env.DEV) console.error('Reset password init error:', err);
         if (!cancelled) {
           setExchangeError(err instanceof Error ? err.message : 'Failed to verify reset link');
           setReady(true);
@@ -103,23 +116,41 @@ const ResetPasswordPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
+
+    if (!strength.isValid) {
+      toast.error('Password must include uppercase, lowercase, number, special character, and at least 8 characters.');
       return;
     }
+
+    if (strength.label === 'weak') {
+      toast.error('Choose a stronger password before continuing.');
+      return;
+    }
+
     if (password !== confirm) {
       toast.error('Passwords do not match');
       return;
     }
+
     setSubmitting(true);
     const { error } = await updatePassword(password);
-    setSubmitting(false);
+
     if (error) {
+      setSubmitting(false);
       toast.error(error.message);
-    } else {
-      toast.success('Password updated. Redirecting…');
-      setTimeout(() => navigate('/', { replace: true }), 800);
+      return;
     }
+
+    const { error: signOutError } = await supabase.auth.signOut({ scope: 'global' });
+    setSubmitting(false);
+
+    if (signOutError) {
+      toast.error(getErrorMessage(signOutError));
+      return;
+    }
+
+    toast.success('Password updated. Please log in again.');
+    navigate('/auth', { replace: true });
   };
 
   if (!ready) {
@@ -136,9 +167,7 @@ const ResetPasswordPage: React.FC = () => {
         <Card className="w-full max-w-md p-8 text-center">
           <h2 className="font-display font-semibold mb-2">Invalid or expired link</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            {exchangeError
-              ? exchangeError
-              : 'Please request a new password reset link.'}
+            {exchangeError ? exchangeError : 'Please request a new password reset link.'}
           </p>
           <Button onClick={() => navigate('/auth')}>Back to sign in</Button>
         </Card>
@@ -166,6 +195,23 @@ const ResetPasswordPage: React.FC = () => {
           </div>
 
           <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Password strength</span>
+              <span className={strengthToTone[strength.label]}>
+                {strength.label.charAt(0).toUpperCase() + strength.label.slice(1)}
+              </span>
+            </div>
+            <Progress value={strengthToProgress[strength.label]} className="h-2" />
+            <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground">
+              <span>{strength.checks.minLength ? '✓' : '•'} At least 8 characters</span>
+              <span>{strength.checks.uppercase ? '✓' : '•'} One uppercase letter</span>
+              <span>{strength.checks.lowercase ? '✓' : '•'} One lowercase letter</span>
+              <span>{strength.checks.number ? '✓' : '•'} One number</span>
+              <span>{strength.checks.special ? '✓' : '•'} One special character: `! @ # $ % ^ & *`</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="confirm-password">Confirm password</Label>
             <PasswordInput
               id="confirm-password"
@@ -177,7 +223,7 @@ const ResetPasswordPage: React.FC = () => {
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" className="w-full" disabled={submitting || !strength.isValid}>
             {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Update password
           </Button>

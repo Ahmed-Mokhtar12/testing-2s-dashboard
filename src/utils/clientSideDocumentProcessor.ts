@@ -34,36 +34,34 @@ export class ClientSideDocumentProcessor {
 
   async processDocument(file: File, sessionId: string): Promise<DocumentProcessingResult> {
     try {
-      this.updateProgress('extracting', 10, 'بدء استخراج النص من المستند...');
-      
-      // Extract text based on file type
+      this.updateProgress('extracting', 10, 'Starting document text extraction...');
+
       let extractedText = '';
-      
+
       if (file.type === 'application/pdf') {
         extractedText = await this.extractPdfText(file);
-      } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-                 file.type === 'application/msword') {
+      } else if (
+        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.type === 'application/msword'
+      ) {
         extractedText = await this.extractWordText(file);
       } else if (file.type === 'text/plain') {
         extractedText = await this.extractPlainText(file);
       } else {
-        throw new Error(`نوع الملف غير مدعوم: ${file.type}`);
+        throw new Error(`Unsupported file type: ${file.type}`);
       }
 
-      this.updateProgress('extracting', 40, 'تم استخراج النص بنجاح');
+      this.updateProgress('extracting', 40, 'Text extracted successfully');
 
       if (!extractedText.trim()) {
-        throw new Error('لم يتم العثور على نص في المستند');
+        throw new Error('No text was found in the uploaded document');
       }
 
-      // Generate a unique document ID
       const documentId = crypto.randomUUID();
-      
-      this.updateProgress('storing', 50, 'حفظ معلومات المستند...');
 
-      this.updateProgress('indexing', 70, 'فهرسة محتوى المستند...');
+      this.updateProgress('storing', 50, 'Saving document metadata...');
+      this.updateProgress('indexing', 70, 'Indexing document content...');
 
-      // Break text into chunks and store in N8N_2S table
       const chunks = this.chunkText(extractedText);
       const chunkPromises = chunks.map(async (chunk, index) => {
         const { error: chunkError } = await supabase
@@ -79,31 +77,30 @@ export class ClientSideDocumentProcessor {
               chunk_size: chunk.length,
               total_chunks: chunks.length,
               processed_client_side: true,
-              session_id: sessionId
-            }
+              session_id: sessionId,
+            },
           });
 
         if (chunkError) {
-          console.error('خطأ في حفظ جزء من النص:', chunkError);
+          throw new Error(`Failed to store document chunk ${index + 1}: ${chunkError.message}`);
         }
       });
 
       await Promise.all(chunkPromises);
 
-      this.updateProgress('complete', 100, 'تم معالجة المستند بنجاح');
+      this.updateProgress('complete', 100, 'Document processed successfully');
 
       return {
         success: true,
-        documentId: documentId,
+        documentId,
         text: extractedText,
-        chunkCount: chunks.length
+        chunkCount: chunks.length,
       };
-
     } catch (error) {
-      console.error('خطأ في معالجة المستند:', error);
+      if (import.meta.env.DEV) console.error('Document processing failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'خطأ غير معروف في معالجة المستند'
+        error: error instanceof Error ? error.message : 'Unknown error while processing the document',
       };
     }
   }
@@ -111,24 +108,24 @@ export class ClientSideDocumentProcessor {
   private async extractPdfText(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
-    
+
     try {
       const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
       let text = '';
-      
+
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
         const pageText = textContent.items
           .map((item) => ('str' in item ? item.str : ''))
           .join(' ');
-        text += pageText + '\n';
+        text += `${pageText}\n`;
       }
-      
+
       return text.trim();
     } catch (error) {
-      console.error('Error extracting PDF text:', error);
-      throw new Error('فشل في استخراج النص من ملف PDF');
+      if (import.meta.env.DEV) console.error('Error extracting PDF text:', error);
+      throw new Error('Failed to extract text from PDF');
     }
   }
 
@@ -144,28 +141,28 @@ export class ClientSideDocumentProcessor {
 
   private chunkText(text: string, maxChunkSize: number = 1000): string[] {
     const chunks: string[] = [];
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim());
-    
+    const sentences = text.split(/[.!?]+/).filter((sentence) => sentence.trim());
+
     let currentChunk = '';
-    
+
     for (const sentence of sentences) {
       const trimmedSentence = sentence.trim();
       if (!trimmedSentence) continue;
-      
+
       if (currentChunk.length + trimmedSentence.length > maxChunkSize) {
         if (currentChunk) {
           chunks.push(currentChunk.trim());
           currentChunk = '';
         }
       }
-      
-      currentChunk += (currentChunk ? '. ' : '') + trimmedSentence;
+
+      currentChunk += `${currentChunk ? '. ' : ''}${trimmedSentence}`;
     }
-    
+
     if (currentChunk.trim()) {
       chunks.push(currentChunk.trim());
     }
-    
+
     return chunks.length > 0 ? chunks : [text];
   }
 }

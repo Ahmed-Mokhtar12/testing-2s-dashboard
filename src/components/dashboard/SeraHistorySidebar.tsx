@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { X, Trash2, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,6 +15,9 @@ interface SeraHistorySidebarProps {
 }
 
 type Group = { label: string; sessions: ChatSession[] };
+type VirtualRow =
+  | { type: 'group'; key: string; label: string }
+  | { type: 'session'; key: string; session: ChatSession };
 
 const groupSessions = (sessions: ChatSession[]): Group[] => {
   const now = new Date();
@@ -28,12 +32,12 @@ const groupSessions = (sessions: ChatSession[]): Group[] => {
 
   [...sessions]
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-    .forEach((s) => {
-      const t = s.timestamp.getTime();
-      if (t >= startOfToday) today.push(s);
-      else if (t >= startOfYesterday) yesterday.push(s);
-      else if (t >= startOf7Days) previous7.push(s);
-      else older.push(s);
+    .forEach((session) => {
+      const timestamp = session.timestamp.getTime();
+      if (timestamp >= startOfToday) today.push(session);
+      else if (timestamp >= startOfYesterday) yesterday.push(session);
+      else if (timestamp >= startOf7Days) previous7.push(session);
+      else older.push(session);
     });
 
   return [
@@ -41,7 +45,7 @@ const groupSessions = (sessions: ChatSession[]): Group[] => {
     { label: 'Yesterday', sessions: yesterday },
     { label: 'Previous 7 days', sessions: previous7 },
     { label: 'Older', sessions: older },
-  ].filter((g) => g.sessions.length > 0);
+  ].filter((group) => group.sessions.length > 0);
 };
 
 export const SeraHistorySidebar: React.FC<SeraHistorySidebarProps> = ({
@@ -51,17 +55,36 @@ export const SeraHistorySidebar: React.FC<SeraHistorySidebarProps> = ({
   onDeleteSession,
   onClose,
 }) => {
+  const parentRef = useRef<HTMLDivElement | null>(null);
   const groups = useMemo(() => groupSessions(chatSessions), [chatSessions]);
+  const rows = useMemo<VirtualRow[]>(
+    () =>
+      groups.flatMap((group) => [
+        { type: 'group', key: `group-${group.label}`, label: group.label } as const,
+        ...group.sessions.map((session) => ({
+          type: 'session',
+          key: session.id,
+          session,
+        }) as const),
+      ]),
+    [groups]
+  );
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => (rows[index]?.type === 'group' ? 28 : 56),
+    overscan: 6,
+  });
 
   return (
     <div className="flex h-full w-full flex-col bg-card/40 backdrop-blur">
-      {/* Header */}
       <div className="h-12 px-3 flex items-center justify-between border-b border-border shrink-0">
         <span className="text-sm font-medium text-foreground">Chat History</span>
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          className="h-10 w-10 text-muted-foreground hover:text-foreground"
           onClick={onClose}
           aria-label="Close history"
         >
@@ -69,60 +92,68 @@ export const SeraHistorySidebar: React.FC<SeraHistorySidebarProps> = ({
         </Button>
       </div>
 
-      {/* List */}
       <ScrollArea className="flex-1">
-        {groups.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center text-muted-foreground">
             <MessageSquare className="h-6 w-6 mb-2 opacity-60" />
             <p className="text-xs">No previous conversations yet</p>
           </div>
         ) : (
-          <div className="p-2 space-y-4">
-            {groups.map((group) => (
-              <div key={group.label}>
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.label}
-                </div>
-                <div className="space-y-0.5">
-                  {group.sessions.map((session) => {
-                    const isActive = activeSessionId === session.id;
-                    return (
+          <div ref={parentRef} className="h-full overflow-y-auto">
+            <div
+              className="relative w-full"
+              style={{ height: `${virtualizer.getTotalSize()}px` }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                if (!row) return null;
+
+                return (
+                  <div
+                    key={row.key}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    {row.type === 'group' ? (
+                      <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {row.label}
+                      </div>
+                    ) : (
                       <div
-                        key={session.id}
-                        onClick={() => onSessionSelect(session.id)}
+                        onClick={() => onSessionSelect(row.session.id)}
                         className={cn(
-                          'group relative flex items-center gap-2 rounded-md px-2 py-2 cursor-pointer transition-colors',
-                          isActive
+                          'group relative flex items-center gap-2 rounded-md mx-2 px-2 py-2 cursor-pointer transition-colors',
+                          activeSessionId === row.session.id
                             ? 'bg-background/60 text-foreground'
                             : 'hover:bg-background/40 text-foreground/90'
                         )}
                       >
                         <div className="min-w-0 flex-1 pr-6">
                           <div className="text-xs font-medium truncate">
-                            {session.title || 'New Chat'}
+                            {row.session.title || 'New Chat'}
                           </div>
-                          {session.lastMessage && (
+                          {row.session.lastMessage && (
                             <div className="text-[11px] text-muted-foreground truncate">
-                              {session.lastMessage}
+                              {row.session.lastMessage}
                             </div>
                           )}
                         </div>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteSession(session.id);
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onDeleteSession(row.session.id);
                           }}
                           aria-label="Delete conversation"
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-2.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </ScrollArea>

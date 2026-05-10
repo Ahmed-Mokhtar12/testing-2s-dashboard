@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, ActionData } from '@/types/chat';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useMessageSending } from '@/hooks/useMessageSending';
@@ -32,15 +32,12 @@ export const useChat = ({
   const { handleActionConfirm, handleActionCancel } = useActionHandling();
   const { loadSessionMessages, clearMessages } = useSessionManagement();
 
-  // Sync external activeSessionId -> internal currentSessionId
   useEffect(() => {
     if (activeSessionId !== undefined && activeSessionId !== currentSessionId) {
       setCurrentSessionId(activeSessionId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionId]);
+  }, [activeSessionId, currentSessionId]);
 
-  // Notify parent when internal currentSessionId changes
   const lastNotifiedRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!onSessionIdChange) return;
@@ -53,29 +50,29 @@ export const useChat = ({
     onSessionIdChange(currentSessionId);
   }, [currentSessionId, activeSessionId, onSessionIdChange]);
 
-  const wrappedFileUpload = (file: File) => {
+  const wrappedFileUpload = useCallback((file: File) => {
     return handleFileUpload(file, setMessages, setIsTyping, currentSessionId);
-  };
+  }, [currentSessionId, handleFileUpload]);
 
-  const wrappedSendMessage = () => {
+  const wrappedSendMessage = useCallback(() => {
     return sendMessage(inputValue, setMessages, setInputValue, setIsTyping, currentSessionId, setCurrentSessionId);
-  };
+  }, [inputValue, currentSessionId, sendMessage]);
 
-  const wrappedActionConfirm = (messageId: string, actionData: ActionData) => {
+  const wrappedActionConfirm = useCallback((messageId: string, actionData: ActionData) => {
     return handleActionConfirm(messageId, actionData, setMessages);
-  };
+  }, [handleActionConfirm]);
 
-  const wrappedActionCancel = (messageId: string) => {
+  const wrappedActionCancel = useCallback((messageId: string) => {
     return handleActionCancel(messageId, setMessages);
-  };
+  }, [handleActionCancel]);
 
-  const wrappedLoadSessionMessages = (sessionMessages: import('./useSessionManagement').StoredSessionMessage[]) => {
+  const wrappedLoadSessionMessages = useCallback((sessionMessages: import('./useSessionManagement').StoredSessionMessage[]) => {
     return loadSessionMessages(sessionMessages, setMessages);
-  };
+  }, [loadSessionMessages]);
 
-  const wrappedClearMessages = () => {
+  const wrappedClearMessages = useCallback(() => {
     return clearMessages(setMessages, setCurrentSessionId);
-  };
+  }, [clearMessages]);
 
   return {
     messages,
