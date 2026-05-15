@@ -10,7 +10,7 @@ function urlHasRecoveryToken(): boolean {
     const type = url.searchParams.get('type') || hashParams.get('type');
     if (type === 'recovery') return true;
     // PKCE recovery codes can also arrive on root
-    if (url.searchParams.has('code') && type === 'recovery') return true;
+    if (url.searchParams.has('code')) return true;
     return false;
   } catch {
     return false;

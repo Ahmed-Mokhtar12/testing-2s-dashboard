@@ -32,6 +32,7 @@ const ResetPasswordPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const strength = useMemo(() => validatePasswordStrength(password), [password]);
 
@@ -66,13 +67,21 @@ const ResetPasswordPage: React.FC = () => {
           });
           if (error) {
             if (import.meta.env.DEV) console.error('verifyOtp failed:', error);
+            const {
+              data: { session: existing },
+            } = await supabase.auth.getSession();
             if (!cancelled) {
-              setExchangeError(error.message);
+              if (existing) {
+                setSessionReady(true);
+              } else {
+                setExchangeError(error.message);
+              }
               setReady(true);
             }
             return;
           }
           window.history.replaceState({}, '', url.pathname);
+          if (!cancelled) setSessionReady(true);
         } else if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
@@ -84,6 +93,7 @@ const ResetPasswordPage: React.FC = () => {
             return;
           }
           window.history.replaceState({}, '', url.pathname);
+          if (!cancelled) setSessionReady(true);
         }
 
         await new Promise((r) => setTimeout(r, 250));
@@ -161,7 +171,7 @@ const ResetPasswordPage: React.FC = () => {
     );
   }
 
-  if (!user) {
+  if (!sessionReady && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md p-8 text-center">
