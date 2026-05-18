@@ -1,0 +1,289 @@
+{
+  "name": "Monitor - WhatsApp Live Two Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "3b6b9c5d-1e3f-4a2a-a2bd-59f3fcae5e01",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://n8n-digitlab-u38985.vm.elestio.app/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "workflowId",
+              "value": "BcaOXV68sc9d3cTp"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            },
+            {
+              "name": "includeData",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "465464c9-8c14-413b-a3e7-556151667ba5",
+      "name": "Get Latest Target Execution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -680,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_EXISTING_N8N_API_KEY_CREDENTIAL_ID",
+          "name": "N8N API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\n\nconst TARGET_WORKFLOW_ID = 'BcaOXV68sc9d3cTp';\nconst TARGET_WORKFLOW_NAME = 'WhatsApp Live Two';\nconst THRESHOLD_MINUTES = 3;\n\nlet executions = [];\n\nfor (const item of inputItems) {\n  const json = item.json ?? {};\n\n  if (Array.isArray(json.data)) {\n    executions = json.data;\n    break;\n  }\n\n  if (Array.isArray(json.results)) {\n    executions = json.results;\n    break;\n  }\n\n  if (Array.isArray(json.executions)) {\n    executions = json.executions;\n    break;\n  }\n\n  if (json.id || json.startedAt || json.stoppedAt || json.createdAt || json.updatedAt) {\n    executions.push(json);\n  }\n}\n\nexecutions = executions\n  .filter((execution) => String(execution.workflowId ?? execution.workflowData?.id ?? TARGET_WORKFLOW_ID) === TARGET_WORKFLOW_ID)\n  .sort((a, b) => {\n    const aDate = new Date(a.startedAt || a.stoppedAt || a.createdAt || a.updatedAt || 0).getTime();\n    const bDate = new Date(b.startedAt || b.stoppedAt || b.createdAt || b.updatedAt || 0).getTime();\n    return bDate - aDate;\n  });\n\nif (!executions.length) {\n  return [{\n    json: {\n      workflowId: TARGET_WORKFLOW_ID,\n      workflowName: TARGET_WORKFLOW_NAME,\n      shouldReactivate: true,\n      reason: 'No executions found for target workflow'\n    }\n  }];\n}\n\nconst last = executions[0];\nconst rawDate = last.startedAt || last.stoppedAt || last.createdAt || last.updatedAt;\n\nif (!rawDate) {\n  return [{\n    json: {\n      workflowId: TARGET_WORKFLOW_ID,\n      workflowName: TARGET_WORKFLOW_NAME,\n      lastExecutionId: last.id,\n      shouldReactivate: true,\n      reason: 'Latest execution has no usable timestamp'\n    }\n  }];\n}\n\nconst lastDate = new Date(rawDate);\n\nif (Number.isNaN(lastDate.getTime())) {\n  return [{\n    json: {\n      workflowId: TARGET_WORKFLOW_ID,\n      workflowName: TARGET_WORKFLOW_NAME,\n      lastExecutionId: last.id,\n      rawTimestamp: rawDate,\n      shouldReactivate: true,\n      reason: 'Latest execution timestamp is invalid'\n    }\n  }];\n}\n\nconst now = new Date();\nconst diffMinutes = (now.getTime() - lastDate.getTime()) / 1000 / 60;\nconst shouldReactivate = diffMinutes > THRESHOLD_MINUTES;\n\nreturn [{\n  json: {\n    workflowId: TARGET_WORKFLOW_ID,\n    workflowName: TARGET_WORKFLOW_NAME,\n    lastExecutionId: last.id,\n    lastStartedAt: lastDate.toISOString(),\n    diffMinutes,\n    shouldReactivate,\n    reason: shouldReactivate\n      ? `Target workflow appears stalled. Last execution was ${diffMinutes.toFixed(2)} minutes ago.`\n      : `Target workflow is healthy. Last execution was ${diffMinutes.toFixed(2)} minutes ago.`\n  }\n}];"
+      },
+      "id": "317e81aa-1452-49b3-9ff1-f0e83fa57793",
+      "name": "Calculate Scheduler Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldReactivate }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "aa1bdc1c-f7c3-4ee6-a827-c7f3845347b1",
+      "name": "Should Reactivate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log(`[HEALTHY] ${$json.workflowName} (${ $json.workflowId }): ${$json.reason}`);\nreturn [{ json: $json }];"
+      },
+      "id": "cde6c2f4-109e-4027-a00e-60774a93aefa",
+      "name": "Log Healthy Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n-digitlab-u38985.vm.elestio.app/api/v1/workflows/BcaOXV68sc9d3cTp/deactivate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "6acae99b-45a9-4082-b1bc-9184149b4609",
+      "name": "Deactivate WhatsApp Live Two",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_EXISTING_N8N_API_KEY_CREDENTIAL_ID",
+          "name": "N8N API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "91718418-14f0-46cb-99fd-80fda6287384",
+      "name": "Wait 5 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        -100
+      ],
+      "webhookId": "monitor-whatsapp-live-two-wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n-digitlab-u38985.vm.elestio.app/api/v1/workflows/BcaOXV68sc9d3cTp/activate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "75b811c7-63af-4d0b-9eae-e56e774836af",
+      "name": "Activate WhatsApp Live Two",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_EXISTING_N8N_API_KEY_CREDENTIAL_ID",
+          "name": "N8N API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst json = item?.json ?? {};\n\nif (json.error || json.message?.includes?.('error')) {\n  console.error('CRITICAL: WhatsApp Live Two was deactivated but could not be activated again. Manual action is required immediately.', json);\n  return [{\n    json: {\n      status: 'critical_activation_failed',\n      workflowId: 'BcaOXV68sc9d3cTp',\n      workflowName: 'WhatsApp Live Two',\n      message: 'CRITICAL: WhatsApp Live Two was deactivated but could not be activated again. Manual action required.',\n      activateResponse: json\n    }\n  }];\n}\n\nconsole.log('[REACTIVATED] WhatsApp Live Two scheduler appeared stalled. The workflow was automatically deactivated and activated again.', json);\nreturn [{\n  json: {\n    status: 'reactivated',\n    workflowId: 'BcaOXV68sc9d3cTp',\n    workflowName: 'WhatsApp Live Two',\n    message: 'Alert: WhatsApp Live Two scheduler appeared stalled. The workflow was automatically deactivated and activated again.',\n    activateResponse: json\n  }\n}];"
+      },
+      "id": "71b16f4f-8d66-4920-a611-31b67e1319eb",
+      "name": "Log Reactivation Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -100
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Target Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Target Execution": {
+      "main": [
+        [
+          {
+            "node": "Calculate Scheduler Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Scheduler Health": {
+      "main": [
+        [
+          {
+            "node": "Should Reactivate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Reactivate?": {
+      "main": [
+        [
+          {
+            "node": "Deactivate WhatsApp Live Two",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Healthy Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deactivate WhatsApp Live Two": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Activate WhatsApp Live Two",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activate WhatsApp Live Two": {
+      "main": [
+        [
+          {
+            "node": "Log Reactivation Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c6ed9965-e8e2-483a-a2dd-5fc62933d0f4",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "monitor-whatsapp-live-two-scheduler",
+  "tags": [
+    {
+      "name": "monitoring"
+    },
+    {
+      "name": "whatsapp"
+    }
+  ]
+}

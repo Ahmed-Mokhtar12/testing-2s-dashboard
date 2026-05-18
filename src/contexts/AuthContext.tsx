@@ -17,11 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = new URL(window.location.href);
       const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
       const type = url.searchParams.get('type') || hashParams.get('type');
-      const hasRecoveryToken =
-        type === 'recovery' ||
-        url.searchParams.has('code') ||
-        hashParams.has('access_token');
-      if (type === 'recovery' || (hasRecoveryToken && type === 'recovery')) {
+      if (type === 'recovery' || url.searchParams.has('code') || hashParams.has('access_token')) {
         setIsRecovering(true);
       }
     } catch { /* ignore */ }

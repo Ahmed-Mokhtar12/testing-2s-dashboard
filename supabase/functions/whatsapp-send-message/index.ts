@@ -125,6 +125,18 @@ serve(async (req) => {
         throw updateError;
       }
 
+      // Insert a takeover marker so the timestamp-based RPC has a reliable anchor.
+      if (action === 'takeover') {
+        const { error: markerErr } = await supabase.from('Chat History').insert({
+          'Sender Number': recipientNumber.trim(),
+          is_human_controlled: true,
+          created_at: new Date().toISOString(),
+        });
+        if (markerErr) {
+          console.error('Error inserting takeover marker:', markerErr);
+        }
+      }
+
       // On release: insert a marker row to record the exact handoff time.
       // The AI will treat any conversation BEFORE this timestamp as read-only context.
       if (action === 'release') {
