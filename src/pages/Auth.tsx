@@ -56,6 +56,8 @@ const AuthPage: React.FC = () => {
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/';
   const safeRedirectTarget = isSafeRedirect(from) ? from : '/';
+  const openReset = (location.state as { openReset?: boolean })?.openReset ?? false;
+  const stateResetError = (location.state as { resetError?: string })?.resetError ?? null;
 
   const hasRecoveryInUrl = (() => {
     if (typeof window === 'undefined') return false;
@@ -72,7 +74,16 @@ const AuthPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showReset, setShowReset] = useState(false);
+  const [showReset, setShowReset] = useState(() => {
+    if (openReset) return true;
+    if (typeof window === 'undefined') return false;
+    try {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      return !!(hashParams.get('error_code') || hashParams.get('error_description'));
+    } catch {
+      return false;
+    }
+  });
   const [resetEmail, setResetEmail] = useState('');
   const [rememberMe, setRememberMe] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -82,6 +93,23 @@ const AuthPage: React.FC = () => {
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [resetAttemptTimestamps, setResetAttemptTimestamps] = useState<number[]>([]);
+  const [urlAuthError] = useState<string | null>(() => {
+    if (stateResetError) return stateResetError;
+    if (typeof window === 'undefined') return null;
+    try {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const errorCode = hashParams.get('error_code');
+      const errorDescription = hashParams.get('error_description');
+      if (errorCode || errorDescription) {
+        return errorCode === 'otp_expired'
+          ? 'Your password reset link has expired.'
+          : (errorDescription ?? 'Your reset link is invalid or has expired.');
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     if (!lockoutUntil && resetAttemptTimestamps.length === 0) return undefined;
@@ -92,6 +120,11 @@ const AuthPage: React.FC = () => {
 
     return () => window.clearInterval(timer);
   }, [lockoutUntil, resetAttemptTimestamps.length]);
+
+  useEffect(() => {
+    if (!urlAuthError) return;
+    window.history.replaceState({}, '', window.location.pathname + window.location.search);
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -275,6 +308,11 @@ const AuthPage: React.FC = () => {
           </form>
         ) : (
           <form onSubmit={handleReset} className="space-y-4">
+            {urlAuthError && (
+              <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-600">
+                {urlAuthError} Enter your email below to request a new one.
+              </div>
+            )}
             {resetLockoutMessage && (
               <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 {resetLockoutMessage}
