@@ -124,9 +124,12 @@ export const useWhatsAppChat = () => {
         if (data && data.length > 0) {
           const historyMessages: WhatsAppMessage[] = [];
           
-          // Check if the latest record has human_controlled true
-          const latestRecord = data[data.length - 1];
-          setIsHumanControlled(latestRecord.is_human_controlled ?? false);
+          // Read authoritative control state regardless of n8n row inserts.
+          const { data: controlData } = await supabase.rpc(
+            'is_conversation_human_controlled',
+            { p_sender_number: sanitizedSenderNumber }
+          );
+          setIsHumanControlled(Boolean(controlData));
 
           data.forEach((chat) => {
             // Extract attachment / media URL from Media column
@@ -290,10 +293,12 @@ export const useWhatsAppChat = () => {
             });
           }
 
-          // Update human control state if changed
-          if (typeof chat['is_human_controlled'] === 'boolean') {
-            setIsHumanControlled(chat['is_human_controlled'] as boolean);
-          }
+          // Re-query authoritative state on every DB insert.
+          supabase
+            .rpc('is_conversation_human_controlled', { p_sender_number: sanitizedSenderNumber })
+            .then(({ data: controlData }) => {
+              setIsHumanControlled(Boolean(controlData));
+            });
         }
       )
       .subscribe();

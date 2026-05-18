@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const IDLE_MINUTES = 60;
+const IDLE_MINUTES = 30;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Idle > 60 min → auto-release
+      // Idle > 30 min → auto-release
       const { error: updErr } = await supabase
         .from('Chat History')
         .update({ is_human_controlled: false })
