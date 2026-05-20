@@ -18,7 +18,7 @@ const items = [
   { title: 'Overview', url: '/', icon: LayoutDashboard },
   { title: 'Reviews', url: '/dashboard/reviews', icon: Star },
   { title: 'WhatsApp', url: '/dashboard/whatsapp', icon: MessageCircle },
-  { title: 'Email', url: '/dashboard/email', icon: Mail },
+  { title: 'Sera Emails', url: '/dashboard/email', icon: Mail },
   { title: 'Competitor Rates', url: '/dashboard/competitors', icon: TrendingUp },
   { title: 'Info Email', url: '/dashboard/info-email', icon: Inbox },
   { title: 'Social Engagement', url: '/dashboard/social', icon: Share2 },
