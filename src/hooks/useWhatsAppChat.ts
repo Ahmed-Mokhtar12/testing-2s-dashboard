@@ -78,6 +78,13 @@ export const useWhatsAppChat = () => {
   const [isHumanControlled, setIsHumanControlled] = useState(false);
   const [isTogglingControl, setIsTogglingControl] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const lastMessageTsRef = useRef<string>(new Date(0).toISOString());
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      lastMessageTsRef.current = messages[messages.length - 1].timestamp.toISOString();
+    }
+  }, [messages]);
 
   // Load available sender numbers
   useEffect(() => {
@@ -199,6 +206,113 @@ export const useWhatsAppChat = () => {
     };
 
     loadHistory();
+  }, [senderNumber]);
+
+  // Polling fallback for cases where Supabase Realtime does not deliver inserts.
+  useEffect(() => {
+    const sanitizedSenderNumber = sanitizeSenderNumber(senderNumber);
+    if (!sanitizedSenderNumber) {
+      return undefined;
+    }
+
+    const poll = async () => {
+      const { data, error } = await supabase
+        .from('Chat History')
+        .select('*')
+        .eq('Sender Number', sanitizedSenderNumber)
+        .eq('is_archived', false)
+        .gt('created_at', lastMessageTsRef.current)
+        .order('created_at', { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        return;
+      }
+
+      const newMessages: WhatsAppMessage[] = [];
+      for (const row of data) {
+        let mediaUrl: string | undefined;
+        let attachment: UploadedAttachment | undefined;
+
+        if (row['Media']) {
+          if (typeof row['Media'] === 'string') {
+            try {
+              const parsed = JSON.parse(row['Media']) as Record<string, unknown>;
+              const url = (parsed.url || parsed.link || parsed.src) as string | undefined;
+              if (url && typeof parsed.kind === 'string') {
+                attachment = {
+                  url,
+                  filename: (parsed.filename as string) || 'file',
+                  mimeType: (parsed.mimeType as string) || '',
+                  size: (parsed.size as number) || 0,
+                  kind: parsed.kind as UploadedAttachment['kind'],
+                };
+              } else {
+                mediaUrl = url;
+              }
+            } catch {
+              mediaUrl = row['Media'];
+            }
+          } else if (typeof row['Media'] === 'object' && row['Media'] !== null) {
+            const m = row['Media'] as Record<string, unknown>;
+            const url = (m.url || m.link || m.src) as string | undefined;
+            if (url && typeof m.kind === 'string') {
+              attachment = {
+                url,
+                filename: (m.filename as string) || 'file',
+                mimeType: (m.mimeType as string) || '',
+                size: (m.size as number) || 0,
+                kind: m.kind as UploadedAttachment['kind'],
+              };
+            } else {
+              mediaUrl = url;
+            }
+          }
+        }
+
+        if (row['Sender Message']) {
+          newMessages.push({
+            id: `user-${row.id}`,
+            content: row['Sender Message'],
+            isUser: true,
+            timestamp: new Date(row.created_at),
+            mediaUrl,
+            attachment,
+          });
+        }
+
+        if (row['human_reply']) {
+          newMessages.push({
+            id: `human-${row.id}`,
+            content: row['human_reply'],
+            isUser: false,
+            isHumanReply: true,
+            timestamp: new Date(row.created_at),
+            repliedByName: row['replied_by_name'] ?? undefined,
+          });
+        } else if (row['Ai Reply']) {
+          newMessages.push({
+            id: `ai-${row.id}`,
+            content: row['Ai Reply'],
+            isUser: false,
+            isHumanReply: false,
+            timestamp: new Date(row.created_at),
+          });
+        }
+      }
+
+      if (newMessages.length === 0) {
+        return;
+      }
+
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const fresh = newMessages.filter((m) => !existingIds.has(m.id));
+        return fresh.length > 0 ? [...prev, ...fresh] : prev;
+      });
+    };
+
+    const interval = setInterval(poll, 8000);
+    return () => clearInterval(interval);
   }, [senderNumber]);
 
   // Realtime subscription for the active conversation
