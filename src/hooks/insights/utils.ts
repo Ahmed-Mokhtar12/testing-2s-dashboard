@@ -79,3 +79,25 @@ export const safeNum = (v: unknown): number => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+
+/**
+ * Fetches all rows from a Supabase query that may exceed the server-side
+ * PostgREST max_rows cap (default 1,000) by paginating with .range().
+ * Pass a builder fn that accepts (from, to) and returns a Supabase query.
+ */
+export async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>
+): Promise<T[]> {
+  const PAGE = 1000;
+  const result: T[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await buildQuery(offset, offset + PAGE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    result.push(...page);
+    if (page.length < PAGE) break;
+    offset += PAGE;
+  }
+  return result;
+}

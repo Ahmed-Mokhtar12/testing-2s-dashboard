@@ -31,7 +31,7 @@ export function useSocialInsights() {
         .gte('created_at', fromISO)
         .lte('created_at', toISO)
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .limit(10000);
       if (error) throw error;
 
       const rows = data || [];

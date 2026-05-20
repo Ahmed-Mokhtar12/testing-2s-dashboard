@@ -15,7 +15,7 @@ export function useReviewsInsights() {
     gcTime: QUERY_GC_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('reviews')
+        .from('Two Seasons and Reviews')
         .select('id, Date, Source, Score, Text, "Hotel Name", Author')
         .gte('Date', fromDateKey)
         .lte('Date', toDateKey)
