@@ -59,7 +59,7 @@ const EmailPage: React.FC = () => {
           loading={isLoading}
         />
         <KpiCard
-          label="Reply Emails"
+          label="Follow-up Emails"
           value={data?.kpis.replyEmails ?? 0}
           icon={Reply}
           tone="magenta"
