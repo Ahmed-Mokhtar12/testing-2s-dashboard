@@ -39,12 +39,15 @@ const AuthCallback: React.FC = () => {
 
     if (user) {
       const email = user.email ?? '';
-      if (email.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+      const [, emailDomain] = email.toLowerCase().split('@');
+      if (emailDomain === '2seasonshotels.com') {
         navigate('/', { replace: true });
       } else {
         setRejectedEmail(email);
         setStatus('denied');
-        signOut();
+        signOut().then(({ error }) => {
+          if (error && import.meta.env.DEV) console.warn('Post-rejection signOut failed:', error);
+        });
       }
     } else {
       setStatus('error');
