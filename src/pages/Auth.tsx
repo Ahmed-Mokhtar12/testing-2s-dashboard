@@ -51,7 +51,7 @@ const formatRemaining = (remainingMs: number) => {
 };
 
 const AuthPage: React.FC = () => {
-  const { user, loading, isRecovering, signIn, resetPassword } = useAuth();
+  const { user, loading, isRecovering, signIn, signInWithAzure, resetPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/';
@@ -216,6 +216,16 @@ const AuthPage: React.FC = () => {
     setShowReset(false);
   };
 
+  const handleAzureSignIn = async () => {
+    setSubmitting(true);
+    const { error } = await signInWithAzure();
+    if (error) {
+      setSubmitting(false);
+      toast.error('Microsoft login is not available right now.');
+    }
+    // On success the browser redirects — no need to reset submitting
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md p-8 bg-card-gradient border-border/60">
@@ -292,6 +302,34 @@ const AuthPage: React.FC = () => {
             <Button type="submit" className="w-full" disabled={submitting || isLockedOut}>
               {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Sign in
+            </Button>
+
+            <div className="relative flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full flex items-center justify-center gap-2"
+              onClick={handleAzureSignIn}
+              disabled={submitting || isLockedOut}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 21 21"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
+                <rect x="0" y="0" width="10" height="10" fill="#F25022" />
+                <rect x="11" y="0" width="10" height="10" fill="#7FBA00" />
+                <rect x="0" y="11" width="10" height="10" fill="#00A4EF" />
+                <rect x="11" y="11" width="10" height="10" fill="#FFB900" />
+              </svg>
+              Sign in with Microsoft
             </Button>
 
             <button
