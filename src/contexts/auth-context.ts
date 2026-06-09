@@ -10,6 +10,7 @@ export interface AuthContextValue {
   signOut: () => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  signInWithAzure: () => Promise<{ error: Error | null }>;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
