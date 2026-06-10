@@ -1,12 +1,64 @@
-# Hotel Training Phase 1 — Implementation Plan
+# Hotel Training Phase 1 — Implementation Checklist
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Execute tasks strictly in order. Stop at every **Checkpoint** gate and report before continuing. Mark completed steps with `[x]`. Do not skip items.
 
 **Goal:** Build a 3-step training registration wizard at `/dashboard/hotel-training` that writes to SharePoint (source of truth) and syncs to Supabase, with an admin panel for managing the colleague directory.
 
 **Architecture:** Single-route in-page stepper (`HotelTraining.tsx` owns wizard state). A flat SharePoint service layer (`src/services/sharepoint.ts`) handles all Graph API calls; React Query hooks wrap it for caching. Dual-write: SharePoint first, Supabase best-effort with `sync_queue` on failure.
 
 **Tech Stack:** React 18, TypeScript, Tailwind, shadcn/ui, React Hook Form + Zod, TanStack React Query v5, Supabase JS v2, Microsoft Graph API v1.0, Playwright for E2E tests.
+
+---
+
+## Global Progress Tracker
+
+| Task | Name                         | Status      | Codex Done | Claude Reviewed | Notes |
+|------|------------------------------|-------------|------------|-----------------|-------|
+| 1    | Types                        | Not Started | [ ]        | [ ]             |       |
+| 2    | Constants                    | Not Started | [ ]        | [ ]             |       |
+| 3    | Infrastructure               | Not Started | [ ]        | [ ]             |       |
+| 4    | Supabase Migration           | Not Started | [ ]        | [ ]             |       |
+| 5    | SharePoint Service Layer     | Not Started | [ ]        | [ ]             |       |
+| 6    | React Query Hooks            | Not Started | [ ]        | [ ]             |       |
+| 7    | Training Details Form        | Not Started | [ ]        | [ ]             |       |
+| 8    | Participants Step            | Not Started | [ ]        | [ ]             |       |
+| 9    | Confirmation Step            | Not Started | [ ]        | [ ]             |       |
+| 10   | Page Orchestrator            | Not Started | [ ]        | [ ]             |       |
+| 11   | Admin Panel                  | Not Started | [ ]        | [ ]             |       |
+| 12   | Draft Autosave Validation    | Not Started | [ ]        | [ ]             |       |
+| 13   | E2E Playwright Tests         | Not Started | [ ]        | [ ]             |       |
+| 14   | Final Self-Review & Cleanup  | Not Started | [ ]        | [ ]             |       |
+
+---
+
+## Codex Execution Rules
+
+- [ ] Do not implement tasks out of order.
+- [ ] Do not skip checklist items.
+- [ ] Do not mark a task as done unless build/tests pass or the failure is documented.
+- [ ] Do not change unrelated files.
+- [ ] Do not remove existing dashboard functionality.
+- [ ] Do not change SharePoint schema.
+- [ ] Do not hardcode unverified SharePoint field types — verify Location and Remarks field `typeAsString` at runtime before implementing their input type.
+- [ ] Keep SharePoint as the source of truth.
+- [ ] Do not clear the draft unless the SharePoint training session AND all SharePoint participant rows are successfully written.
+- [ ] Stop after each Checkpoint gate and wait for review before proceeding.
+
+---
+
+## Claude Review Rules
+
+For each completed task, Claude checks:
+
+- [ ] Implementation matches the approved design spec.
+- [ ] No required business rule was missed.
+- [ ] Number of participant rows always equals `totalParticipants` — no more, no fewer.
+- [ ] Duplicate participants are blocked at the UI layer.
+- [ ] Admin panel is visible only for the three approved admin emails (case-insensitive).
+- [ ] Add/Remove member uses soft-delete only (`IsActive: false`) — no hard deletes.
+- [ ] Supabase sync failure does not rollback the SharePoint write.
+- [ ] Draft is only cleared after ALL SharePoint participant rows succeed.
+- [ ] Tests/build output is included in Codex completion notes.
 
 ---
 
@@ -28,11 +80,19 @@ The plan below uses `number` as written in the spec. **Adjust Task 7 field types
 
 ---
 
-## Task 1: Types, constants, department-section mapping
+## Task 1 — Types
 
-**Files:**
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Define all shared TypeScript interfaces and union types used throughout the feature. Every other task imports from this file — it must exist and compile before any other task starts.
+
+### Files to modify/create
+
 - Create: `src/types/hotel-training.ts`
-- Create: `src/lib/hotel-training-constants.ts`
+
+### Steps
 
 - [ ] **Step 1: Create types file**
 
@@ -78,7 +138,64 @@ export interface HotelTrainingDraft {
 }
 ```
 
-- [ ] **Step 2: Create constants file**
+- [ ] **Step 2: Verify TypeScript compiles**
+
+```bash
+cd /home/digitlab-testing-2s-dashboard/htdocs/testing-2s-dashboard.digitlab.ai
+npm run build 2>&1 | tail -5
+```
+
+Expected: build succeeds (no imports yet, no errors).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/types/hotel-training.ts
+git commit -m "feat(hotel-training): add shared TypeScript types"
+```
+
+### Validation / Expected result
+
+- [ ] `src/types/hotel-training.ts` exists
+- [ ] `npm run build` exits with no errors
+- [ ] All 7 exports present: `Colleague`, `ParticipantRow`, `TrainingDetailsValues`, `WizardStep`, `SuccessState`, `HotelTrainingDraft`
+
+### Codex completion notes
+
+_Fill in after completing: files created, build output, any issues._
+
+### Claude review notes
+
+_Fill in after review: approved / rejected / changes requested._
+
+---
+
+### Checkpoint — Task 1
+
+Codex must stop here and report:
+- [ ] Which files were created
+- [ ] Build result (`npm run build` output)
+- [ ] Any deviations from the code above
+
+**Do not start Task 2 until this checkpoint is reviewed.**
+
+---
+
+## Task 2 — Constants
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Define all shared constants: SharePoint list GUIDs, site coordinates, duration options, admin emails, department-section mapping, and the draft localStorage key helper. Every other task that references SharePoint IDs or admin emails imports from this file.
+
+### Files to modify/create
+
+- Create: `src/lib/hotel-training-constants.ts`
+
+### Steps
+
+- [ ] **Step 1: Create constants file**
 
 ```typescript
 // src/lib/hotel-training-constants.ts
@@ -136,25 +253,67 @@ export const DRAFT_KEY = (email: string) =>
   `hotel-training-draft-${email.toLowerCase()}`;
 ```
 
-- [ ] **Step 3: Verify TypeScript compiles**
+- [ ] **Step 2: Verify TypeScript compiles**
 
 ```bash
-cd /home/digitlab-testing-2s-dashboard/htdocs/testing-2s-dashboard.digitlab.ai
 npm run build 2>&1 | tail -5
 ```
 
-Expected: build succeeds (new files have no imports yet so no errors).
+Expected: build succeeds.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/types/hotel-training.ts src/lib/hotel-training-constants.ts
-git commit -m "feat(hotel-training): add shared types and constants"
+git add src/lib/hotel-training-constants.ts
+git commit -m "feat(hotel-training): add constants, admin emails, dept-section map"
 ```
+
+### Validation / Expected result
+
+- [ ] `src/lib/hotel-training-constants.ts` exists
+- [ ] `npm run build` exits with no errors
+- [ ] `ADMIN_EMAILS` contains exactly 3 lowercase email strings
+- [ ] `DEPARTMENT_SECTIONS` covers all 14 departments
+- [ ] `DRAFT_KEY` is exported as a function
+
+### Codex completion notes
+
+_Fill in after completing: files created, build output, any issues._
+
+### Claude review notes
+
+_Fill in after review: approved / rejected / changes requested._
 
 ---
 
-## Task 2: Infrastructure — CSP, auth scopes, route, sidebar
+### Checkpoint — Task 2
+
+Codex must stop here and report:
+- [ ] Which files were created
+- [ ] Build result
+- [ ] Admin emails match exactly: `ahmed.mokhtar@2seasonshotels.com`, `amir.monir@2seasonshotels.com`, `xarmaigne.narciso@2seasonshotels.com`
+
+**Do not start Task 3 until this checkpoint is reviewed.**
+
+---
+
+## Task 3 — Infrastructure
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Wire up the feature into the existing application: extend the Content Security Policy to allow Graph API calls, extend auth scopes to include `Sites.ReadWrite.All`, add the lazy-loaded route, add the sidebar nav item, and create a placeholder page so the route resolves before any business logic is implemented.
+
+### Files to modify/create
+
+- Modify: `index.html`
+- Modify: `src/contexts/AuthContext.tsx`
+- Modify: `src/App.tsx`
+- Modify: `src/components/dashboard/AppSidebar.tsx`
+- Create: `src/pages/dashboard/HotelTraining.tsx` (placeholder only)
+
+### Steps
 
 **Files:**
 - Modify: `index.html`
@@ -235,9 +394,49 @@ git add index.html src/contexts/AuthContext.tsx src/App.tsx src/components/dashb
 git commit -m "feat(hotel-training): wire up route, nav item, CSP, and auth scopes"
 ```
 
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] `/dashboard/hotel-training` renders the placeholder ("coming soon") without crashing
+- [ ] "Hotel Training" nav item appears in sidebar
+- [ ] `scopes` in `AuthContext.tsx` now includes `offline_access Sites.ReadWrite.All`
+- [ ] CSP `connect-src` includes `https://graph.microsoft.com` and `https://login.microsoftonline.com`
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 3: Supabase migration
+### Checkpoint — Task 3
+
+Codex must stop here and report:
+- [ ] Files modified (list each)
+- [ ] Build result
+- [ ] Screenshot or confirmation that `/dashboard/hotel-training` renders the placeholder
+- [ ] Confirm existing routes (`/dashboard/reviews`, etc.) still work
+
+**Do not start Task 4 until this checkpoint is reviewed.**
+
+---
+
+## Task 4 — Supabase Migration
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Create the three Supabase tables (`training_sessions`, `training_participants`, `training_sync_queue`) with correct constraints, RLS policies, and a `sync_status` check constraint. This migration must be applied to the remote Supabase project before Task 6 (submit mutation) is testable.
+
+### Files to modify/create
+
+- Create: `supabase/migrations/20260610120000_hotel_training.sql`
+
+### Steps
 
 **Files:**
 - Create: `supabase/migrations/20260610120000_hotel_training.sql`
@@ -349,9 +548,49 @@ git add supabase/migrations/20260610120000_hotel_training.sql
 git commit -m "feat(hotel-training): add Supabase migration for training tables + RLS"
 ```
 
+### Validation / Expected result
+
+- [ ] Migration file exists at `supabase/migrations/20260610120000_hotel_training.sql`
+- [ ] All three tables created: `training_sessions`, `training_participants`, `training_sync_queue`
+- [ ] RLS enabled on all three tables
+- [ ] `training_participants` insert policy uses subquery (not `with check(true)`)
+- [ ] `training_sessions(training_id)` has `unique` constraint
+- [ ] Migration applied successfully (no SQL errors)
+
+### Codex completion notes
+
+_Fill in after completing: migration output, any SQL errors._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 4: SharePoint service layer
+### Checkpoint — Task 4
+
+Codex must stop here and report:
+- [ ] Migration file committed
+- [ ] Migration applied (paste SQL output or Supabase CLI output)
+- [ ] Confirm RLS is active on all three tables (check Supabase dashboard or run `select tablename, rowsecurity from pg_tables where schemaname = 'public'`)
+
+**Do not start Task 5 until this checkpoint is reviewed.**
+
+---
+
+## Task 5 — SharePoint Service Layer
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Implement all Microsoft Graph API calls as flat async functions in a single service file. This layer handles: site ID resolution (with module-level cache), 429 throttling retries, 401 error signalling, colleague pagination via `@odata.nextLink`, training session creation, participant row creation, and colleague add/soft-delete.
+
+### Files to modify/create
+
+- Create: `src/services/sharepoint.ts`
+
+### Steps
 
 **Files:**
 - Create: `src/services/sharepoint.ts`
@@ -654,9 +893,50 @@ git add src/services/sharepoint.ts
 git commit -m "feat(hotel-training): add SharePoint Graph API service layer"
 ```
 
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] All exported functions present: `graphRequest`, `getSiteId`, `resetSiteIdCache`, `getListColumns`, `getColleagues`, `createTrainingSession`, `createParticipants`, `createColleague`, `patchColleague`
+- [ ] `graphRequest` retries on 429 (reads `Retry-After`, max 3 retries)
+- [ ] `getColleagues` follows `@odata.nextLink` for pagination
+- [ ] `createParticipants` returns `{ succeeded, failed }` — does not throw on partial row failure
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 5: React Query hooks — useColleagues + useListColumns
+### Checkpoint — Task 5
+
+Codex must stop here and report:
+- [ ] File committed
+- [ ] Build result
+- [ ] Confirm `patchColleague` only patches fields passed in — does not hard-delete
+
+**Do not start Task 6 until this checkpoint is reviewed.**
+
+---
+
+## Task 6 — React Query Hooks
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Create three React Query hooks that wrap the SharePoint service layer: `useColleagues` (cached list of all colleagues), `useListColumns` (cached column choices for dropdowns), and `useTrainingSubmit` (mutation that executes the dual-write: SharePoint first, Supabase best-effort with sync queue on failure).
+
+### Files to modify/create
+
+- Create: `src/hooks/useColleagues.ts`
+- Create: `src/hooks/useListColumns.ts`
+- Create: `src/hooks/useTrainingSubmit.ts`
+
+### Steps
 
 **Files:**
 - Create: `src/hooks/useColleagues.ts`
@@ -705,29 +985,7 @@ export function useListColumns() {
 }
 ```
 
-- [ ] **Step 3: Build to verify**
-
-```bash
-npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
-```
-
-Expected: no errors.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/hooks/useColleagues.ts src/hooks/useListColumns.ts
-git commit -m "feat(hotel-training): add useColleagues and useListColumns React Query hooks"
-```
-
----
-
-## Task 6: useTrainingSubmit mutation
-
-**Files:**
-- Create: `src/hooks/useTrainingSubmit.ts`
-
-- [ ] **Step 1: Create the mutation hook**
+- [ ] **Step 3: Create `useTrainingSubmit`**
 
 ```typescript
 // src/hooks/useTrainingSubmit.ts
@@ -870,24 +1128,65 @@ export function useTrainingSubmit() {
 }
 ```
 
-- [ ] **Step 2: Build to verify**
+- [ ] **Step 4: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 ```
 
-Expected: no errors. (May warn about Supabase table types not existing yet — acceptable until generated types are updated.)
+Expected: no errors. Supabase table type warnings acceptable until types are generated.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit all three hooks**
 
 ```bash
-git add src/hooks/useTrainingSubmit.ts
-git commit -m "feat(hotel-training): add useTrainingSubmit mutation with dual-write logic"
+git add src/hooks/useColleagues.ts src/hooks/useListColumns.ts src/hooks/useTrainingSubmit.ts
+git commit -m "feat(hotel-training): add React Query hooks (colleagues, columns, submit)"
 ```
+
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] `useColleagues`: `staleTime` = 5 min, `enabled` only when token present
+- [ ] `useListColumns`: `staleTime` = 30 min
+- [ ] `useTrainingSubmit`: SharePoint write happens first; Supabase write is best-effort; on Supabase failure, inserts into `training_sync_queue` and does NOT throw
+- [ ] Draft is cleared only after SP participant writes ALL succeed
+- [ ] `generateTrainingId()` produces `TRN-yyyyMMddHHmmss` format
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
 
 ---
 
-## Task 7: TrainingDetailsForm — Step 1
+### Checkpoint — Task 6
+
+Codex must stop here and report:
+- [ ] All three hook files committed
+- [ ] Build result
+- [ ] Confirm dual-write order: SharePoint session → SharePoint participants → Supabase (never reversed)
+- [ ] Confirm Supabase failure path writes to `training_sync_queue` and does not throw to the caller
+
+**Do not start Task 7 until this checkpoint is reviewed.**
+
+---
+
+## Task 7 — Training Details Form (Step 1)
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Build the Step 1 form: Training Title, Department (from SP column choices), Duration (fixed options), Total Participants (controls exact row count in Step 2), Date (calendar picker), Time (hour/minute selects), Trainer Name (multi-select from SP choices), Location and Remarks (optional number fields — verify SP field types before choosing input type).
+
+### Files to modify/create
+
+- Create: `src/components/hotel-training/TrainingDetailsForm.tsx`
+
+### Steps
 
 **Files:**
 - Create: `src/components/hotel-training/TrainingDetailsForm.tsx`
@@ -1242,9 +1541,49 @@ git add src/components/hotel-training/TrainingDetailsForm.tsx
 git commit -m "feat(hotel-training): add TrainingDetailsForm (Step 1)"
 ```
 
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] Zod schema rejects `totalParticipants < 1`
+- [ ] Trainer multi-select allows more than one trainer
+- [ ] Past-date warning shown as a `toast.warning` (does not block submission)
+- [ ] Location and Remarks field input types match the `typeAsString` from SP columns endpoint
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 8: ParticipantRow + ParticipantsStep — Step 2
+### Checkpoint — Task 7
+
+Codex must stop here and report:
+- [ ] File committed
+- [ ] Build result
+- [ ] Confirm `field_5` and `field_7` `typeAsString` was checked — state what the runtime type is and which input type was used
+
+**Do not start Task 8 until this checkpoint is reviewed.**
+
+---
+
+## Task 8 — Participants Step (Step 2)
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Build the Step 2 UI: exactly `totalParticipants` rows, each row is a searchable combobox showing only active colleagues, filtering out already-selected IDs. Validation blocks advance to Step 3 if any row is empty or any employee ID is duplicated.
+
+### Files to modify/create
+
+- Create: `src/components/hotel-training/ParticipantRow.tsx`
+- Create: `src/components/hotel-training/ParticipantsStep.tsx`
+
+### Steps
 
 **Files:**
 - Create: `src/components/hotel-training/ParticipantRow.tsx`
@@ -1451,9 +1790,51 @@ git add src/components/hotel-training/ParticipantRow.tsx src/components/hotel-tr
 git commit -m "feat(hotel-training): add ParticipantRow and ParticipantsStep (Step 2)"
 ```
 
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] Row count equals `totalParticipants` — no more, no fewer rows rendered
+- [ ] Duplicate employee ID shows error and blocks navigation to Step 3
+- [ ] Empty row shows error and blocks navigation to Step 3
+- [ ] Inactive colleagues (`isActive: false`) do NOT appear in any row's dropdown
+- [ ] Already-selected IDs are excluded from other rows' dropdown options
+- [ ] Each row has `data-testid="participant-select-{rowNo}"`
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 9: ConfirmationStep — Step 3
+### Checkpoint — Task 8
+
+Codex must stop here and report:
+- [ ] Both files committed
+- [ ] Build result
+- [ ] Confirm inactive colleagues are filtered out
+- [ ] Confirm duplicate detection uses employee ID (not name)
+
+**Do not start Task 9 until this checkpoint is reviewed.**
+
+---
+
+## Task 9 — Confirmation Step (Step 3)
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Build the read-only review screen shown before final submission. Displays training details and a full participants table. Confirm & Submit button triggers the `useTrainingSubmit` mutation. Shows a spinner while pending; disables Back and Submit buttons during submission.
+
+### Files to modify/create
+
+- Create: `src/components/hotel-training/ConfirmationStep.tsx`
+
+### Steps
 
 **Files:**
 - Create: `src/components/hotel-training/ConfirmationStep.tsx`
@@ -1589,9 +1970,48 @@ git add src/components/hotel-training/ConfirmationStep.tsx
 git commit -m "feat(hotel-training): add ConfirmationStep (Step 3)"
 ```
 
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] All training detail fields displayed in a 2-column key/value layout
+- [ ] Participants table shows: row number, name, employee ID, position, section, department
+- [ ] Back and Submit buttons disabled while `isPending === true`
+- [ ] Spinner shown on Submit button while pending
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 10: HotelTraining page — orchestrator, stepper, draft autosave
+### Checkpoint — Task 9
+
+Codex must stop here and report:
+- [ ] File committed
+- [ ] Build result
+- [ ] Confirm buttons are disabled during submission (`isPending` prop)
+
+**Do not start Task 10 until this checkpoint is reviewed.**
+
+---
+
+## Task 10 — Page Orchestrator
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Replace the placeholder `HotelTraining.tsx` with the full page component. Owns all wizard state (`step`, `trainingDetails`, `participants`), renders the 3-step stepper, handles the "reduce participants" confirmation dialog, wires up the submit mutation callbacks (full success / partial success screens), and shows the admin Tabs panel to admin-only users. Draft autosave (800 ms debounce, localStorage) is also wired here.
+
+### Files to modify/create
+
+- Replace: `src/pages/dashboard/HotelTraining.tsx` (placeholder → full implementation)
+
+### Steps
 
 **Files:**
 - Replace: `src/pages/dashboard/HotelTraining.tsx` (placeholder → full implementation)
@@ -1969,9 +2389,54 @@ git add src/pages/dashboard/HotelTraining.tsx
 git commit -m "feat(hotel-training): implement HotelTraining page with stepper, wizard state, and draft autosave"
 ```
 
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] Stepper indicator updates on step change
+- [ ] Clicking a completed step number navigates back to it
+- [ ] `isAdmin` check uses `ADMIN_EMAILS.includes(email.toLowerCase())` — case-insensitive
+- [ ] "Manage Members" tab only visible to the 3 admin emails
+- [ ] "Reduce participants" confirmation dialog fires when reducing count with filled rows
+- [ ] Success screen shows full (green) or partial (yellow) state depending on `syncStatus`
+- [ ] "Register New Training" on success screen resets all state
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Task 11: AddMemberForm
+### Checkpoint — Task 10
+
+Codex must stop here and report:
+- [ ] File committed
+- [ ] Build result
+- [ ] Manual test: navigate to `/dashboard/hotel-training`, confirm stepper renders and steps advance
+- [ ] Confirm admin tab hidden for non-admin session
+
+**Do not start Task 11 until this checkpoint is reviewed.**
+
+---
+
+## Task 11 — Admin Panel
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Build the three admin components rendered under the "Manage Members" tab: `AddMemberForm` (creates a new active colleague in SharePoint with duplicate ID check across active + inactive), `RemoveMemberForm` (soft-deletes via `IsActive: false` with a confirmation dialog), and `AdminPanel` (renders both under inner tabs). All components verify `isAdmin` at runtime before calling the API.
+
+### Files to modify/create
+
+- Create: `src/components/hotel-training/AddMemberForm.tsx`
+- Create: `src/components/hotel-training/RemoveMemberForm.tsx`
+- Create: `src/components/hotel-training/AdminPanel.tsx`
+
+### Steps
 
 **Files:**
 - Create: `src/components/hotel-training/AddMemberForm.tsx`
@@ -2133,28 +2598,7 @@ export function AddMemberForm() {
 }
 ```
 
-- [ ] **Step 2: Build to verify**
-
-```bash
-npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/components/hotel-training/AddMemberForm.tsx
-git commit -m "feat(hotel-training): add AddMemberForm admin component"
-```
-
----
-
-## Task 12: RemoveMemberForm + AdminPanel wrapper
-
-**Files:**
-- Create: `src/components/hotel-training/RemoveMemberForm.tsx`
-- Create: `src/components/hotel-training/AdminPanel.tsx`
-
-- [ ] **Step 1: Create `RemoveMemberForm`**
+- [ ] **Step 2: Create `RemoveMemberForm`**
 
 ```typescript
 // src/components/hotel-training/RemoveMemberForm.tsx
@@ -2312,7 +2756,7 @@ export function RemoveMemberForm() {
 }
 ```
 
-- [ ] **Step 2: Create `AdminPanel`**
+- [ ] **Step 3: Create `AdminPanel`**
 
 ```typescript
 // src/components/hotel-training/AdminPanel.tsx
@@ -2341,7 +2785,7 @@ export function AdminPanel() {
 }
 ```
 
-- [ ] **Step 3: Build to verify**
+- [ ] **Step 4: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
@@ -2349,16 +2793,140 @@ npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit all three admin components**
 
 ```bash
-git add src/components/hotel-training/RemoveMemberForm.tsx src/components/hotel-training/AdminPanel.tsx
-git commit -m "feat(hotel-training): add RemoveMemberForm and AdminPanel"
+git add src/components/hotel-training/AddMemberForm.tsx src/components/hotel-training/RemoveMemberForm.tsx src/components/hotel-training/AdminPanel.tsx
+git commit -m "feat(hotel-training): add admin panel (AddMemberForm, RemoveMemberForm, AdminPanel)"
 ```
+
+### Validation / Expected result
+
+- [ ] `npm run build` exits with no errors
+- [ ] `AddMemberForm`: Employee ID uniqueness checked against BOTH active and inactive colleagues
+- [ ] `AddMemberForm`: Employee ID must be numeric; Name and Position must be letters only
+- [ ] `RemoveMemberForm`: Only active colleagues shown in search
+- [ ] `RemoveMemberForm`: Uses `patchColleague(..., { IsActive: false })` — never deletes the SP item
+- [ ] `RemoveMemberForm`: Confirmation dialog appears before deactivation
+- [ ] `AdminPanel`: Section and Department dropdowns are cascading (Section disabled until Department selected)
+
+### Codex completion notes
+
+_Fill in after completing._
+
+### Claude review notes
+
+_Fill in after review._
 
 ---
 
-## Task 13: Full build + smoke test
+### Checkpoint — Task 11
+
+Codex must stop here and report:
+- [ ] All three files committed
+- [ ] Build result
+- [ ] Confirm remove member uses `IsActive: false` patch — NOT a DELETE request
+- [ ] Confirm add member checks uniqueness across active AND inactive colleagues
+
+**Do not start Task 12 until this checkpoint is reviewed.**
+
+---
+
+## Task 12 — Draft Autosave Validation
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Verify — not implement — that the draft autosave behaviour in `HotelTraining.tsx` satisfies all approved rules. This is a dedicated test and manual verification task: run the dev server, exercise each scenario, and confirm the exact clearing/keeping rules are working correctly. No new code should be required if Task 10 was implemented correctly; if gaps are found, fix them in `HotelTraining.tsx` and commit.
+
+### Files to modify/create
+
+- May patch: `src/pages/dashboard/HotelTraining.tsx` (only if gaps found)
+
+### Steps
+
+- [ ] **Step 1: Start dev server**
+
+```bash
+npm run dev
+```
+
+- [ ] **Step 2: Verify draft saves on input (800 ms debounce)**
+
+Open `/dashboard/hotel-training`, type a training title. Wait 1 second. Inspect `localStorage` in DevTools — confirm key `hotel-training-draft-{email}` appears with `savedAt` field.
+
+- [ ] **Step 3: Verify draft restore banner**
+
+Reload the page. Confirm a yellow/info banner appears quoting the saved time. Click "Restore" — confirm form is pre-filled. Click "Discard" on a second try — confirm banner disappears and form is empty.
+
+- [ ] **Step 4: Verify draft cleared after successful SharePoint submit**
+
+Complete a full mock submission (use Playwright mock or a real token). After success screen, confirm `localStorage` no longer contains the draft key.
+
+- [ ] **Step 5: Verify draft NOT cleared when SharePoint participant write fails**
+
+If running against real SP: force a partial participant failure (e.g., use a duplicate TrainingID). Confirm draft is still present in `localStorage` after the error toast.
+
+- [ ] **Step 6: Verify draft NOT cleared on Supabase failure (SharePoint succeeds)**
+
+Use the Playwright mock in Test 6 (`supabaseFailure: true`). After partial-success screen, confirm `localStorage` draft key is gone (draft SHOULD be cleared — SP succeeded).
+
+- [ ] **Step 7: Fix any gaps found, build, commit**
+
+```bash
+npm run build 2>&1 | tail -5
+git add src/pages/dashboard/HotelTraining.tsx
+git commit -m "fix(hotel-training): correct draft autosave behavior"
+```
+
+Only run this step if a gap was found. Skip if no changes needed.
+
+### Validation / Expected result
+
+- [ ] Draft saves to `localStorage` with key `hotel-training-draft-{userEmail}` (lowercase)
+- [ ] Draft payload includes `savedAt` ISO string
+- [ ] Debounce delay is 800 ms (not 0 ms, not 2000 ms)
+- [ ] Draft is cleared ONLY when all SharePoint participant rows succeed
+- [ ] Draft is NOT cleared when submission throws before reaching SharePoint
+- [ ] Draft IS cleared even when Supabase sync fails (SP already succeeded)
+- [ ] Restore always brings user back to Step 1 (not the saved step)
+
+### Codex completion notes
+
+_Fill in after completing: which scenarios were tested, any fixes made._
+
+### Claude review notes
+
+_Fill in after review._
+
+---
+
+### Checkpoint — Task 12
+
+Codex must stop here and report:
+- [ ] All 7 draft scenarios verified (pass/fail for each)
+- [ ] Any code changes made to `HotelTraining.tsx`
+- [ ] Build result if changes were made
+
+**Do not start Task 13 until this checkpoint is reviewed.**
+
+---
+
+## Task 13 — E2E Playwright Tests
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Write and run 6 Playwright tests covering: happy path submit, duplicate participant blocking, admin tab visibility, draft restore, reduce-participants confirmation, and Supabase sync failure with partial success. All tests mock the Graph API via `page.route()` — no real SharePoint calls.
+
+### Files to modify/create
+
+- Create: `tests/helpers/hotel-training-mocks.ts`
+- Create: `tests/hotel-training.spec.ts`
+
+### Steps
 
 - [ ] **Step 1: Run full build**
 
@@ -2743,28 +3311,143 @@ git add tests/helpers/hotel-training-mocks.ts tests/hotel-training.spec.ts
 git commit -m "test(hotel-training): add Playwright E2E tests for all 6 scenarios"
 ```
 
+### Validation / Expected result
+
+- [ ] All 6 tests pass in Chromium
+- [ ] Test 1: happy path → success screen rendered, draft key absent from `localStorage`
+- [ ] Test 2: duplicate employee ID → error message blocks Step 3
+- [ ] Test 3: non-admin → "Manage Members" tab not visible; admin → tab visible
+- [ ] Test 4: draft restored after reload with title pre-filled
+- [ ] Test 5: reduce participants with filled rows → confirmation dialog; Cancel keeps original count
+- [ ] Test 6: Supabase failure → partial success banner; draft cleared (SP succeeded)
+
+### Codex completion notes
+
+_Fill in after completing: test output (pass/fail per test), any fixes required._
+
+### Claude review notes
+
+_Fill in after review._
+
 ---
 
-## Self-Review Checklist (run before handing off)
+### Checkpoint — Task 13
 
-- [ ] All 6 Playwright tests pass
+Codex must stop here and report:
+- [ ] Paste full test output (6 tests, result for each)
+- [ ] Both files committed
+- [ ] Any test failures and how they were resolved
+
+**Do not start Task 14 until this checkpoint is reviewed.**
+
+---
+
+## Task 14 — Final Self-Review & Cleanup
+
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+### Objective
+
+Full build, lint, smoke test in a real browser, and spec cross-check. This is the handoff gate — nothing ships until every item below is checked. Fix any remaining lint errors and commit.
+
+### Files to modify/create
+
+- May patch any file where a gap is found
+
+### Steps
+
+- [ ] **Step 1: Full production build**
+
+```bash
+npm run build 2>&1 | tail -10
+```
+
+Expected: `✓ built in X.XXs` with zero errors.
+
+- [ ] **Step 2: Lint**
+
+```bash
+npm run lint 2>&1 | tail -10
+```
+
+Fix any errors. Commit fixes:
+
+```bash
+git add -A
+git commit -m "fix(hotel-training): resolve lint errors"
+```
+
+- [ ] **Step 3: Start dev server and smoke test**
+
+```bash
+npm run dev
+```
+
+Navigate to `http://localhost:5173/dashboard/hotel-training` and verify each item:
+
+- [ ] Page loads with "Hotel Training" heading
+- [ ] Stepper shows Step 1: Training Details
+- [ ] Sidebar nav item "Hotel Training" is present
+- [ ] "Manage Members" tab visible when signed in as an admin email, hidden otherwise
+- [ ] Draft restore banner appears: fill title, wait 1 s, reload page
+- [ ] Step 2 renders exactly `totalParticipants` rows
+- [ ] Inactive colleagues absent from row dropdowns
+- [ ] Full submission reaches success screen
+- [ ] "Register New Training" resets wizard back to Step 1
+
+- [ ] **Step 4: Spec cross-check**
+
+| Requirement | Task | Status |
+|---|---|---|
+| Route `/dashboard/hotel-training` inside DashboardShell | 3 | |
+| CSP allows `graph.microsoft.com` | 3 | |
+| Auth scopes include `Sites.ReadWrite.All` | 3 | |
+| Supabase tables + RLS | 4 | |
+| SharePoint service with 429 retry and 401 signal | 5 | |
+| useColleagues staleTime 5 min | 6 | |
+| useTrainingSubmit: SP first, Supabase best-effort | 6 | |
+| TrainingID format `TRN-yyyyMMddHHmmss` | 6 | |
+| Step 1: Total Participants controls row count | 7 | |
+| Step 1: Location / Remarks type verified at runtime | 7 | |
+| Step 2: row count = totalParticipants | 8 | |
+| Step 2: inactive colleagues excluded | 8 | |
+| Step 2: duplicate ID blocked | 8 | |
+| Step 3: disabled during submission | 9 | |
+| Draft: 800 ms debounce | 10 | |
+| Draft: localStorage key includes user email | 10 | |
+| Draft: cleared only on full SP success | 10 | |
+| Admin check: case-insensitive | 10 | |
+| Reduce participants: confirmation dialog | 10 | |
+| Success: full vs partial state | 10 | |
+| Add member: unique ID across active + inactive | 11 | |
+| Remove member: soft-delete only | 11 | |
+| All 6 E2E tests pass | 13 | |
+
+### Validation / Expected result
+
 - [ ] `npm run build` exits cleanly
 - [ ] `npm run lint` exits cleanly
-- [ ] `/dashboard/hotel-training` loads in browser, stepper renders
-- [ ] Sidebar shows "Hotel Training" nav item
-- [ ] Admin tab hidden for non-admin, visible for admin email
-- [ ] Draft banner appears after page refresh (fill title, wait 1s, reload)
-- [ ] Spec requirements with task coverage:
-  - ✅ Route + sidebar: Task 2
-  - ✅ CSP + auth scopes: Task 2
-  - ✅ SP service layer: Task 4
-  - ✅ useColleagues + useListColumns: Task 5
-  - ✅ useTrainingSubmit dual-write: Task 6
-  - ✅ TrainingDetailsForm (Step 1): Task 7
-  - ✅ ParticipantsStep + rows (Step 2): Task 8
-  - ✅ ConfirmationStep (Step 3): Task 9
-  - ✅ Wizard orchestrator + draft autosave: Task 10
-  - ✅ Admin Add Member: Task 11
-  - ✅ Admin Remove Member + AdminPanel: Task 12
-  - ✅ Supabase migration + RLS: Task 3
-  - ✅ All 6 E2E tests: Task 14
+- [ ] All 6 Playwright tests pass
+- [ ] All rows in spec cross-check table filled and confirmed
+- [ ] No existing dashboard routes broken (`/dashboard/reviews`, `/dashboard/whatsapp`, etc.)
+
+### Codex completion notes
+
+_Fill in after completing: build output, lint output, smoke test observations, any regressions found._
+
+### Claude review notes
+
+_Fill in after review. This is the final approval gate before the feature is considered complete._
+
+---
+
+### Checkpoint — Task 14 (Final Gate)
+
+Codex must stop here and report:
+- [ ] Build output
+- [ ] Lint output
+- [ ] All 6 E2E test results
+- [ ] Spec cross-check table — every row filled
+- [ ] Any remaining issues or known limitations
+
+**This is the final checkpoint. Feature is complete only after Claude approves this report.**
