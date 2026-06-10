@@ -64,19 +64,33 @@ For each completed task, Claude checks:
 
 ## Pre-Implementation: Verify SharePoint Column Types
 
-Before writing any code, run this one-time check to confirm `field_5` and `field_7` types:
+**This is a required one-time step before Task 1. The result affects Task 7's Location/Remarks input types.**
+
+Get a valid Microsoft Graph token: sign in to the dashboard in Chrome, open DevTools → Application → Local Storage, copy `provider_token` from the Supabase auth entry.
 
 ```bash
-# Replace TOKEN with a valid Microsoft Graph token (get from browser DevTools after signing in)
-curl -H "Authorization: Bearer TOKEN" \
+TOKEN="paste-token-here"
+curl -s -H "Authorization: Bearer $TOKEN" \
   "https://graph.microsoft.com/v1.0/sites/2seasonshotels.sharepoint.com:/sites/Two_Seasons_Training_Record:/lists/aa8fe143-854d-4646-a423-89bc44bb217d/columns" \
-  | jq '.value[] | select(.name == "field_5" or .name == "field_7") | {name, typeAsString}'
+  | python3 -c "import sys,json; cols=json.load(sys.stdin)['value']; [print(c['name'], c.get('typeAsString','?')) for c in cols if c['name'] in ('field_5','field_7')]"
 ```
 
-If `typeAsString` is `"Text"` or `"Note"` → use `z.string().optional()` and `<Input type="text">` for those fields.
-If `typeAsString` is `"Number"` → use `z.number().optional()` and `<Input type="number">`.
+Expected output (two lines):
+```
+field_5  Number     ← or Text/Note
+field_7  Number     ← or Text/Note
+```
 
-The plan below uses `number` as written in the spec. **Adjust Task 7 field types/Zod if the runtime check says Text.**
+**Decision:**
+- If `typeAsString` is `Text` or `Note` for either field: in Task 7, change that field's Zod schema to `z.string().optional()` and input to `<Input type="text" />`.
+- If `typeAsString` is `Number`: keep as-is (plan defaults to Number).
+
+**Record the result here before proceeding:**
+
+`field_5 typeAsString:` _______________
+`field_7 typeAsString:` _______________
+
+---
 
 ---
 
@@ -315,12 +329,6 @@ Wire up the feature into the existing application: extend the Content Security P
 
 ### Steps
 
-**Files:**
-- Modify: `index.html`
-- Modify: `src/contexts/AuthContext.tsx`
-- Modify: `src/App.tsx`
-- Modify: `src/components/dashboard/AppSidebar.tsx`
-
 - [ ] **Step 1: Update CSP in `index.html`**
 
 Find the line:
@@ -437,9 +445,6 @@ Create the three Supabase tables (`training_sessions`, `training_participants`, 
 - Create: `supabase/migrations/20260610120000_hotel_training.sql`
 
 ### Steps
-
-**Files:**
-- Create: `supabase/migrations/20260610120000_hotel_training.sql`
 
 - [ ] **Step 1: Create migration file**
 
@@ -591,9 +596,6 @@ Implement all Microsoft Graph API calls as flat async functions in a single serv
 - Create: `src/services/sharepoint.ts`
 
 ### Steps
-
-**Files:**
-- Create: `src/services/sharepoint.ts`
 
 - [ ] **Step 1: Create the service file**
 
@@ -938,10 +940,6 @@ Create three React Query hooks that wrap the SharePoint service layer: `useColle
 
 ### Steps
 
-**Files:**
-- Create: `src/hooks/useColleagues.ts`
-- Create: `src/hooks/useListColumns.ts`
-
 - [ ] **Step 1: Create `useColleagues`**
 
 ```typescript
@@ -1149,7 +1147,7 @@ git commit -m "feat(hotel-training): add React Query hooks (colleagues, columns,
 - [ ] `useColleagues`: `staleTime` = 5 min, `enabled` only when token present
 - [ ] `useListColumns`: `staleTime` = 30 min
 - [ ] `useTrainingSubmit`: SharePoint write happens first; Supabase write is best-effort; on Supabase failure, inserts into `training_sync_queue` and does NOT throw
-- [ ] Draft is cleared only after SP participant writes ALL succeed
+- [ ] `useTrainingSubmit`: when SP participant rows partially fail, returns `failedParticipants` array (non-empty) — does NOT throw; caller (Task 10) decides whether to clear draft
 - [ ] `generateTrainingId()` produces `TRN-yyyyMMddHHmmss` format
 
 ### Codex completion notes
@@ -1187,9 +1185,6 @@ Build the Step 1 form: Training Title, Department (from SP column choices), Dura
 - Create: `src/components/hotel-training/TrainingDetailsForm.tsx`
 
 ### Steps
-
-**Files:**
-- Create: `src/components/hotel-training/TrainingDetailsForm.tsx`
 
 - [ ] **Step 1: Create the component**
 
@@ -1279,7 +1274,6 @@ export function TrainingDetailsForm({ defaultValues, departments, trainers, onNe
   });
 
   const selectedTrainers = watch('trainerNames') ?? [];
-  const selectedDate = watch('date');
   const [trainerOpen, setTrainerOpen] = React.useState(false);
 
   const onSubmit = (values: FormValues) => {
