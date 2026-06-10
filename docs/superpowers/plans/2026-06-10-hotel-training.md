@@ -1,0 +1,2770 @@
+# Hotel Training Phase 1 — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build a 3-step training registration wizard at `/dashboard/hotel-training` that writes to SharePoint (source of truth) and syncs to Supabase, with an admin panel for managing the colleague directory.
+
+**Architecture:** Single-route in-page stepper (`HotelTraining.tsx` owns wizard state). A flat SharePoint service layer (`src/services/sharepoint.ts`) handles all Graph API calls; React Query hooks wrap it for caching. Dual-write: SharePoint first, Supabase best-effort with `sync_queue` on failure.
+
+**Tech Stack:** React 18, TypeScript, Tailwind, shadcn/ui, React Hook Form + Zod, TanStack React Query v5, Supabase JS v2, Microsoft Graph API v1.0, Playwright for E2E tests.
+
+---
+
+## Pre-Implementation: Verify SharePoint Column Types
+
+Before writing any code, run this one-time check to confirm `field_5` and `field_7` types:
+
+```bash
+# Replace TOKEN with a valid Microsoft Graph token (get from browser DevTools after signing in)
+curl -H "Authorization: Bearer TOKEN" \
+  "https://graph.microsoft.com/v1.0/sites/2seasonshotels.sharepoint.com:/sites/Two_Seasons_Training_Record:/lists/aa8fe143-854d-4646-a423-89bc44bb217d/columns" \
+  | jq '.value[] | select(.name == "field_5" or .name == "field_7") | {name, typeAsString}'
+```
+
+If `typeAsString` is `"Text"` or `"Note"` → use `z.string().optional()` and `<Input type="text">` for those fields.
+If `typeAsString` is `"Number"` → use `z.number().optional()` and `<Input type="number">`.
+
+The plan below uses `number` as written in the spec. **Adjust Task 7 field types/Zod if the runtime check says Text.**
+
+---
+
+## Task 1: Types, constants, department-section mapping
+
+**Files:**
+- Create: `src/types/hotel-training.ts`
+- Create: `src/lib/hotel-training-constants.ts`
+
+- [ ] **Step 1: Create types file**
+
+```typescript
+// src/types/hotel-training.ts
+
+export interface Colleague {
+  id: string;
+  employeeId: string;
+  colleagueName: string;
+  position: string;
+  section: string;
+  department: string;
+  isActive: boolean;
+}
+
+export interface ParticipantRow {
+  rowNo: number;
+  colleague: Colleague | null;
+}
+
+export interface TrainingDetailsValues {
+  title: string;
+  department: string;
+  durationMinutes: number;
+  totalParticipants: number;
+  location?: number;
+  remarks?: number;
+  date: Date;
+  hour: number;
+  minute: number;
+  trainerNames: string[];
+}
+
+export type WizardStep = 1 | 2 | 3;
+export type SuccessState = 'full' | 'partial' | null;
+
+export interface HotelTrainingDraft {
+  trainingDetails: TrainingDetailsValues | null;
+  participants: ParticipantRow[];
+  step: WizardStep;
+  savedAt: string;
+}
+```
+
+- [ ] **Step 2: Create constants file**
+
+```typescript
+// src/lib/hotel-training-constants.ts
+
+export const MONTHLY_TRAINING_LIST_ID = 'aa8fe143-854d-4646-a423-89bc44bb217d';
+export const PARTICIPANTS_LIST_ID = '73f67c6d-f327-4c14-aa68-2b718afcd132';
+export const COLLEAGUES_LIST_ID = '8bdc10b9-01c8-4310-8a16-48eb83020d7e';
+export const SP_SITE_HOST = '2seasonshotels.sharepoint.com';
+export const SP_SITE_PATH = '/sites/Two_Seasons_Training_Record';
+
+export const DURATION_OPTIONS: { label: string; minutes: number }[] = [
+  { label: '30 minutes', minutes: 30 },
+  { label: '45 minutes', minutes: 45 },
+  { label: '1 hour', minutes: 60 },
+  { label: '1.5 hours', minutes: 90 },
+  { label: '2 hours', minutes: 120 },
+  { label: '2.5 hours', minutes: 150 },
+  { label: '3 hours', minutes: 180 },
+  { label: '3.5 hours', minutes: 210 },
+  { label: '4 hours', minutes: 240 },
+  { label: '4.5 hours', minutes: 270 },
+  { label: '5 hours', minutes: 300 },
+  { label: '5.5 hours', minutes: 330 },
+  { label: '6 hours', minutes: 360 },
+  { label: '6.5 hours', minutes: 390 },
+  { label: '7 hours', minutes: 420 },
+  { label: '7.5 hours', minutes: 450 },
+  { label: '8 hours', minutes: 480 },
+];
+
+export const ADMIN_EMAILS = [
+  'ahmed.mokhtar@2seasonshotels.com',
+  'amir.monir@2seasonshotels.com',
+  'xarmaigne.narciso@2seasonshotels.com',
+];
+
+export const DEPARTMENT_SECTIONS: Record<string, string[]> = {
+  'Engineering': ['Engineering'],
+  'Executive Office': ['Executive Office'],
+  'Finance': ['Finance'],
+  'Food & Beverage': ['La Terrasse', 'House Of Noodles', 'Pool Bar', 'Room Service / Minibar', 'Banquet', 'F & B Admin', 'Stewarding', 'Le Grand Café'],
+  'Front Office': ['Concierge', 'Front Office Admin', 'Guest Relations', 'Reception Long Term', 'Telecommunication', 'Reception Hotel'],
+  'Housekeeping': ['Housekeeping', 'Laundry'],
+  'Human Resources': ['Human Resources', 'Colleague Cafeteria'],
+  'Information Technology': ['Information Technology'],
+  'Kitchen': ['Kitchen Admin', 'Kitchen Hot', 'House Of Noodles - Kitchen', 'Kitchen Pastry', 'Kitchen Cold', 'Kitchen Butchery', 'Kitchen Sushi', 'Kitchen Bakery'],
+  'Materials': ['Materials'],
+  'Recreation': ['Recreation'],
+  'Revenue': ['Revenue', 'Reservation'],
+  'Sales & Marketing': ['Sales & Marketing'],
+  'Security': ['Security'],
+};
+
+export const DRAFT_KEY = (email: string) =>
+  `hotel-training-draft-${email.toLowerCase()}`;
+```
+
+- [ ] **Step 3: Verify TypeScript compiles**
+
+```bash
+cd /home/digitlab-testing-2s-dashboard/htdocs/testing-2s-dashboard.digitlab.ai
+npm run build 2>&1 | tail -5
+```
+
+Expected: build succeeds (new files have no imports yet so no errors).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/types/hotel-training.ts src/lib/hotel-training-constants.ts
+git commit -m "feat(hotel-training): add shared types and constants"
+```
+
+---
+
+## Task 2: Infrastructure — CSP, auth scopes, route, sidebar
+
+**Files:**
+- Modify: `index.html`
+- Modify: `src/contexts/AuthContext.tsx`
+- Modify: `src/App.tsx`
+- Modify: `src/components/dashboard/AppSidebar.tsx`
+
+- [ ] **Step 1: Update CSP in `index.html`**
+
+Find the line:
+```
+connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;
+```
+
+Replace with:
+```
+connect-src 'self' https://*.supabase.co wss://*.supabase.co https://graph.microsoft.com https://login.microsoftonline.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;
+```
+
+- [ ] **Step 2: Extend auth scopes in `AuthContext.tsx`**
+
+Find:
+```typescript
+scopes: 'email profile openid',
+```
+
+Replace with:
+```typescript
+scopes: 'email profile openid offline_access Sites.ReadWrite.All',
+```
+
+- [ ] **Step 3: Add route to `App.tsx`**
+
+Add this import near the other lazy imports:
+```typescript
+const HotelTrainingPage = lazy(() => import("./pages/dashboard/HotelTraining"));
+```
+
+Add this route inside the `DashboardShell` route group (after the existing dashboard routes):
+```typescript
+<Route path="/dashboard/hotel-training" element={<HotelTrainingPage />} />
+```
+
+- [ ] **Step 4: Add nav item to `AppSidebar.tsx`**
+
+Add `GraduationCap` to the lucide-react import:
+```typescript
+import { LayoutDashboard, Star, MessageCircle, Mail, TrendingUp, Inbox, Share2, Send, GraduationCap } from 'lucide-react';
+```
+
+Add to the `items` array (after the existing items):
+```typescript
+{ title: 'Hotel Training', url: '/dashboard/hotel-training', icon: GraduationCap },
+```
+
+- [ ] **Step 5: Create placeholder page so the route resolves**
+
+```typescript
+// src/pages/dashboard/HotelTraining.tsx  (temporary placeholder)
+import React from 'react';
+export default function HotelTraining() {
+  return <div className="p-6 text-muted-foreground">Hotel Training — coming soon</div>;
+}
+```
+
+- [ ] **Step 6: Build to verify no errors**
+
+```bash
+npm run build 2>&1 | tail -5
+```
+
+Expected: build succeeds.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add index.html src/contexts/AuthContext.tsx src/App.tsx src/components/dashboard/AppSidebar.tsx src/pages/dashboard/HotelTraining.tsx
+git commit -m "feat(hotel-training): wire up route, nav item, CSP, and auth scopes"
+```
+
+---
+
+## Task 3: Supabase migration
+
+**Files:**
+- Create: `supabase/migrations/20260610120000_hotel_training.sql`
+
+- [ ] **Step 1: Create migration file**
+
+```sql
+-- supabase/migrations/20260610120000_hotel_training.sql
+
+create table public.training_sessions (
+  id                 uuid        primary key default gen_random_uuid(),
+  sharepoint_id      text        not null,
+  training_id        text        not null unique,
+  title              text        not null,
+  department         text        not null,
+  duration_minutes   integer     not null,
+  location           text,
+  remarks            text,
+  training_date      timestamptz not null,
+  trainer_names      text[]      not null,
+  total_participants integer     not null,
+  submitted_by       text        not null,
+  submitted_at       timestamptz not null default now(),
+  sync_status        text        not null default 'synced'
+    check (sync_status in ('synced', 'partial', 'failed'))
+);
+
+create table public.training_participants (
+  id             uuid    primary key default gen_random_uuid(),
+  training_id    text    not null references public.training_sessions(training_id),
+  row_no         integer not null,
+  employee_id    text    not null,
+  colleague_name text    not null,
+  position       text    not null,
+  section        text    not null,
+  department     text    not null,
+  unique (training_id, row_no),
+  unique (training_id, employee_id)
+);
+
+create table public.training_sync_queue (
+  id             uuid        primary key default gen_random_uuid(),
+  training_id    text        not null,
+  payload        jsonb       not null,
+  failure_reason text,
+  created_at     timestamptz not null default now(),
+  resolved       boolean     not null default false
+);
+
+alter table public.training_sessions    enable row level security;
+alter table public.training_participants enable row level security;
+alter table public.training_sync_queue  enable row level security;
+
+create policy "users can insert training sessions"
+  on public.training_sessions for insert to authenticated
+  with check (submitted_by = auth.jwt()->>'email');
+
+create policy "admins can read all training sessions"
+  on public.training_sessions for select to authenticated
+  using (lower(auth.jwt()->>'email') in (
+    'ahmed.mokhtar@2seasonshotels.com',
+    'amir.monir@2seasonshotels.com',
+    'xarmaigne.narciso@2seasonshotels.com'
+  ));
+
+create policy "users can insert participants for their sessions"
+  on public.training_participants for insert to authenticated
+  with check (
+    exists (
+      select 1 from public.training_sessions ts
+      where ts.training_id = training_participants.training_id
+        and lower(ts.submitted_by) = lower(auth.jwt()->>'email')
+    )
+  );
+
+create policy "admins can read all participants"
+  on public.training_participants for select to authenticated
+  using (lower(auth.jwt()->>'email') in (
+    'ahmed.mokhtar@2seasonshotels.com',
+    'amir.monir@2seasonshotels.com',
+    'xarmaigne.narciso@2seasonshotels.com'
+  ));
+
+create policy "users can insert sync queue entries"
+  on public.training_sync_queue for insert to authenticated
+  with check (true);
+
+create policy "admins can read sync queue"
+  on public.training_sync_queue for select to authenticated
+  using (lower(auth.jwt()->>'email') in (
+    'ahmed.mokhtar@2seasonshotels.com',
+    'amir.monir@2seasonshotels.com',
+    'xarmaigne.narciso@2seasonshotels.com'
+  ));
+```
+
+- [ ] **Step 2: Apply migration via Supabase CLI (if available) or dashboard**
+
+```bash
+# If supabase CLI is installed:
+npx supabase db push
+# Or apply via Supabase dashboard → SQL editor → paste the file contents
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add supabase/migrations/20260610120000_hotel_training.sql
+git commit -m "feat(hotel-training): add Supabase migration for training tables + RLS"
+```
+
+---
+
+## Task 4: SharePoint service layer
+
+**Files:**
+- Create: `src/services/sharepoint.ts`
+
+- [ ] **Step 1: Create the service file**
+
+```typescript
+// src/services/sharepoint.ts
+
+import {
+  MONTHLY_TRAINING_LIST_ID,
+  PARTICIPANTS_LIST_ID,
+  COLLEAGUES_LIST_ID,
+  SP_SITE_HOST,
+  SP_SITE_PATH,
+} from '@/lib/hotel-training-constants';
+import type { Colleague } from '@/types/hotel-training';
+
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+
+// Module-level cache for site ID (one resolve per browser session)
+let cachedSiteId: string | null = null;
+
+function delay(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms));
+}
+
+export async function graphRequest<T = unknown>(
+  token: string,
+  url: string,
+  options: RequestInit = {},
+  retryCount = 0,
+): Promise<T> {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers ?? {}),
+    },
+  });
+
+  if (res.status === 429) {
+    if (retryCount >= 3) throw new Error('SharePoint throttling: max retries exceeded');
+    const retryAfter = parseInt(res.headers.get('Retry-After') ?? '10', 10);
+    await delay(retryAfter * 1000);
+    return graphRequest<T>(token, url, options, retryCount + 1);
+  }
+
+  if (res.status === 401) {
+    const err = new Error('GRAPH_401');
+    throw err;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Graph API ${res.status}: ${text}`);
+  }
+
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+export async function getSiteId(token: string): Promise<string> {
+  if (cachedSiteId) return cachedSiteId;
+  const data = await graphRequest<{ id: string }>(
+    token,
+    `${GRAPH_BASE}/sites/${SP_SITE_HOST}:${SP_SITE_PATH}`,
+  );
+  cachedSiteId = data.id;
+  return cachedSiteId;
+}
+
+// Exported only for tests
+export function resetSiteIdCache() {
+  cachedSiteId = null;
+}
+
+// ── Column choices ───────────────────────────────────────────────────────────
+
+export interface ListColumnsResult {
+  departments: string[];
+  trainers: string[];
+  locationTypeAsString: string;
+  remarksTypeAsString: string;
+}
+
+export async function getListColumns(token: string): Promise<ListColumnsResult> {
+  const siteId = await getSiteId(token);
+  const data = await graphRequest<{
+    value: Array<{ name: string; typeAsString?: string; choice?: { choices: string[] } }>;
+  }>(token, `${GRAPH_BASE}/sites/${siteId}/lists/${MONTHLY_TRAINING_LIST_ID}/columns`);
+
+  const find = (name: string) => data.value.find(c => c.name === name);
+  const deptCol = find('field_1');
+  const trainerCol = find('TrainerName_x002e_');
+  const locationCol = find('field_5');
+  const remarksCol = find('field_7');
+
+  return {
+    departments: deptCol?.choice?.choices ?? [],
+    trainers: trainerCol?.choice?.choices ?? [],
+    locationTypeAsString: locationCol?.typeAsString ?? 'Number',
+    remarksTypeAsString: remarksCol?.typeAsString ?? 'Number',
+  };
+}
+
+// ── Colleagues ───────────────────────────────────────────────────────────────
+
+export async function getColleagues(token: string): Promise<Colleague[]> {
+  const siteId = await getSiteId(token);
+  const results: Colleague[] = [];
+  let url: string | null =
+    `${GRAPH_BASE}/sites/${siteId}/lists/${COLLEAGUES_LIST_ID}/items` +
+    `?$top=500&$expand=fields($select=EmployeeID,ColleagueName,Position,Section,Department,IsActive)`;
+
+  while (url) {
+    const data = await graphRequest<{
+      value: Array<{ id: string; fields: Record<string, unknown> }>;
+      '@odata.nextLink'?: string;
+    }>(token, url);
+
+    for (const item of data.value) {
+      const f = item.fields;
+      const dept =
+        f.Department && typeof f.Department === 'object'
+          ? String((f.Department as { Value: string }).Value ?? '')
+          : String(f.Department ?? '');
+      results.push({
+        id: item.id,
+        employeeId: String(f.EmployeeID ?? ''),
+        colleagueName: String(f.ColleagueName ?? ''),
+        position: String(f.Position ?? ''),
+        section: String(f.Section ?? ''),
+        department: dept,
+        isActive: Boolean(f.IsActive),
+      });
+    }
+
+    url = (data as Record<string, unknown>)['@odata.nextLink'] as string | null ?? null;
+  }
+
+  return results;
+}
+
+// ── Training session ─────────────────────────────────────────────────────────
+
+export interface TrainingSessionPayload {
+  title: string;
+  department: string;
+  durationMinutes: number;
+  totalParticipants: number;
+  location?: number | null;
+  remarks?: number | null;
+  trainingDate: string;
+  trainerNames: string[];
+}
+
+export async function createTrainingSession(
+  token: string,
+  data: TrainingSessionPayload,
+): Promise<string> {
+  const siteId = await getSiteId(token);
+  const result = await graphRequest<{ id: string }>(
+    token,
+    `${GRAPH_BASE}/sites/${siteId}/lists/${MONTHLY_TRAINING_LIST_ID}/items`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        fields: {
+          Title: data.title,
+          field_1: data.department,
+          field_4: data.durationMinutes,
+          field_5: data.location ?? null,
+          field_6: data.totalParticipants,
+          field_7: data.remarks ?? null,
+          field_8: data.trainingDate,
+          TrainerName_x002e_: data.trainerNames,
+        },
+      }),
+    },
+  );
+  return result.id;
+}
+
+// ── Participants ─────────────────────────────────────────────────────────────
+
+export interface ParticipantPayload {
+  trainingId: string;
+  rowNo: number;
+  employeeId: string;
+  colleagueName: string;
+  position: string;
+  section: string;
+  department: string;
+}
+
+export interface CreateParticipantsResult {
+  succeeded: ParticipantPayload[];
+  failed: Array<{ row: ParticipantPayload; error: string }>;
+}
+
+export async function createParticipants(
+  token: string,
+  rows: ParticipantPayload[],
+): Promise<CreateParticipantsResult> {
+  const siteId = await getSiteId(token);
+  const succeeded: ParticipantPayload[] = [];
+  const failed: Array<{ row: ParticipantPayload; error: string }> = [];
+
+  for (const row of rows) {
+    try {
+      await graphRequest(
+        token,
+        `${GRAPH_BASE}/sites/${siteId}/lists/${PARTICIPANTS_LIST_ID}/items`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            fields: {
+              Title: row.colleagueName,
+              TrainingID: row.trainingId,
+              RowNo: row.rowNo,
+              EmployeeID: row.employeeId,
+              ColleagueName: row.colleagueName,
+              Position: row.position,
+              Section: row.section,
+              Department: row.department,
+            },
+          }),
+        },
+      );
+      succeeded.push(row);
+    } catch (err) {
+      failed.push({ row, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+// ── Admin: colleagues ────────────────────────────────────────────────────────
+
+export interface NewColleaguePayload {
+  employeeId: string;
+  colleagueName: string;
+  position: string;
+  section: string;
+  department: string;
+}
+
+export async function createColleague(token: string, data: NewColleaguePayload): Promise<string> {
+  const siteId = await getSiteId(token);
+  const result = await graphRequest<{ id: string }>(
+    token,
+    `${GRAPH_BASE}/sites/${siteId}/lists/${COLLEAGUES_LIST_ID}/items`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        fields: {
+          Title: data.colleagueName,
+          EmployeeID: data.employeeId,
+          ColleagueName: data.colleagueName,
+          Position: data.position,
+          Section: data.section,
+          Department: data.department,
+          IsActive: true,
+        },
+      }),
+    },
+  );
+  return result.id;
+}
+
+export async function patchColleague(
+  token: string,
+  itemId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const siteId = await getSiteId(token);
+  await graphRequest(
+    token,
+    `${GRAPH_BASE}/sites/${siteId}/lists/${COLLEAGUES_LIST_ID}/items/${itemId}/fields`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  );
+}
+```
+
+- [ ] **Step 2: Build to verify TypeScript**
+
+```bash
+npm run build 2>&1 | grep -E "error|warning" | head -10
+```
+
+Expected: no errors.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/services/sharepoint.ts
+git commit -m "feat(hotel-training): add SharePoint Graph API service layer"
+```
+
+---
+
+## Task 5: React Query hooks — useColleagues + useListColumns
+
+**Files:**
+- Create: `src/hooks/useColleagues.ts`
+- Create: `src/hooks/useListColumns.ts`
+
+- [ ] **Step 1: Create `useColleagues`**
+
+```typescript
+// src/hooks/useColleagues.ts
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { getColleagues } from '@/services/sharepoint';
+import type { Colleague } from '@/types/hotel-training';
+
+export function useColleagues() {
+  const { session } = useAuth();
+  const token = session?.provider_token ?? '';
+
+  return useQuery<Colleague[], Error>({
+    queryKey: ['colleagues', token],
+    queryFn: () => getColleagues(token),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!token,
+  });
+}
+```
+
+- [ ] **Step 2: Create `useListColumns`**
+
+```typescript
+// src/hooks/useListColumns.ts
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { getListColumns, type ListColumnsResult } from '@/services/sharepoint';
+
+export function useListColumns() {
+  const { session } = useAuth();
+  const token = session?.provider_token ?? '';
+
+  return useQuery<ListColumnsResult, Error>({
+    queryKey: ['listColumns', token],
+    queryFn: () => getListColumns(token),
+    staleTime: 30 * 60 * 1000,
+    enabled: !!token,
+  });
+}
+```
+
+- [ ] **Step 3: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+Expected: no errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/hooks/useColleagues.ts src/hooks/useListColumns.ts
+git commit -m "feat(hotel-training): add useColleagues and useListColumns React Query hooks"
+```
+
+---
+
+## Task 6: useTrainingSubmit mutation
+
+**Files:**
+- Create: `src/hooks/useTrainingSubmit.ts`
+
+- [ ] **Step 1: Create the mutation hook**
+
+```typescript
+// src/hooks/useTrainingSubmit.ts
+import { useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  createTrainingSession,
+  createParticipants,
+  type ParticipantPayload,
+} from '@/services/sharepoint';
+import type { TrainingDetailsValues, ParticipantRow } from '@/types/hotel-training';
+
+function generateTrainingId(): string {
+  const now = new Date();
+  const pad = (n: number, d = 2) => String(n).padStart(d, '0');
+  return `TRN-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}
+
+export interface SubmitInput {
+  trainingDetails: TrainingDetailsValues;
+  participants: ParticipantRow[];
+}
+
+export interface SubmitResult {
+  trainingId: string;
+  sharepointId: string;
+  syncStatus: 'synced' | 'partial';
+  failedParticipants: Array<{ row: ParticipantPayload; error: string }>;
+}
+
+export function useTrainingSubmit() {
+  const { session } = useAuth();
+
+  return useMutation<SubmitResult, Error, SubmitInput>({
+    mutationFn: async ({ trainingDetails, participants }) => {
+      const token = session?.provider_token;
+      if (!token) throw new Error('No Microsoft session token. Please sign in again.');
+
+      // Validate completed rows match totalParticipants
+      const completed = participants.filter(p => p.colleague !== null);
+      if (completed.length !== trainingDetails.totalParticipants) {
+        throw new Error(
+          `Participant count mismatch: expected ${trainingDetails.totalParticipants}, got ${completed.length}`,
+        );
+      }
+
+      // Build training date ISO string
+      const d = new Date(trainingDetails.date);
+      d.setHours(trainingDetails.hour, trainingDetails.minute, 0, 0);
+      const isoDate = d.toISOString();
+
+      const trainingId = generateTrainingId();
+
+      // Step 1: POST to SharePoint Monthly_Training
+      const sharepointId = await createTrainingSession(token, {
+        title: trainingDetails.title,
+        department: trainingDetails.department,
+        durationMinutes: trainingDetails.durationMinutes,
+        totalParticipants: trainingDetails.totalParticipants,
+        location: trainingDetails.location ?? null,
+        remarks: trainingDetails.remarks ?? null,
+        trainingDate: isoDate,
+        trainerNames: trainingDetails.trainerNames,
+      });
+
+      // Step 2: POST participant rows
+      const rows: ParticipantPayload[] = participants.map((p, i) => ({
+        trainingId,
+        rowNo: i + 1,
+        employeeId: p.colleague!.employeeId,
+        colleagueName: p.colleague!.colleagueName,
+        position: p.colleague!.position,
+        section: p.colleague!.section,
+        department: p.colleague!.department,
+      }));
+
+      const { failed } = await createParticipants(token, rows);
+
+      if (failed.length > 0) {
+        // Keep draft — caller shows retry UI
+        return { trainingId, sharepointId, syncStatus: 'partial', failedParticipants: failed };
+      }
+
+      // Step 3: Supabase sync (best-effort — do not throw on failure)
+      const userEmail = session?.user?.email ?? '';
+      let syncStatus: 'synced' | 'partial' = 'synced';
+
+      try {
+        const { error: sessionError } = await supabase.from('training_sessions').insert({
+          sharepoint_id: sharepointId,
+          training_id: trainingId,
+          title: trainingDetails.title,
+          department: trainingDetails.department,
+          duration_minutes: trainingDetails.durationMinutes,
+          location: trainingDetails.location != null ? String(trainingDetails.location) : null,
+          remarks: trainingDetails.remarks != null ? String(trainingDetails.remarks) : null,
+          training_date: isoDate,
+          trainer_names: trainingDetails.trainerNames,
+          total_participants: trainingDetails.totalParticipants,
+          submitted_by: userEmail,
+        });
+
+        if (sessionError) throw sessionError;
+
+        const { error: partErr } = await supabase.from('training_participants').insert(
+          participants.map((p, i) => ({
+            training_id: trainingId,
+            row_no: i + 1,
+            employee_id: p.colleague!.employeeId,
+            colleague_name: p.colleague!.colleagueName,
+            position: p.colleague!.position,
+            section: p.colleague!.section,
+            department: p.colleague!.department,
+          })),
+        );
+
+        if (partErr) {
+          await supabase
+            .from('training_sessions')
+            .update({ sync_status: 'partial' })
+            .eq('training_id', trainingId);
+          throw partErr;
+        }
+      } catch (err) {
+        syncStatus = 'partial';
+        await supabase
+          .from('training_sync_queue')
+          .insert({
+            training_id: trainingId,
+            payload: { trainingDetails, participants: participants.map(p => p.colleague), sharepointId },
+            failure_reason: err instanceof Error ? err.message : String(err),
+          })
+          .catch(() => {});
+      }
+
+      return { trainingId, sharepointId, syncStatus, failedParticipants: [] };
+    },
+  });
+}
+```
+
+- [ ] **Step 2: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+Expected: no errors. (May warn about Supabase table types not existing yet — acceptable until generated types are updated.)
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/hooks/useTrainingSubmit.ts
+git commit -m "feat(hotel-training): add useTrainingSubmit mutation with dual-write logic"
+```
+
+---
+
+## Task 7: TrainingDetailsForm — Step 1
+
+**Files:**
+- Create: `src/components/hotel-training/TrainingDetailsForm.tsx`
+
+- [ ] **Step 1: Create the component**
+
+```typescript
+// src/components/hotel-training/TrainingDetailsForm.tsx
+import React from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { format } from 'date-fns';
+import { CalendarIcon, ChevronDown, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { DURATION_OPTIONS } from '@/lib/hotel-training-constants';
+import type { TrainingDetailsValues } from '@/types/hotel-training';
+
+const DURATION_MINUTES = DURATION_OPTIONS.map(d => d.minutes) as [number, ...number[]];
+
+const schema = z.object({
+  title: z.string().min(1, 'Training title is required'),
+  department: z.string().min(1, 'Department is required'),
+  durationMinutes: z.number({ required_error: 'Duration is required' }).refine(
+    v => DURATION_MINUTES.includes(v),
+    'Invalid duration',
+  ),
+  totalParticipants: z.number({ required_error: 'Total participants is required' }).int().min(1, 'Must be at least 1'),
+  location: z.number().optional(),
+  remarks: z.number().optional(),
+  date: z.date({ required_error: 'Date is required' }),
+  hour: z.number().int().min(0).max(23),
+  minute: z.number().int().min(0).max(55).refine(v => v % 5 === 0, 'Minutes must be in 5-min increments'),
+  trainerNames: z.array(z.string()).min(1, 'At least one trainer is required'),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+interface Props {
+  defaultValues?: TrainingDetailsValues | null;
+  departments: string[];
+  trainers: string[];
+  onNext: (values: TrainingDetailsValues) => void;
+}
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+
+export function TrainingDetailsForm({ defaultValues, departments, trainers, onNext }: Props) {
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: defaultValues
+      ? {
+          ...defaultValues,
+          date: defaultValues.date instanceof Date ? defaultValues.date : new Date(defaultValues.date),
+        }
+      : {
+          trainerNames: [],
+          hour: 9,
+          minute: 0,
+        },
+  });
+
+  const selectedTrainers = watch('trainerNames') ?? [];
+  const selectedDate = watch('date');
+  const [trainerOpen, setTrainerOpen] = React.useState(false);
+
+  const onSubmit = (values: FormValues) => {
+    if (values.date < new Date(new Date().setHours(0, 0, 0, 0))) {
+      toast.warning('Training date is in the past. Continue?', { duration: 3000 });
+    }
+    onNext(values as TrainingDetailsValues);
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {/* Training Title */}
+      <div className="space-y-1.5">
+        <Label htmlFor="title">Training Title <span className="text-destructive">*</span></Label>
+        <Input id="title" {...register('title')} placeholder="e.g. Fire Safety Training" />
+        {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
+      </div>
+
+      {/* Department */}
+      <div className="space-y-1.5">
+        <Label>Department <span className="text-destructive">*</span></Label>
+        <Controller
+          name="department"
+          control={control}
+          render={({ field }) => (
+            <Select onValueChange={field.onChange} value={field.value}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map(d => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.department && <p className="text-sm text-destructive">{errors.department.message}</p>}
+      </div>
+
+      {/* Duration */}
+      <div className="space-y-1.5">
+        <Label>Training Duration <span className="text-destructive">*</span></Label>
+        <Controller
+          name="durationMinutes"
+          control={control}
+          render={({ field }) => (
+            <Select
+              onValueChange={v => field.onChange(parseInt(v, 10))}
+              value={field.value?.toString()}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                {DURATION_OPTIONS.map(d => (
+                  <SelectItem key={d.minutes} value={d.minutes.toString()}>{d.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.durationMinutes && <p className="text-sm text-destructive">{errors.durationMinutes.message}</p>}
+      </div>
+
+      {/* Total Participants */}
+      <div className="space-y-1.5">
+        <Label htmlFor="totalParticipants">Total Participants <span className="text-destructive">*</span></Label>
+        <Controller
+          name="totalParticipants"
+          control={control}
+          render={({ field }) => (
+            <Input
+              id="totalParticipants"
+              type="number"
+              min={1}
+              value={field.value ?? ''}
+              onChange={e => field.onChange(parseInt(e.target.value, 10) || undefined)}
+            />
+          )}
+        />
+        {errors.totalParticipants && <p className="text-sm text-destructive">{errors.totalParticipants.message}</p>}
+      </div>
+
+      {/* Date */}
+      <div className="space-y-1.5">
+        <Label>Date <span className="text-destructive">*</span></Label>
+        <Controller
+          name="date"
+          control={control}
+          render={({ field }) => (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn('w-full justify-start text-left font-normal', !field.value && 'text-muted-foreground')}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {field.value ? format(field.value, 'PPP') : 'Pick a date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={field.value}
+                  onSelect={field.onChange}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+        />
+        {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+      </div>
+
+      {/* Time */}
+      <div className="space-y-1.5">
+        <Label>Time <span className="text-destructive">*</span></Label>
+        <div className="flex gap-2">
+          <Controller
+            name="hour"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={v => field.onChange(parseInt(v, 10))} value={field.value?.toString()}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="Hour" />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOURS.map(h => (
+                    <SelectItem key={h} value={h.toString()}>{String(h).padStart(2, '0')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <span className="self-center text-muted-foreground">:</span>
+          <Controller
+            name="minute"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={v => field.onChange(parseInt(v, 10))} value={field.value?.toString()}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="Min" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MINUTES.map(m => (
+                    <SelectItem key={m} value={m.toString()}>{String(m).padStart(2, '0')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Trainer Name (multi-select) */}
+      <div className="space-y-1.5">
+        <Label>Trainer Name <span className="text-destructive">*</span></Label>
+        <Popover open={trainerOpen} onOpenChange={setTrainerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" className="w-full justify-between h-auto min-h-9 flex-wrap gap-1">
+              {selectedTrainers.length > 0
+                ? selectedTrainers.map(t => (
+                    <Badge
+                      key={t}
+                      variant="secondary"
+                      className="cursor-pointer"
+                      onClick={e => {
+                        e.stopPropagation();
+                        setValue('trainerNames', selectedTrainers.filter(x => x !== t));
+                      }}
+                    >
+                      {t} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  ))
+                : <span className="text-muted-foreground font-normal">Select trainers…</span>}
+              <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search trainers…" />
+              <CommandEmpty>No trainer found.</CommandEmpty>
+              <CommandGroup className="max-h-60 overflow-y-auto">
+                {trainers.map(t => (
+                  <CommandItem
+                    key={t}
+                    value={t}
+                    onSelect={() => {
+                      const next = selectedTrainers.includes(t)
+                        ? selectedTrainers.filter(x => x !== t)
+                        : [...selectedTrainers, t];
+                      setValue('trainerNames', next, { shouldValidate: true });
+                    }}
+                  >
+                    <span className={cn('mr-2 h-4 w-4', selectedTrainers.includes(t) ? 'opacity-100' : 'opacity-0')}>✓</span>
+                    {t}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
+        {errors.trainerNames && <p className="text-sm text-destructive">{errors.trainerNames.message}</p>}
+      </div>
+
+      {/* Location (optional) */}
+      <div className="space-y-1.5">
+        <Label htmlFor="location">Location</Label>
+        <Controller
+          name="location"
+          control={control}
+          render={({ field }) => (
+            <Input
+              id="location"
+              type="number"
+              value={field.value ?? ''}
+              onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+            />
+          )}
+        />
+      </div>
+
+      {/* Remarks (optional) */}
+      <div className="space-y-1.5">
+        <Label htmlFor="remarks">Remarks</Label>
+        <Controller
+          name="remarks"
+          control={control}
+          render={({ field }) => (
+            <Input
+              id="remarks"
+              type="number"
+              value={field.value ?? ''}
+              onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+            />
+          )}
+        />
+      </div>
+
+      <Button type="submit" className="w-full">
+        Next: Add Participants →
+      </Button>
+    </form>
+  );
+}
+```
+
+- [ ] **Step 2: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/components/hotel-training/TrainingDetailsForm.tsx
+git commit -m "feat(hotel-training): add TrainingDetailsForm (Step 1)"
+```
+
+---
+
+## Task 8: ParticipantRow + ParticipantsStep — Step 2
+
+**Files:**
+- Create: `src/components/hotel-training/ParticipantRow.tsx`
+- Create: `src/components/hotel-training/ParticipantsStep.tsx`
+
+- [ ] **Step 1: Create `ParticipantRow`**
+
+```typescript
+// src/components/hotel-training/ParticipantRow.tsx
+import React, { useState } from 'react';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
+import type { Colleague, ParticipantRow as ParticipantRowType } from '@/types/hotel-training';
+
+interface Props {
+  row: ParticipantRowType;
+  allColleagues: Colleague[];
+  selectedEmployeeIds: Set<string>;
+  onChange: (colleague: Colleague | null) => void;
+}
+
+export function ParticipantRow({ row, allColleagues, selectedEmployeeIds, onChange }: Props) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const available = allColleagues.filter(
+    c =>
+      c.isActive &&
+      (c.employeeId !== row.colleague?.employeeId
+        ? !selectedEmployeeIds.has(c.employeeId)
+        : true) &&
+      (search === '' ||
+        c.colleagueName.toLowerCase().includes(search.toLowerCase()) ||
+        c.employeeId.includes(search)),
+  );
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card">
+      <span className="text-sm font-medium text-muted-foreground w-6 pt-2 shrink-0">{row.rowNo}</span>
+
+      <div className="flex-1 space-y-2">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              className="w-full justify-start font-normal"
+              data-testid={`participant-select-${row.rowNo}`}
+            >
+              {row.colleague
+                ? `${row.colleague.colleagueName} (${row.colleague.employeeId})`
+                : <span className="text-muted-foreground">Search by name or Employee ID…</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Type name or ID…"
+                value={search}
+                onValueChange={setSearch}
+              />
+              <CommandEmpty>No active colleague found.</CommandEmpty>
+              <CommandGroup className="max-h-48 overflow-y-auto">
+                {available.map(c => (
+                  <CommandItem
+                    key={c.id}
+                    value={`${c.colleagueName} ${c.employeeId}`}
+                    onSelect={() => {
+                      onChange(c);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                  >
+                    <span className="font-medium">{c.colleagueName}</span>
+                    <span className="ml-2 text-muted-foreground text-xs">ID: {c.employeeId}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        {row.colleague && (
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <Badge variant="outline">Position: {row.colleague.position}</Badge>
+            <Badge variant="outline">Section: {row.colleague.section}</Badge>
+            <Badge variant="outline">Dept: {row.colleague.department}</Badge>
+          </div>
+        )}
+      </div>
+
+      {row.colleague && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8 text-muted-foreground hover:text-destructive"
+          onClick={() => onChange(null)}
+          aria-label="Clear participant"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: Create `ParticipantsStep`**
+
+```typescript
+// src/components/hotel-training/ParticipantsStep.tsx
+import React, { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ParticipantRow } from './ParticipantRow';
+import type { Colleague, ParticipantRow as ParticipantRowType } from '@/types/hotel-training';
+
+interface Props {
+  participants: ParticipantRowType[];
+  allColleagues: Colleague[];
+  onBack: () => void;
+  onNext: (participants: ParticipantRowType[]) => void;
+  onChange: (index: number, colleague: Colleague | null) => void;
+}
+
+export function ParticipantsStep({ participants, allColleagues, onBack, onNext, onChange }: Props) {
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedIds = useMemo(
+    () => new Set(participants.filter(p => p.colleague).map(p => p.colleague!.employeeId)),
+    [participants],
+  );
+
+  const handleNext = () => {
+    const incomplete = participants.some(p => p.colleague === null);
+    if (incomplete) {
+      setError('Please select all participants before continuing.');
+      return;
+    }
+
+    const ids = participants.map(p => p.colleague!.employeeId);
+    const hasDuplicate = ids.length !== new Set(ids).size;
+    if (hasDuplicate) {
+      setError('Duplicate participants are not allowed.');
+      return;
+    }
+
+    setError(null);
+    onNext(participants);
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Select a colleague for each row. Only active colleagues are shown.
+      </p>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="space-y-2">
+        {participants.map((row, i) => (
+          <ParticipantRow
+            key={row.rowNo}
+            row={row}
+            allColleagues={allColleagues}
+            selectedEmployeeIds={selectedIds}
+            onChange={colleague => onChange(i, colleague)}
+          />
+        ))}
+      </div>
+
+      <div className="flex justify-between pt-2">
+        <Button variant="outline" onClick={onBack}>← Back</Button>
+        <Button onClick={handleNext}>Next: Review →</Button>
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/hotel-training/ParticipantRow.tsx src/components/hotel-training/ParticipantsStep.tsx
+git commit -m "feat(hotel-training): add ParticipantRow and ParticipantsStep (Step 2)"
+```
+
+---
+
+## Task 9: ConfirmationStep — Step 3
+
+**Files:**
+- Create: `src/components/hotel-training/ConfirmationStep.tsx`
+
+- [ ] **Step 1: Create the component**
+
+```typescript
+// src/components/hotel-training/ConfirmationStep.tsx
+import React from 'react';
+import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Loader2 } from 'lucide-react';
+import { DURATION_OPTIONS } from '@/lib/hotel-training-constants';
+import type { TrainingDetailsValues, ParticipantRow } from '@/types/hotel-training';
+
+interface Props {
+  trainingDetails: TrainingDetailsValues;
+  participants: ParticipantRow[];
+  isPending: boolean;
+  onBack: () => void;
+  onConfirm: () => void;
+}
+
+export function ConfirmationStep({ trainingDetails, participants, isPending, onBack, onConfirm }: Props) {
+  const durationLabel =
+    DURATION_OPTIONS.find(d => d.minutes === trainingDetails.durationMinutes)?.label ??
+    `${trainingDetails.durationMinutes} min`;
+
+  const d = new Date(trainingDetails.date);
+  d.setHours(trainingDetails.hour, trainingDetails.minute, 0, 0);
+  const dateLabel = format(d, 'PPPp');
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Training Details</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <span className="text-muted-foreground">Title</span>
+          <span className="font-medium">{trainingDetails.title}</span>
+          <span className="text-muted-foreground">Department</span>
+          <span>{trainingDetails.department}</span>
+          <span className="text-muted-foreground">Duration</span>
+          <span>{durationLabel}</span>
+          <span className="text-muted-foreground">Date & Time</span>
+          <span>{dateLabel}</span>
+          <span className="text-muted-foreground">Trainers</span>
+          <span className="flex flex-wrap gap-1">
+            {trainingDetails.trainerNames.map(t => (
+              <Badge key={t} variant="secondary">{t}</Badge>
+            ))}
+          </span>
+          <span className="text-muted-foreground">Total Participants</span>
+          <span>{trainingDetails.totalParticipants}</span>
+          {trainingDetails.location != null && (
+            <>
+              <span className="text-muted-foreground">Location</span>
+              <span>{trainingDetails.location}</span>
+            </>
+          )}
+          {trainingDetails.remarks != null && (
+            <>
+              <span className="text-muted-foreground">Remarks</span>
+              <span>{trainingDetails.remarks}</span>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Participants ({participants.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">#</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Position</TableHead>
+                <TableHead>Section</TableHead>
+                <TableHead>Department</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {participants.map(p => (
+                <TableRow key={p.rowNo}>
+                  <TableCell>{p.rowNo}</TableCell>
+                  <TableCell className="font-medium">{p.colleague!.colleagueName}</TableCell>
+                  <TableCell>{p.colleague!.employeeId}</TableCell>
+                  <TableCell>{p.colleague!.position}</TableCell>
+                  <TableCell>{p.colleague!.section}</TableCell>
+                  <TableCell>{p.colleague!.department}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={onBack} disabled={isPending}>← Back to edit</Button>
+        <Button onClick={onConfirm} disabled={isPending}>
+          {isPending ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
+          ) : (
+            'Confirm & Submit'
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/components/hotel-training/ConfirmationStep.tsx
+git commit -m "feat(hotel-training): add ConfirmationStep (Step 3)"
+```
+
+---
+
+## Task 10: HotelTraining page — orchestrator, stepper, draft autosave
+
+**Files:**
+- Replace: `src/pages/dashboard/HotelTraining.tsx` (placeholder → full implementation)
+
+- [ ] **Step 1: Write the full page component**
+
+```typescript
+// src/pages/dashboard/HotelTraining.tsx
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Check, CircleDot, Circle } from 'lucide-react';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { SectionHeader } from '@/components/dashboard/SectionHeader';
+import { TrainingDetailsForm } from '@/components/hotel-training/TrainingDetailsForm';
+import { ParticipantsStep } from '@/components/hotel-training/ParticipantsStep';
+import { ConfirmationStep } from '@/components/hotel-training/ConfirmationStep';
+import { AdminPanel } from '@/components/hotel-training/AdminPanel';
+import { useColleagues } from '@/hooks/useColleagues';
+import { useListColumns } from '@/hooks/useListColumns';
+import { useTrainingSubmit } from '@/hooks/useTrainingSubmit';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  ADMIN_EMAILS,
+  DRAFT_KEY,
+} from '@/lib/hotel-training-constants';
+import type {
+  TrainingDetailsValues,
+  ParticipantRow,
+  WizardStep,
+  SuccessState,
+  HotelTrainingDraft,
+  Colleague,
+} from '@/types/hotel-training';
+
+const DEBOUNCE_MS = 800;
+
+function makeEmptyRows(count: number): ParticipantRow[] {
+  return Array.from({ length: count }, (_, i) => ({ rowNo: i + 1, colleague: null }));
+}
+
+const STEP_LABELS: Record<WizardStep, string> = {
+  1: 'Training Details',
+  2: 'Participants',
+  3: 'Confirm & Submit',
+};
+
+export default function HotelTraining() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
+
+  const { data: colleagues = [], isLoading: colleaguesLoading } = useColleagues();
+  const { data: columns, isLoading: columnsLoading } = useListColumns();
+
+  const [step, setStep] = useState<WizardStep>(1);
+  const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValues | null>(null);
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [successState, setSuccessState] = useState<SuccessState>(null);
+  const [draftDate, setDraftDate] = useState<string | null>(null);
+  const [reduceConfirm, setReduceConfirm] = useState<{
+    newCount: number;
+    pendingDetails: TrainingDetailsValues;
+  } | null>(null);
+
+  const draftKeyStr = DRAFT_KEY(user?.email ?? 'unknown');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Draft: check on mount ──────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKeyStr);
+      if (raw) {
+        const draft: HotelTrainingDraft = JSON.parse(raw);
+        setDraftDate(draft.savedAt);
+      }
+    } catch { /* ignore */ }
+  }, [draftKeyStr]);
+
+  // ── Draft: debounced autosave ─────────────────────────────────────────────
+  useEffect(() => {
+    if (successState) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      try {
+        const draft: HotelTrainingDraft = {
+          trainingDetails,
+          participants,
+          step,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(draftKeyStr, JSON.stringify(draft));
+      } catch { /* ignore */ }
+    }, DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [trainingDetails, participants, step, draftKeyStr, successState]);
+
+  const restoreDraft = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(draftKeyStr);
+      if (!raw) return;
+      const draft: HotelTrainingDraft = JSON.parse(raw);
+      if (draft.trainingDetails) {
+        // Ensure date is a Date object
+        setTrainingDetails({
+          ...draft.trainingDetails,
+          date: new Date(draft.trainingDetails.date),
+        });
+      }
+      setParticipants(draft.participants ?? []);
+      setStep(1); // Always restore to Step 1
+      setDraftDate(null);
+    } catch { /* ignore */ }
+  }, [draftKeyStr]);
+
+  const discardDraft = useCallback(() => {
+    localStorage.removeItem(draftKeyStr);
+    setDraftDate(null);
+  }, [draftKeyStr]);
+
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(draftKeyStr);
+    setDraftDate(null);
+  }, [draftKeyStr]);
+
+  // ── Submit mutation ────────────────────────────────────────────────────────
+  const { mutate: submitTraining, isPending } = useTrainingSubmit();
+
+  const handleConfirmSubmit = () => {
+    if (!trainingDetails) return;
+    submitTraining(
+      { trainingDetails, participants },
+      {
+        onSuccess: result => {
+          clearDraft();
+          if (result.failedParticipants.length > 0) {
+            // Partial SP failure — stay on step 3, show retry UI
+            toast.error(`Training saved, but ${result.failedParticipants.length} participant row(s) failed to save. Please retry.`);
+            return;
+          }
+          setSuccessState(result.syncStatus === 'partial' ? 'partial' : 'full');
+        },
+        onError: err => {
+          toast.error(err.message ?? 'Submission failed. Your draft is saved.');
+        },
+      },
+    );
+  };
+
+  // ── Participant helpers ────────────────────────────────────────────────────
+  const handleParticipantChange = (index: number, colleague: Colleague | null) => {
+    setParticipants(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], colleague };
+      return next;
+    });
+  };
+
+  const handleStep1Next = (values: TrainingDetailsValues) => {
+    const newCount = values.totalParticipants;
+    const prevCount = trainingDetails?.totalParticipants ?? 0;
+
+    if (participants.length > 0 && newCount < prevCount) {
+      const rowsToTrim = participants.slice(newCount);
+      const hasFilled = rowsToTrim.some(r => r.colleague !== null);
+      if (hasFilled) {
+        setReduceConfirm({ newCount, pendingDetails: values });
+        return;
+      }
+    }
+
+    applyStep1(values, newCount, prevCount);
+  };
+
+  const applyStep1 = (values: TrainingDetailsValues, newCount: number, prevCount: number) => {
+    setTrainingDetails(values);
+    if (newCount > prevCount) {
+      setParticipants(prev => [
+        ...prev,
+        ...makeEmptyRows(newCount - prev.length).map((r, i) => ({
+          ...r,
+          rowNo: prev.length + i + 1,
+        })),
+      ]);
+    } else if (newCount < prevCount) {
+      setParticipants(prev => prev.slice(0, newCount));
+    } else if (participants.length === 0) {
+      setParticipants(makeEmptyRows(newCount));
+    }
+    setStep(2);
+  };
+
+  const handleReduceConfirm = () => {
+    if (!reduceConfirm) return;
+    applyStep1(reduceConfirm.pendingDetails, reduceConfirm.newCount, trainingDetails?.totalParticipants ?? 0);
+    setReduceConfirm(null);
+  };
+
+  // ── Success screen ─────────────────────────────────────────────────────────
+  if (successState) {
+    return (
+      <div className="max-w-2xl mx-auto py-10 flex flex-col items-center gap-6 text-center">
+        {successState === 'full' ? (
+          <>
+            <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h2 className="text-xl font-semibold">Training submitted successfully.</h2>
+          </>
+        ) : (
+          <>
+            <div className="h-16 w-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+              <span className="text-2xl">⚠</span>
+            </div>
+            <h2 className="text-xl font-semibold">Training saved to SharePoint. Dashboard sync pending.</h2>
+            <p className="text-sm text-muted-foreground">Your training record is safely saved. The analytics dashboard will sync shortly.</p>
+          </>
+        )}
+        <div className="flex gap-3">
+          <Button
+            onClick={() => {
+              setSuccessState(null);
+              setStep(1);
+              setTrainingDetails(null);
+              setParticipants([]);
+            }}
+          >
+            Register New Training
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/')}>
+            ← Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const isLoading = colleaguesLoading || columnsLoading;
+
+  const registerTrainingContent = (
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Draft restore banner */}
+      {draftDate && (
+        <Alert>
+          <AlertDescription className="flex items-center justify-between gap-2 flex-wrap">
+            <span>
+              You have an unsaved draft from {format(new Date(draftDate), 'PPp')}.
+            </span>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={restoreDraft}>Restore</Button>
+              <Button size="sm" variant="outline" onClick={discardDraft}>Discard</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Reduce-participants confirmation dialog */}
+      {reduceConfirm && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex items-center justify-between gap-2 flex-wrap">
+            <span>Reducing participant count will remove filled entries. Continue?</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="destructive" onClick={handleReduceConfirm}>Yes, reduce</Button>
+              <Button size="sm" variant="outline" onClick={() => setReduceConfirm(null)}>Cancel</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Stepper */}
+      <div className="flex items-center gap-2 text-sm">
+        {([1, 2, 3] as WizardStep[]).map((s, idx) => (
+          <React.Fragment key={s}>
+            <button
+              type="button"
+              className={`flex items-center gap-1.5 ${step === s ? 'font-semibold text-primary' : s < step ? 'text-muted-foreground cursor-pointer hover:text-foreground' : 'text-muted-foreground/50 cursor-default'}`}
+              onClick={() => { if (s < step) setStep(s); }}
+              disabled={s > step}
+            >
+              {s < step
+                ? <Check className="h-4 w-4 text-primary" />
+                : s === step
+                  ? <CircleDot className="h-4 w-4 text-primary" />
+                  : <Circle className="h-4 w-4" />}
+              {STEP_LABELS[s]}
+            </button>
+            {idx < 2 && <span className="flex-1 h-px bg-border" />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
+          Loading training data…
+        </div>
+      ) : (
+        <>
+          {step === 1 && (
+            <TrainingDetailsForm
+              defaultValues={trainingDetails}
+              departments={columns?.departments ?? []}
+              trainers={columns?.trainers ?? []}
+              onNext={handleStep1Next}
+            />
+          )}
+          {step === 2 && (
+            <ParticipantsStep
+              participants={participants}
+              allColleagues={colleagues}
+              onBack={() => setStep(1)}
+              onNext={() => setStep(3)}
+              onChange={handleParticipantChange}
+            />
+          )}
+          {step === 3 && trainingDetails && (
+            <ConfirmationStep
+              trainingDetails={trainingDetails}
+              participants={participants}
+              isPending={isPending}
+              onBack={() => setStep(2)}
+              onConfirm={handleConfirmSubmit}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Hotel Training"
+        subtitle="Register monthly training sessions and manage participants."
+      />
+
+      {isAdmin ? (
+        <Tabs defaultValue="register">
+          <TabsList>
+            <TabsTrigger value="register">Register Training</TabsTrigger>
+            <TabsTrigger value="admin">Manage Members</TabsTrigger>
+          </TabsList>
+          <TabsContent value="register" className="pt-4">
+            {registerTrainingContent}
+          </TabsContent>
+          <TabsContent value="admin" className="pt-4">
+            <AdminPanel />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        registerTrainingContent
+      )}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+Expected: no errors.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/pages/dashboard/HotelTraining.tsx
+git commit -m "feat(hotel-training): implement HotelTraining page with stepper, wizard state, and draft autosave"
+```
+
+---
+
+## Task 11: AddMemberForm
+
+**Files:**
+- Create: `src/components/hotel-training/AddMemberForm.tsx`
+
+- [ ] **Step 1: Create the component**
+
+```typescript
+// src/components/hotel-training/AddMemberForm.tsx
+import React from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useAuth } from '@/hooks/useAuth';
+import { useColleagues } from '@/hooks/useColleagues';
+import { createColleague } from '@/services/sharepoint';
+import { ADMIN_EMAILS, DEPARTMENT_SECTIONS } from '@/lib/hotel-training-constants';
+
+const schema = z.object({
+  employeeId: z.string().regex(/^\d+$/, 'Employee ID must contain numbers only'),
+  name: z.string().regex(/^[A-Za-z ]+$/, 'Name must contain letters only').min(1, 'Name is required'),
+  position: z.string().regex(/^[A-Za-z ]+$/, 'Position must contain letters only').min(1, 'Position is required'),
+  department: z.string().min(1, 'Department is required'),
+  section: z.string().min(1, 'Section is required'),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+export function AddMemberForm() {
+  const { session, user } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: colleagues = [] } = useColleagues();
+
+  const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+
+  const selectedDept = watch('department');
+  const sections = selectedDept ? (DEPARTMENT_SECTIONS[selectedDept] ?? []) : [];
+
+  const onSubmit = async (values: FormValues) => {
+    if (!isAdmin) {
+      toast.error('Unauthorised action.');
+      return;
+    }
+
+    const token = session?.provider_token;
+    if (!token) {
+      toast.error('No Microsoft session token. Please sign in again.');
+      return;
+    }
+
+    // Check uniqueness (active + inactive)
+    const exists = colleagues.some(c => c.employeeId === values.employeeId);
+    if (exists) {
+      setError('employeeId', { message: 'This Employee ID already exists.' });
+      return;
+    }
+
+    try {
+      await createColleague(token, {
+        employeeId: values.employeeId,
+        colleagueName: values.name,
+        position: values.position,
+        section: values.section,
+        department: values.department,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ['colleagues'] });
+      reset();
+      toast.success('New member added successfully.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add member.');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 max-w-md">
+      <div className="space-y-1.5">
+        <Label htmlFor="employeeId">Employee ID <span className="text-destructive">*</span></Label>
+        <Input id="employeeId" {...register('employeeId')} placeholder="e.g. 12345" />
+        {errors.employeeId && <p className="text-sm text-destructive">{errors.employeeId.message}</p>}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
+        <Input id="name" {...register('name')} placeholder="e.g. John Smith" />
+        {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="position">Position <span className="text-destructive">*</span></Label>
+        <Input id="position" {...register('position')} placeholder="e.g. Supervisor" />
+        {errors.position && <p className="text-sm text-destructive">{errors.position.message}</p>}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Department <span className="text-destructive">*</span></Label>
+        <Controller
+          name="department"
+          control={control}
+          render={({ field }) => (
+            <Select onValueChange={field.onChange} value={field.value}>
+              <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+              <SelectContent>
+                {Object.keys(DEPARTMENT_SECTIONS).map(d => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.department && <p className="text-sm text-destructive">{errors.department.message}</p>}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Section <span className="text-destructive">*</span></Label>
+        <Controller
+          name="section"
+          control={control}
+          render={({ field }) => (
+            <Select onValueChange={field.onChange} value={field.value} disabled={!selectedDept}>
+              <SelectTrigger><SelectValue placeholder={selectedDept ? 'Select section' : 'Select department first'} /></SelectTrigger>
+              <SelectContent>
+                {sections.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.section && <p className="text-sm text-destructive">{errors.section.message}</p>}
+      </div>
+
+      <Button type="submit" disabled={isSubmitting} className="w-full">
+        {isSubmitting ? 'Adding…' : 'Add Member'}
+      </Button>
+    </form>
+  );
+}
+```
+
+- [ ] **Step 2: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/components/hotel-training/AddMemberForm.tsx
+git commit -m "feat(hotel-training): add AddMemberForm admin component"
+```
+
+---
+
+## Task 12: RemoveMemberForm + AdminPanel wrapper
+
+**Files:**
+- Create: `src/components/hotel-training/RemoveMemberForm.tsx`
+- Create: `src/components/hotel-training/AdminPanel.tsx`
+
+- [ ] **Step 1: Create `RemoveMemberForm`**
+
+```typescript
+// src/components/hotel-training/RemoveMemberForm.tsx
+import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAuth } from '@/hooks/useAuth';
+import { useColleagues } from '@/hooks/useColleagues';
+import { patchColleague } from '@/services/sharepoint';
+import { ADMIN_EMAILS } from '@/lib/hotel-training-constants';
+import type { Colleague } from '@/types/hotel-training';
+
+export function RemoveMemberForm() {
+  const { session, user } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: colleagues = [] } = useColleagues();
+
+  const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
+
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Colleague | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  const active = colleagues.filter(
+    c =>
+      c.isActive &&
+      (search === '' ||
+        c.colleagueName.toLowerCase().includes(search.toLowerCase()) ||
+        c.employeeId.includes(search)),
+  );
+
+  const handleRemove = async () => {
+    if (!isAdmin) { toast.error('Unauthorised action.'); return; }
+    if (!selected) return;
+
+    const token = session?.provider_token;
+    if (!token) { toast.error('No Microsoft session token.'); return; }
+
+    setRemoving(true);
+    try {
+      await patchColleague(token, selected.id, { IsActive: false });
+      await queryClient.invalidateQueries({ queryKey: ['colleagues'] });
+      setSelected(null);
+      setConfirming(false);
+      toast.success('Member removed successfully. The member is now inactive.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove member.');
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-md">
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium">Search colleague</label>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full justify-start font-normal">
+              {selected
+                ? `${selected.colleagueName} (${selected.employeeId})`
+                : <span className="text-muted-foreground">Search by name or Employee ID…</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Type name or ID…"
+                value={search}
+                onValueChange={setSearch}
+              />
+              <CommandEmpty>No active colleague found.</CommandEmpty>
+              <CommandGroup className="max-h-56 overflow-y-auto">
+                {active.map(c => (
+                  <CommandItem
+                    key={c.id}
+                    value={`${c.colleagueName} ${c.employeeId}`}
+                    onSelect={() => { setSelected(c); setOpen(false); setSearch(''); }}
+                  >
+                    <span className="font-medium">{c.colleagueName}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">ID: {c.employeeId}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {selected && (
+        <div className="rounded-lg border border-border p-4 space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-y-1">
+            <span className="text-muted-foreground">Name</span>
+            <span className="font-medium">{selected.colleagueName}</span>
+            <span className="text-muted-foreground">Employee ID</span>
+            <span>{selected.employeeId}</span>
+            <span className="text-muted-foreground">Position</span>
+            <span>{selected.position}</span>
+            <span className="text-muted-foreground">Department</span>
+            <span>{selected.department}</span>
+            <span className="text-muted-foreground">Section</span>
+            <span>{selected.section}</span>
+          </div>
+          <Button
+            variant="destructive"
+            className="w-full mt-2"
+            onClick={() => setConfirming(true)}
+          >
+            Remove Member
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate {selected?.colleagueName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will deactivate {selected?.colleagueName}. They will no longer be selectable in
+              training sessions. Old records are preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRemove} disabled={removing}>
+              {removing ? 'Removing…' : 'Yes, deactivate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: Create `AdminPanel`**
+
+```typescript
+// src/components/hotel-training/AdminPanel.tsx
+import React from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AddMemberForm } from './AddMemberForm';
+import { RemoveMemberForm } from './RemoveMemberForm';
+
+export function AdminPanel() {
+  return (
+    <div className="max-w-2xl">
+      <Tabs defaultValue="add">
+        <TabsList>
+          <TabsTrigger value="add">Add New Member</TabsTrigger>
+          <TabsTrigger value="remove">Remove Member</TabsTrigger>
+        </TabsList>
+        <TabsContent value="add" className="pt-4">
+          <AddMemberForm />
+        </TabsContent>
+        <TabsContent value="remove" className="pt-4">
+          <RemoveMemberForm />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: Build to verify**
+
+```bash
+npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
+```
+
+Expected: no errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/hotel-training/RemoveMemberForm.tsx src/components/hotel-training/AdminPanel.tsx
+git commit -m "feat(hotel-training): add RemoveMemberForm and AdminPanel"
+```
+
+---
+
+## Task 13: Full build + smoke test
+
+- [ ] **Step 1: Run full build**
+
+```bash
+npm run build 2>&1 | tail -10
+```
+
+Expected: `✓ built in X.XXs` with no errors.
+
+- [ ] **Step 2: Run lint**
+
+```bash
+npm run lint 2>&1 | tail -10
+```
+
+Fix any lint errors before continuing.
+
+- [ ] **Step 3: Start dev server and manually verify**
+
+```bash
+npm run dev
+```
+
+Navigate to `http://localhost:5173/dashboard/hotel-training`. Confirm:
+- Page loads with "Hotel Training" heading
+- Stepper shows Step 1: Training Details
+- Sidebar shows "Hotel Training" nav item
+- Admin tab visible when signed in as an admin email, hidden otherwise
+
+- [ ] **Step 4: Commit any lint fixes**
+
+```bash
+git add -A
+git commit -m "fix(hotel-training): address lint errors"
+```
+
+---
+
+## Task 14: Playwright E2E tests
+
+**Files:**
+- Create: `tests/hotel-training.spec.ts`
+- Create: `tests/helpers/hotel-training-mocks.ts`
+
+- [ ] **Step 1: Create mock helpers**
+
+```typescript
+// tests/helpers/hotel-training-mocks.ts
+import type { Page } from '@playwright/test';
+
+export const MOCK_SITE_ID = 'mock-site-id,mock-site-id,mock-root';
+export const MOCK_SP_SESSION_ID = 'sp-item-001';
+
+export const MOCK_COLLEAGUES = [
+  { id: 'col-1', fields: { EmployeeID: '1001', ColleagueName: 'Alice Smith', Position: 'Supervisor', Section: 'Reception Hotel', Department: { Value: 'Front Office' }, IsActive: true } },
+  { id: 'col-2', fields: { EmployeeID: '1002', ColleagueName: 'Bob Jones', Position: 'Manager', Section: 'Engineering', Department: { Value: 'Engineering' }, IsActive: true } },
+  { id: 'col-3', fields: { EmployeeID: '1003', ColleagueName: 'Carol White', Position: 'Coordinator', Section: 'Finance', Department: { Value: 'Finance' }, IsActive: true } },
+  { id: 'col-4', fields: { EmployeeID: '1004', ColleagueName: 'Dave Black', Position: 'Staff', Section: 'Security', Department: { Value: 'Security' }, IsActive: false } },
+];
+
+export const MOCK_COLUMNS = {
+  value: [
+    { name: 'field_1', typeAsString: 'Choice', choice: { choices: ['Engineering', 'Finance', 'Front Office', 'Human Resources'] } },
+    { name: 'TrainerName_x002e_', typeAsString: 'MultiChoice', choice: { choices: ['Ahmed Mokhtar', 'Amir Monir'] } },
+    { name: 'field_5', typeAsString: 'Number' },
+    { name: 'field_7', typeAsString: 'Number' },
+  ],
+};
+
+export async function mockGraphAPI(page: Page, opts: { supabaseFailure?: boolean } = {}) {
+  await page.route('https://graph.microsoft.com/v1.0/sites/**', async route => {
+    const url = route.request().url();
+    const method = route.request().method();
+
+    // Site resolve
+    if (!url.includes('/lists/') && method === 'GET') {
+      return route.fulfill({ json: { id: MOCK_SITE_ID } });
+    }
+
+    // Column choices
+    if (url.includes('/columns') && method === 'GET') {
+      return route.fulfill({ json: MOCK_COLUMNS });
+    }
+
+    // Colleagues list
+    if (url.includes('8bdc10b9') && method === 'GET') {
+      return route.fulfill({ json: { value: MOCK_COLLEAGUES } });
+    }
+
+    // Create training session
+    if (url.includes('aa8fe143') && method === 'POST') {
+      return route.fulfill({ json: { id: MOCK_SP_SESSION_ID } });
+    }
+
+    // Create participant rows
+    if (url.includes('73f67c6d') && method === 'POST') {
+      return route.fulfill({ json: { id: `part-${Date.now()}` } });
+    }
+
+    return route.fulfill({ json: {} });
+  });
+
+  if (opts.supabaseFailure) {
+    // Mock Supabase insert to fail
+    await page.route('**/rest/v1/training_sessions*', route =>
+      route.fulfill({ status: 500, json: { message: 'DB error' } }),
+    );
+  }
+}
+
+export async function setMockAuthSession(page: Page, email = 'user@2seasonshotels.com') {
+  const fakeSession = {
+    access_token: 'mock-access-token',
+    refresh_token: 'mock-refresh-token',
+    expires_in: 3600,
+    token_type: 'bearer',
+    provider_token: 'mock-provider-token',
+    user: {
+      id: 'mock-user-id',
+      email,
+      aud: 'authenticated',
+      role: 'authenticated',
+      email_confirmed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user_metadata: { first_name: 'Test' },
+      app_metadata: { provider: 'azure' },
+    },
+  };
+
+  await page.addInitScript(session => {
+    localStorage.setItem(
+      'sb-yczcebfaqerlwfalrbjn-auth-token',
+      JSON.stringify(session),
+    );
+  }, fakeSession);
+}
+```
+
+- [ ] **Step 2: Create the E2E test file**
+
+```typescript
+// tests/hotel-training.spec.ts
+import { test, expect } from '@playwright/test';
+import {
+  mockGraphAPI,
+  setMockAuthSession,
+} from './helpers/hotel-training-mocks';
+
+const ADMIN_EMAIL = 'ahmed.mokhtar@2seasonshotels.com';
+const USER_EMAIL = 'user@2seasonshotels.com';
+
+test.describe('Hotel Training', () => {
+  // ── Test 1: Happy path ──────────────────────────────────────────────────
+  test('happy path: submit training with 3 participants shows success screen', async ({ page }) => {
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockGraphAPI(page);
+    await page.goto('/dashboard/hotel-training');
+
+    // Wait for Step 1 to load
+    await expect(page.getByText('Training Details')).toBeVisible();
+
+    // Fill Step 1
+    await page.getByLabel('Training Title').fill('Fire Safety Training');
+    await page.getByRole('combobox').filter({ hasText: 'Select department' }).click();
+    await page.getByRole('option', { name: 'Engineering' }).click();
+
+    await page.getByRole('combobox').filter({ hasText: 'Select duration' }).click();
+    await page.getByRole('option', { name: '1 hour' }).click();
+
+    await page.getByLabel('Total Participants').fill('3');
+
+    // Select date
+    await page.getByRole('button', { name: /Pick a date/ }).click();
+    await page.getByRole('button', { name: /15/ }).first().click(); // pick a day
+
+    // Hour/minute
+    await page.getByRole('combobox').filter({ hasText: 'Hour' }).click();
+    await page.getByRole('option', { name: '09' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Min' }).click();
+    await page.getByRole('option', { name: '00' }).click();
+
+    // Trainer
+    await page.getByRole('combobox', { name: /Select trainers/ }).click();
+    await page.getByRole('option', { name: 'Ahmed Mokhtar' }).click();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    // Step 2: select 3 participants
+    await expect(page.getByText('Participants')).toBeVisible();
+    for (let i = 1; i <= 3; i++) {
+      await page.getByTestId(`participant-select-${i}`).click();
+      await page.getByRole('option').nth(0).click();
+    }
+
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+
+    // Step 3: confirm
+    await expect(page.getByText('Confirm & Submit')).toBeVisible();
+    await page.getByRole('button', { name: 'Confirm & Submit' }).click();
+
+    // Success screen
+    await expect(page.getByText('Training submitted successfully')).toBeVisible({ timeout: 10000 });
+
+    // Draft cleared
+    const draft = await page.evaluate(() => {
+      return Object.keys(localStorage).some(k => k.startsWith('hotel-training-draft-'));
+    });
+    expect(draft).toBe(false);
+  });
+
+  // ── Test 2: Duplicate participant ───────────────────────────────────────
+  test('duplicate participant blocks advance to Step 3', async ({ page }) => {
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockGraphAPI(page);
+    await page.goto('/dashboard/hotel-training');
+
+    // Fill Step 1 quickly (2 participants)
+    await page.getByLabel('Training Title').fill('Test');
+    await page.getByRole('combobox').filter({ hasText: 'Select department' }).click();
+    await page.getByRole('option', { name: 'Engineering' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Select duration' }).click();
+    await page.getByRole('option', { name: '1 hour' }).click();
+    await page.getByLabel('Total Participants').fill('2');
+    await page.getByRole('button', { name: /Pick a date/ }).click();
+    await page.getByRole('button', { name: /15/ }).first().click();
+    await page.getByRole('combobox').filter({ hasText: 'Hour' }).click();
+    await page.getByRole('option', { name: '09' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Min' }).click();
+    await page.getByRole('option', { name: '00' }).click();
+    await page.getByRole('combobox', { name: /Select trainers/ }).click();
+    await page.getByRole('option', { name: 'Ahmed Mokhtar' }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    // Select same colleague for both rows
+    await page.getByTestId('participant-select-1').click();
+    await page.getByRole('option').nth(0).click();
+    await page.getByTestId('participant-select-2').click();
+    await page.getByRole('option').nth(0).click();
+
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+
+    await expect(page.getByText('Duplicate participants are not allowed')).toBeVisible();
+  });
+
+  // ── Test 3: Admin panel visibility ─────────────────────────────────────
+  test('Manage Members tab hidden for non-admin, visible for admin', async ({ page }) => {
+    // Non-admin
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockGraphAPI(page);
+    await page.goto('/dashboard/hotel-training');
+    await expect(page.getByRole('tab', { name: 'Manage Members' })).not.toBeVisible();
+
+    // Admin
+    await page.evaluate(() => localStorage.clear());
+    await setMockAuthSession(page, ADMIN_EMAIL);
+    await page.reload();
+    await expect(page.getByRole('tab', { name: 'Manage Members' })).toBeVisible();
+  });
+
+  // ── Test 4: Draft restore ───────────────────────────────────────────────
+  test('draft restore banner appears after refresh and restores form', async ({ page }) => {
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockGraphAPI(page);
+    await page.goto('/dashboard/hotel-training');
+
+    await page.getByLabel('Training Title').fill('Draft Training Title');
+
+    // Wait for debounced save (800ms + buffer)
+    await page.waitForTimeout(1500);
+
+    // Hard reload
+    await page.reload();
+    await mockGraphAPI(page);
+
+    await expect(page.getByText(/You have an unsaved draft from/)).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Restore' }).click();
+
+    await expect(page.getByLabel('Training Title')).toHaveValue('Draft Training Title');
+  });
+
+  // ── Test 5: Reduce participants confirmation dialog ─────────────────────
+  test('reducing participants count with filled rows shows confirmation dialog', async ({ page }) => {
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockGraphAPI(page);
+    await page.goto('/dashboard/hotel-training');
+
+    // Fill Step 1 with 3 participants
+    await page.getByLabel('Training Title').fill('Test');
+    await page.getByRole('combobox').filter({ hasText: 'Select department' }).click();
+    await page.getByRole('option', { name: 'Engineering' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Select duration' }).click();
+    await page.getByRole('option', { name: '1 hour' }).click();
+    await page.getByLabel('Total Participants').fill('3');
+    await page.getByRole('button', { name: /Pick a date/ }).click();
+    await page.getByRole('button', { name: /15/ }).first().click();
+    await page.getByRole('combobox').filter({ hasText: 'Hour' }).click();
+    await page.getByRole('option', { name: '09' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Min' }).click();
+    await page.getByRole('option', { name: '00' }).click();
+    await page.getByRole('combobox', { name: /Select trainers/ }).click();
+    await page.getByRole('option', { name: 'Ahmed Mokhtar' }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    // Fill all 3 rows
+    for (let i = 1; i <= 3; i++) {
+      await page.getByTestId(`participant-select-${i}`).click();
+      await page.getByRole('option').nth(i - 1).click();
+    }
+
+    // Go back to Step 1 and reduce to 2
+    await page.getByRole('button', { name: /Back/ }).click();
+    await page.getByLabel('Total Participants').fill('2');
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    // Confirmation dialog should appear
+    await expect(page.getByText('Reducing participant count will remove filled entries')).toBeVisible();
+
+    // Cancel keeps original count
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByLabel('Total Participants')).toHaveValue('3');
+  });
+
+  // ── Test 6: Supabase sync failure shows partial success ─────────────────
+  test('Supabase sync failure shows partial success banner and clears draft', async ({ page }) => {
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockGraphAPI(page, { supabaseFailure: true });
+    await page.goto('/dashboard/hotel-training');
+
+    // Fill and submit training
+    await page.getByLabel('Training Title').fill('Test Training');
+    await page.getByRole('combobox').filter({ hasText: 'Select department' }).click();
+    await page.getByRole('option', { name: 'Engineering' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Select duration' }).click();
+    await page.getByRole('option', { name: '1 hour' }).click();
+    await page.getByLabel('Total Participants').fill('1');
+    await page.getByRole('button', { name: /Pick a date/ }).click();
+    await page.getByRole('button', { name: /15/ }).first().click();
+    await page.getByRole('combobox').filter({ hasText: 'Hour' }).click();
+    await page.getByRole('option', { name: '09' }).click();
+    await page.getByRole('combobox').filter({ hasText: 'Min' }).click();
+    await page.getByRole('option', { name: '00' }).click();
+    await page.getByRole('combobox', { name: /Select trainers/ }).click();
+    await page.getByRole('option', { name: 'Ahmed Mokhtar' }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    await page.getByTestId('participant-select-1').click();
+    await page.getByRole('option').nth(0).click();
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+    await page.getByRole('button', { name: 'Confirm & Submit' }).click();
+
+    // Partial success banner
+    await expect(
+      page.getByText('Training saved to SharePoint. Dashboard sync pending.'),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Draft cleared
+    const draft = await page.evaluate(() =>
+      Object.keys(localStorage).some(k => k.startsWith('hotel-training-draft-')),
+    );
+    expect(draft).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 3: Run the tests**
+
+```bash
+npm run test:e2e -- --project=chromium tests/hotel-training.spec.ts 2>&1 | tail -30
+```
+
+Expected: all 6 tests pass. If any fail, diagnose and fix before committing.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add tests/helpers/hotel-training-mocks.ts tests/hotel-training.spec.ts
+git commit -m "test(hotel-training): add Playwright E2E tests for all 6 scenarios"
+```
+
+---
+
+## Self-Review Checklist (run before handing off)
+
+- [ ] All 6 Playwright tests pass
+- [ ] `npm run build` exits cleanly
+- [ ] `npm run lint` exits cleanly
+- [ ] `/dashboard/hotel-training` loads in browser, stepper renders
+- [ ] Sidebar shows "Hotel Training" nav item
+- [ ] Admin tab hidden for non-admin, visible for admin email
+- [ ] Draft banner appears after page refresh (fill title, wait 1s, reload)
+- [ ] Spec requirements with task coverage:
+  - ✅ Route + sidebar: Task 2
+  - ✅ CSP + auth scopes: Task 2
+  - ✅ SP service layer: Task 4
+  - ✅ useColleagues + useListColumns: Task 5
+  - ✅ useTrainingSubmit dual-write: Task 6
+  - ✅ TrainingDetailsForm (Step 1): Task 7
+  - ✅ ParticipantsStep + rows (Step 2): Task 8
+  - ✅ ConfirmationStep (Step 3): Task 9
+  - ✅ Wizard orchestrator + draft autosave: Task 10
+  - ✅ Admin Add Member: Task 11
+  - ✅ Admin Remove Member + AdminPanel: Task 12
+  - ✅ Supabase migration + RLS: Task 3
+  - ✅ All 6 E2E tests: Task 14
