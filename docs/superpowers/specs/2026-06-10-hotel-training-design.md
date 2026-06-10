@@ -52,13 +52,17 @@ All reads/writes go through Microsoft Graph API (`/sites/{site-id}/lists/{list-i
 | `Title` | Single line text | yes |
 | `field_1` | Choice (single) — Department | yes |
 | `field_4` | Number — Duration (minutes) | yes |
-| `field_5` | Number — Location | no |
-| `field_6` | Number — Total Participants | yes (auto-calculated) |
-| `field_7` | Number — Remarks | no |
+| `field_5` | **Verify at runtime** — reported as Number; may be Text. See note below | no |
+| `field_6` | Number — Total Participants | yes (must equal completed participant count exactly) |
+| `field_7` | **Verify at runtime** — reported as Number; may be Text. See note below | no |
 | `field_8` | DateTime — Date | yes |
 | `TrainerName_x002e_` | Choice (multi-select) — Trainer Name | yes |
 
 > Department and TrainerName choice options are fetched live from Graph (`/lists/{id}/columns`) to stay in sync with Power Apps.
+
+> **⚠ field_5 (Location) and field_7 (Remarks) — verify column types at runtime:** The spec records these as Number, but business use suggests they may be Text. The implementor must call `GET /sites/{siteId}/lists/{listId}/columns`, check `typeAsString` for both fields, and build UI controls accordingly. Number type → number input + numeric Zod. Text type → text/textarea input + string Zod.
+
+> **⚠ field_6 (Total Participants):** Written to SharePoint as `trainingDetails.totalParticipants`. The submission must validate that completed participant rows equal this value exactly; a mismatch must block the POST.
 
 ### List 2: `Monthly_Training_Participants`
 **GUID:** `73f67c6d-f327-4c14-aa68-2b718afcd132`
@@ -119,6 +123,8 @@ scopes: 'email profile openid offline_access Sites.ReadWrite.All'
 ```
 
 Existing logged-in users will need to sign in once to receive the new token with the Graph scopes. No other changes to the auth flow.
+
+> **⚠ Sites.ReadWrite.All is a broad delegated permission (Phase 1 MVP only).** It grants the signed-in user read/write access to all SharePoint sites they can access. This is acceptable for an internal hotel dashboard where all users are `@2seasonshotels.com` staff. A future phase should scope this down (e.g. `Sites.Selected` targeting only the training site) or move SharePoint writes to a Supabase Edge Function using a service-level credential so the broad permission is never exposed to the browser.
 
 ### Runtime token usage
 
@@ -530,11 +536,18 @@ create policy "admins can read all training sessions"
     )
   );
 
--- training_participants: insert allowed for authenticated users; admins read all
-create policy "users can insert participants"
+-- training_participants: insert only for sessions the user submitted
+create policy "users can insert participants for their sessions"
   on public.training_participants for insert
   to authenticated
-  with check (true);
+  with check (
+    exists (
+      select 1 from public.training_sessions ts
+      where ts.training_id = training_participants.training_id
+        and lower(ts.submitted_by) = lower(auth.jwt()->>'email')
+    )
+  );
+-- Note: session row must already exist (inserted first) for this check to pass.
 
 create policy "admins can read all participants"
   on public.training_participants for select
@@ -590,6 +603,8 @@ Coverage:
 2. **Duplicate participant** — select the same colleague twice, assert error message and Step 3 is blocked
 3. **Admin panel visibility** — assert "Manage Members" tab is absent for non-admin email, present for admin email
 4. **Draft restore** — fill Step 1, hard-refresh, assert restore banner appears and restores form values
+5. **Reduce participants with filled rows** — fill 3 participant rows, navigate back to Step 1, reduce Total Participants to 2, assert confirmation dialog appears before trimming the filled row
+6. **Supabase sync failure** — mock Graph API success + Supabase insert failure, assert partial-success banner "Training saved to SharePoint. Dashboard sync pending." is shown and localStorage draft is cleared
 
 ---
 
