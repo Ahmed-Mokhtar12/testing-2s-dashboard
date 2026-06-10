@@ -17,7 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = new URL(window.location.href);
       const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
       const type = url.searchParams.get('type') || hashParams.get('type');
-      if (type === 'recovery' || url.searchParams.has('code') || hashParams.has('access_token')) {
+      if (type === 'recovery') {
         setIsRecovering(true);
       }
     } catch { /* ignore */ }
@@ -125,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         scopes: 'email profile openid',
+        queryParams: { prompt: 'select_account' },
       },
     });
     return { error };
