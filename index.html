@@ -9,7 +9,7 @@
                script-src 'self' 'unsafe-eval';
                style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
                font-src 'self' https://fonts.gstatic.com data:;
-               connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;
+               connect-src 'self' https://*.supabase.co wss://*.supabase.co https://graph.microsoft.com https://login.microsoftonline.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;
                img-src 'self' data: blob: https://*.supabase.co https://2s-dashboard.digitlab.ai;
                worker-src 'self' blob: https://cdnjs.cloudflare.com;
                frame-ancestors 'none';
