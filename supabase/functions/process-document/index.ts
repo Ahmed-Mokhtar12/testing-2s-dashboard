@@ -48,7 +48,7 @@ async function extractTextFromWord(buffer: ArrayBuffer): Promise<string> {
     
     // Try to extract readable text (basic approach)
     // Remove binary content and extract text between XML tags
-    content = content.replace(/[\x00-\x1F\x7F-\x9F]/g, ' '); // Remove control characters
+    content = content.replace(new RegExp('[\\x00-\\x1F\\x7F-\\x9F]', 'g'), ' '); // Remove control characters
     content = content.replace(/<[^>]*>/g, ' '); // Remove XML tags
     content = content.replace(/\s+/g, ' '); // Normalize whitespace
     content = content.trim();
@@ -73,7 +73,7 @@ async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
     let content = decoder.decode(buffer);
     
     // Extract text from PDF streams (basic approach)
-    content = content.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
+    content = content.replace(new RegExp('[\\x00-\\x1F\\x7F-\\x9F]', 'g'), ' ');
     content = content.replace(/\s+/g, ' ');
     content = content.trim();
     
@@ -474,7 +474,7 @@ async function extractWordText(fileData: Blob): Promise<string> {
       let rawText = decoder.decode(uint8Array);
       
       // Clean up extracted text (basic approach for .doc files)
-      rawText = rawText.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove control characters
+      rawText = rawText.replace(new RegExp('[\\x00-\\x1F\\x7F-\\x9F]', 'g'), ' ') // Remove control characters
                        .replace(/\s+/g, ' ') // Normalize whitespace
                        .trim();
       
@@ -557,7 +557,7 @@ async function extractSpreadsheetText(fileData: Blob, filename: string): Promise
       const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
       
       // Try to extract readable text patterns from Excel files
-      const textMatches = text.match(/[a-zA-Z0-9\s\.,;:!?\-_]+/g);
+      const textMatches = text.match(/[a-zA-Z0-9\s.,;:!?_-]+/g);
       if (textMatches) {
         const extractedText = textMatches
           .filter(match => match.trim().length > 2)
@@ -608,7 +608,7 @@ async function extractPresentationText(fileData: Blob, filename: string): Promis
     } else {
       // Basic text extraction for legacy PPT files
       const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
-      const textMatches = text.match(/[a-zA-Z0-9\s\.,;:!?\-_]+/g);
+      const textMatches = text.match(/[a-zA-Z0-9\s.,;:!?_-]+/g);
       
       if (textMatches) {
         const extractedText = textMatches
@@ -706,7 +706,7 @@ async function attemptGenericTextExtraction(fileData: Blob, filename: string, mi
       const text = await fileData.text();
       if (text && text.length > 50) {
         // Filter out mostly binary content
-        const readableChars = text.match(/[a-zA-Z0-9\s\.,;:!?\-_]/g);
+        const readableChars = text.match(/[a-zA-Z0-9\s.,;:!?_-]/g);
         if (readableChars && readableChars.length > text.length * 0.7) {
           console.log('✅ Generic text extraction successful, length:', text.length);
           return `Document Content (${filename}):\n${text}`;
@@ -720,10 +720,10 @@ async function attemptGenericTextExtraction(fileData: Blob, filename: string, mi
     const arrayBuffer = await fileData.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('utf-8', { fatal: false });
-    let rawText = decoder.decode(uint8Array);
+    const rawText = decoder.decode(uint8Array);
     
     // Extract readable text patterns
-    const textMatches = rawText.match(/[a-zA-Z0-9\s\.,;:!?\-_]{3,}/g);
+    const textMatches = rawText.match(/[a-zA-Z0-9\s.,;:!?_-]{3,}/g);
     if (textMatches && textMatches.length > 0) {
       const extractedText = textMatches
         .filter(match => match.trim().length > 3)

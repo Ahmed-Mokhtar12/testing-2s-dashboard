@@ -13,9 +13,9 @@ export class ConversationContextAnalyzer {
   static analyzeConversationHistory(userHistory?: any[]): ConversationData {
     console.log('🔍 Analyzing conversation context and extracting data points...');
     
-    let recentDataPoints = new Map<string, any>();
+    const recentDataPoints = new Map<string, any>();
     let conversationFlow = '';
-    let userPreferences = {
+    const userPreferences = {
       detailLevel: 'moderate' as const,
       communicationStyle: 'professional' as const,
       focusAreas: ['general']

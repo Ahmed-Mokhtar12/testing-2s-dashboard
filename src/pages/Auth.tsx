@@ -124,7 +124,7 @@ const AuthPage: React.FC = () => {
   useEffect(() => {
     if (!urlAuthError) return;
     window.history.replaceState({}, '', window.location.pathname + window.location.search);
-  }, []);
+  }, [urlAuthError]);
 
   useEffect(() => {
     if (loading) return;

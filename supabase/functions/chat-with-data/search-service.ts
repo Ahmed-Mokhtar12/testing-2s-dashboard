@@ -274,7 +274,7 @@ export class SearchService {
     
     try {
       switch (functionName) {
-        case 'search_web':
+        case 'search_web': {
           console.log('🔍 بدء البحث على الويب...');
           const results = await this.searchWeb(args.query, args.num_results || 5);
           const formattedResults = this.formatSearchResults(results, args.query);
@@ -292,10 +292,12 @@ export class SearchService {
           }
           
           return formattedResults;
+        }
           
-        case 'get_current_datetime':
+        case 'get_current_datetime': {
           const currentTime = this.getCurrentDateTime();
           return `التاريخ والوقت الحالي: ${currentTime}`;
+        }
           
         default:
           throw new Error(`Unknown function: ${functionName}`);

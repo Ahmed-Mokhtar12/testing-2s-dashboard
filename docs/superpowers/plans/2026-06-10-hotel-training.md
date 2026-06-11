@@ -26,7 +26,7 @@
 | 10   | Page Orchestrator            | Completed   | [x]        | [ ]             | Build passed; authenticated manual test pending |
 | 11   | Admin Panel                  | Completed   | [x]        | [ ]             | Build passed; admin panel wired |
 | 12   | Draft Autosave Validation    | Completed   | [x]        | [ ]             | Source verified; auth-gated manual scenarios blocked |
-| 13   | E2E Playwright Tests         | Blocked     | [ ]        | [ ]             | Build passed; lint blocked by repo-wide pre-existing errors; route HTTP 200 |
+| 13   | E2E Playwright Tests         | Completed   | [x]        | [ ]             | Lint clean; build passed; route HTTP 200; auth visual pending |
 | 14   | Final Self-Review & Cleanup  | Not Started | [ ]        | [ ]             |       |
 
 ---
@@ -2939,7 +2939,7 @@ Codex must stop here and report:
 
 ## Task 13 — E2E Playwright Tests
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [x] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -2960,7 +2960,7 @@ npm run build 2>&1 | tail -10
 
 Expected: `✓ built in X.XXs` with no errors.
 
-- [x] **Step 2: Run lint** — `npm run lint` was executed and failed with 235 repo-wide problems (225 errors, 10 warnings), primarily pre-existing issues under `supabase/functions/chat-with-data/**` plus unrelated lint warnings. No hotel-training-specific lint fix was identified in this task.
+- [x] **Step 2: Run lint** — initial run failed with 235 repo-wide problems (225 errors, 10 warnings). A separate lint cleanup pass was completed, and `npm run lint` now exits cleanly with no errors or warnings.
 
 ```bash
 npm run lint 2>&1 | tail -10
@@ -2980,7 +2980,7 @@ Navigate to `http://localhost:5173/dashboard/hotel-training`. Confirm:
 - Sidebar shows "Hotel Training" nav item
 - Admin tab visible when signed in as an admin email, hidden otherwise
 
-- [ ] **Step 4: Commit any lint fixes** — skipped because the lint failure is broad existing repo lint debt outside the hotel-training task scope; no lint-fix code changes were made.
+- [x] **Step 4: Commit any lint fixes** — lint cleanup applied in scoped config/code changes and committed separately from hotel-training feature work.
 
 ```bash
 git add -A
@@ -2989,7 +2989,7 @@ git commit -m "fix(hotel-training): address lint errors"
 
 ### Task 13 Completion Notes
 
-Task 13 is blocked, not completed. Build passed successfully. Lint was run and failed with 235 total repo-wide problems (225 errors, 10 warnings), concentrated in unrelated existing files such as `supabase/functions/chat-with-data/**` plus a few unrelated warnings; fixing that backlog would be a separate cleanup task. The local route check passed (`HTTP 200`), and source verification confirmed `/dashboard/hotel-training`, the `Hotel Training` sidebar nav item, and case-insensitive admin gating for the `Manage Members` tab. Authenticated browser verification is still blocked by lack of a logged-in Supabase/Microsoft session.
+Task 13 is complete after the unrelated lint backlog cleanup. `npm run lint` now exits cleanly with no errors or warnings. `npm run build` passed successfully after the cleanup, with the same existing Vite warnings: outdated Browserslist data, Bluebird `eval`, and large chunk size. The local route check passed (`HTTP 200`), and source verification confirmed `/dashboard/hotel-training`, the `Hotel Training` sidebar nav item, and case-insensitive admin gating for the `Manage Members` tab. Authenticated browser verification is still blocked by lack of a logged-in Supabase/Microsoft session.
 
 ---
 

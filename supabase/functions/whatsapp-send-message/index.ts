@@ -93,7 +93,7 @@ serve(async (req) => {
       );
     }
 
-    let repliedByUserId: string | null = authedUser.id;
+    const repliedByUserId: string | null = authedUser.id;
     let repliedByName: string | null = null;
     {
       const meta = (authedUser.user_metadata ?? {}) as Record<string, unknown>;

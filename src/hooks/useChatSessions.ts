@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,7 +18,7 @@ export const useChatSessions = () => {
   const { toast } = useToast();
 
   // Load chat sessions from Supabase (only non-archived)
-  const loadChatSessions = async () => {
+  const loadChatSessions = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -71,7 +71,7 @@ export const useChatSessions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   // Save a chat message to Supabase with proper session ID
   const saveChatMessage = async (userMessage: string, aiReply: string, sessionId?: string) => {
@@ -161,7 +161,7 @@ export const useChatSessions = () => {
   // Load chat sessions on mount
   useEffect(() => {
     loadChatSessions();
-  }, []);
+  }, [loadChatSessions]);
 
   return {
     chatSessions,
