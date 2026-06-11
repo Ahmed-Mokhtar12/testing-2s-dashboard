@@ -1,16 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '@/hooks/useAuth';
-import { getColleagues } from '@/services/sharepoint';
+import { supabase } from '@/integrations/supabase/client';
 import type { Colleague } from '@/types/hotel-training';
 
 export function useColleagues() {
-  const { session } = useAuth();
-  const token = session?.provider_token ?? '';
-
   return useQuery<Colleague[], Error>({
-    queryKey: ['colleagues', token],
-    queryFn: () => getColleagues(token),
+    queryKey: ['colleagues'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sp-read-colleagues');
+      if (error) throw error;
+      return data as Colleague[];
+    },
     staleTime: 5 * 60 * 1000,
-    enabled: !!token,
   });
 }
