@@ -55,6 +55,18 @@ interface Colleague {
   isActive: boolean;
 }
 
+// SharePoint Yes/No columns normally return a JSON boolean, but be defensive:
+// handle true, "true", "True", 1, "1", "Yes". Anything else is treated as inactive.
+function parseActive(raw: unknown): boolean {
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'number') return raw === 1;
+  if (typeof raw === 'string') {
+    const v = raw.trim().toLowerCase();
+    return v === 'true' || v === '1' || v === 'yes';
+  }
+  return false;
+}
+
 async function fetchColleagues(token: string): Promise<Colleague[]> {
   const siteId = await getSiteId(token);
   const results: Colleague[] = [];
@@ -88,7 +100,7 @@ async function fetchColleagues(token: string): Promise<Colleague[]> {
         position: String(f.Position ?? ''),
         section: String(f.Section ?? ''),
         department,
-        isActive: Boolean(f.IsActive),
+        isActive: parseActive(f.IsActive),
       });
     }
 

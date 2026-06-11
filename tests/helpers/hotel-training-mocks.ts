@@ -50,6 +50,16 @@ export const MOCK_COLLEAGUES = [
   },
 ];
 
+// The sp-read-colleagues Edge Function returns already-flattened Colleague
+// objects (not the raw Graph `{ value: [{ fields }] }` shape). This mirrors
+// MOCK_COLLEAGUES after the function's transform, including Dave Black inactive.
+export const MOCK_COLLEAGUES_FLAT = [
+  { id: 'col-1', employeeId: '1001', colleagueName: 'Alice Smith', position: 'Supervisor', section: 'Reception Hotel', department: 'Front Office', isActive: true },
+  { id: 'col-2', employeeId: '1002', colleagueName: 'Bob Jones', position: 'Manager', section: 'Engineering', department: 'Engineering', isActive: true },
+  { id: 'col-3', employeeId: '1003', colleagueName: 'Carol White', position: 'Coordinator', section: 'Finance', department: 'Finance', isActive: true },
+  { id: 'col-4', employeeId: '1004', colleagueName: 'Dave Black', position: 'Staff', section: 'Security', department: 'Security', isActive: false },
+];
+
 export const MOCK_COLUMNS = {
   value: [
     {
@@ -97,6 +107,29 @@ export async function mockGraphAPI(page: Page) {
 
     return route.fulfill({ json: {} });
   });
+}
+
+// Colleagues are now read via the sp-read-colleagues Edge Function (application
+// credentials, server-side) rather than a direct browser Graph call. Mock it.
+export async function mockColleaguesFunction(
+  page: Page,
+  opts: { failure?: boolean } = {},
+) {
+  await page.route(
+    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-colleagues`,
+    async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, body: 'ok' });
+      }
+      if (opts.failure) {
+        return route.fulfill({
+          status: 503,
+          json: { error: 'Missing Azure credentials: set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET as Supabase secrets.' },
+        });
+      }
+      return route.fulfill({ json: MOCK_COLLEAGUES_FLAT });
+    },
+  );
 }
 
 export async function mockSupabaseRest(page: Page, opts: { trainingSessionFailure?: boolean } = {}) {

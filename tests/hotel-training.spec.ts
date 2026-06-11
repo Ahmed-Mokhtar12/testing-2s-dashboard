@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  mockColleaguesFunction,
   mockGraphAPI,
   mockSupabaseRest,
   setMockAuthSession,
@@ -12,6 +13,7 @@ const FUTURE_DAY = '15';
 async function openHotelTraining(page: Page, email = USER_EMAIL, opts: { supabaseFailure?: boolean } = {}) {
   await setMockAuthSession(page, email);
   await mockGraphAPI(page);
+  await mockColleaguesFunction(page);
   await mockSupabaseRest(page, { trainingSessionFailure: opts.supabaseFailure });
   await page.goto('/dashboard/hotel-training');
   await expect(page.getByText('Hotel Training').first()).toBeVisible();

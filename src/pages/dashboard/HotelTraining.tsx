@@ -43,7 +43,12 @@ export default function HotelTraining() {
   const navigate = useNavigate();
   const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
 
-  const { data: colleagues = [], isLoading: colleaguesLoading } = useColleagues();
+  const {
+    data: colleagues = [],
+    isLoading: colleaguesLoading,
+    isError: colleaguesFailed,
+    error: colleaguesError,
+  } = useColleagues();
   const { data: columns, isLoading: columnsLoading } = useListColumns();
   const { mutate: submitTraining, isPending } = useTrainingSubmit();
 
@@ -74,6 +79,12 @@ export default function HotelTraining() {
       // Ignore invalid drafts.
     }
   }, [draftKeyStr]);
+
+  useEffect(() => {
+    if (colleaguesFailed) {
+      toast.error(colleaguesError?.message ?? 'Could not load colleagues from SharePoint.');
+    }
+  }, [colleaguesFailed, colleaguesError]);
 
   useEffect(() => {
     if (successState || draftDate) return;
@@ -358,13 +369,22 @@ export default function HotelTraining() {
             />
           )}
           {step === 2 && (
-            <ParticipantsStep
-              participants={participants}
-              allColleagues={colleagues}
-              onBack={() => setStep(1)}
-              onNext={() => setStep(3)}
-              onChange={handleParticipantChange}
-            />
+            <>
+              {colleaguesFailed && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>
+                    {colleaguesError?.message ?? 'Could not load colleagues from SharePoint.'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <ParticipantsStep
+                participants={participants}
+                allColleagues={colleagues}
+                onBack={() => setStep(1)}
+                onNext={() => setStep(3)}
+                onChange={handleParticipantChange}
+              />
+            </>
           )}
           {step === 3 && trainingDetails && (
             <ConfirmationStep
