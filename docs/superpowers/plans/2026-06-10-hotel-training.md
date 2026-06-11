@@ -14,20 +14,22 @@
 
 | Task | Name                         | Status      | Codex Done | Claude Reviewed | Notes |
 |------|------------------------------|-------------|------------|-----------------|-------|
-| 1    | Types                        | Completed   | [x]        | [ ]             | Build passed; commit e07b3e6 |
-| 2    | Constants                    | Completed   | [x]        | [ ]             | Build passed; Task 2 commit |
-| 3    | Infrastructure               | Completed   | [x]        | [ ]             | Build passed; source/build route confirmation |
-| 4    | Supabase Migration           | Completed   | [x]        | [ ]             | Applied via Supabase connector; RLS verified |
-| 5    | SharePoint Service Layer     | Completed   | [x]        | [ ]             | Build passed; Graph service added |
-| 6    | React Query Hooks            | Completed   | [x]        | [ ]             | Build passed; hooks added |
-| 7    | Training Details Form        | Completed   | [x]        | [ ]             | Build passed; dynamic Location/Remarks types |
-| 8    | Participants Step            | Completed   | [x]        | [ ]             | Build passed; participant selection added |
-| 9    | Confirmation Step            | Completed   | [x]        | [ ]             | Build passed; confirmation UI added |
-| 10   | Page Orchestrator            | Completed   | [x]        | [ ]             | Build passed; authenticated manual test pending |
-| 11   | Admin Panel                  | Completed   | [x]        | [ ]             | Build passed; admin panel wired |
-| 12   | Draft Autosave Validation    | Completed   | [x]        | [ ]             | Source verified; auth-gated manual scenarios blocked |
-| 13   | E2E Playwright Tests         | Completed   | [x]        | [ ]             | Lint clean; build passed; route HTTP 200; auth visual pending |
-| 14   | Final Self-Review & Cleanup  | Completed   | [x]        | [ ]             | 6 Chromium E2E tests passed; lint/build passed |
+| 1    | Types                        | Completed   | [x]        | [x]             | `location`/`remarks` widened to `number \| string`; draft `Partial<>` |
+| 2    | Constants                    | Completed   | [x]        | [x]             | Exact match to plan |
+| 3    | Infrastructure               | Completed   | [x]        | [x]             | CSP, scopes, route, sidebar all verified present in source |
+| 4    | Supabase Migration           | Completed   | [x]        | [x]             | Verified live: 3 tables, RLS on, 2 policies each |
+| 5    | SharePoint Service Layer     | Completed   | [x]        | [x]             | 401 refresh+retry, 429/offline toasts all present |
+| 6    | React Query Hooks            | Completed   | [x]        | [x]             | Dual-write order correct; `UntypedSupabase` cast (see R4) |
+| 7    | Training Details Form        | Completed   | [x]        | [x]             | Runtime Number/Text switching implemented (improvement) |
+| 8    | Participants Step            | Completed   | [x]        | [x]             | Inactive excluded; selected IDs excluded across rows |
+| 9    | Confirmation Step            | Completed   | [x]        | [x]             | Reviewed |
+| 10   | Page Orchestrator            | Completed   | [x]        | [x]             | Live draft capture via `onDraftChange` (improvement) |
+| 11   | Admin Panel                  | Completed   | [x]        | [x]             | Soft-delete only; uniqueness across active+inactive |
+| 12   | Draft Autosave Validation    | Completed   | [x]        | [x]             | Clear/keep rules correct |
+| 13   | E2E Playwright Tests         | Completed   | [x]        | [x]             | 6/6 pass (Claude re-run 2026-06-11, 40.4s) |
+| 14   | Final Self-Review & Cleanup  | Completed   | [x]        | [x]             | Build + lint clean |
+
+> **Status: All 14 tasks implemented and reviewed by Claude on 2026-06-11.** Verdict: faithful, build/lint/E2E all green, migration live. See **"Post-Implementation Review"** at the bottom for the follow-up punch-list (R1–R7) — mostly real-SharePoint runtime checks, since every automated test so far used mocked Graph API.
 
 ---
 
@@ -3481,3 +3483,84 @@ Codex must stop here and report:
 - [ ] Any remaining issues or known limitations
 
 **This is the final checkpoint. Feature is complete only after Claude approves this report.**
+
+---
+
+## Post-Implementation Review — Claude (2026-06-11)
+
+**Verdict: APPROVED.** All 14 tasks are implemented faithfully to the plan and spec. Several areas are *better* than the plan (noted below). Objective checks performed by Claude:
+
+- `npm run build` → clean (HotelTraining chunk 189 kB gzip 56.7 kB)
+- `npx eslint` on all hotel-training files → clean
+- `npx playwright test tests/hotel-training.spec.ts` → **6/6 passed (40.4s)**
+- Supabase live verification (project `yczcebfaqerlwfalrbjn`): `training_sessions`, `training_participants`, `training_sync_queue` all exist, `rowsecurity = true`, 2 policies each.
+
+### Improvements Codex made beyond the plan (accepted, no action needed)
+
+- **Live draft capture:** `TrainingDetailsForm` exposes `onDraftChange`; the page saves in-progress Step 1 typing, not just submitted values. Matches the spec's "save on every state change" better than the original plan.
+- **Runtime field-type switching actually wired:** the form receives `locationTypeAsString`/`remarksTypeAsString` from `getListColumns` and renders number input vs text/textarea + matching Zod live. This supersedes the static pre-implementation curl check.
+- **Type widening:** `location`/`remarks` are `number | string`; `HotelTrainingDraft.trainingDetails` is `Partial<>`. Correct given the above.
+- **Test 2 rewritten correctly:** since the UI excludes already-selected colleagues from other rows, a literal duplicate can't be chosen. The test now asserts exclusion + the "select all participants" guard. (The "Duplicate participants are not allowed" branch in `ParticipantsStep` is now defensive/dead — acceptable.)
+- `Command` components use `shouldFilter={false}` with manual filtering — correct.
+
+---
+
+## Follow-Up Punch-List for Codex (R1–R7)
+
+> **None of these block the build or tests.** R1–R4 are **runtime verifications that require a real Microsoft Graph token** — every automated test so far used mocked Graph API, so the real SharePoint round-trip has not yet been exercised. Do these in a signed-in browser session before calling the feature production-ready. R5–R7 are optional hardening.
+
+### R1 — Verify the real SharePoint write end-to-end  🔴 do before production
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+- [ ] Sign in as a `@2seasonshotels.com` user, complete the wizard, submit one real training with 2–3 participants.
+- [ ] Confirm a new item appears in `Monthly_Training` (SharePoint) with all 8 fields populated (`Title`, `field_1`, `field_4`, `field_5`, `field_6`, `field_7`, `field_8`, `TrainerName_x002e_`).
+- [ ] Confirm N rows appear in `Monthly_Training_Participants` with `TrainingID` matching `TRN-yyyyMMddHHmmss`.
+- [ ] Confirm the matching rows land in Supabase `training_sessions` + `training_participants` (`sync_status = 'synced'`).
+- [ ] Record the created `TrainingID` in the notes below.
+
+**Notes:** _____
+
+### R2 — Verify Colleague Department actually populates  🔴 do before production
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+`getColleagues` requests `$expand=fields($select=...,Department,...)`. `Department` is a lookup/managed-metadata column (spec notes `.Value`). With `$select`, SharePoint sometimes returns lookup columns under a different shape (e.g. `DepartmentLookupId`) or omits them.
+
+- [ ] In Step 2, select a colleague and confirm the **Dept** badge is non-empty.
+- [ ] If Department is blank: in `src/services/sharepoint.ts` `getColleagues`, drop `$select` (use `$expand=fields` alone) or adjust the field name, and re-verify. The mapping code already handles both `{ Value }` objects and plain strings.
+
+**Notes:** _____
+
+### R3 — Verify the 401 silent-refresh path  🟠
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+- [ ] Confirm `supabase.auth.refreshSession()` returns a fresh `provider_token` (requires the `offline_access` scope + `provider_refresh_token` stored at sign-in). If `provider_token` comes back empty after refresh, the user is bounced to "Session expired" even when recoverable.
+- [ ] If it does not refresh: confirm the Azure app registration grants `offline_access`, and that users have re-consented after the scope change (existing sessions predate it).
+
+**Notes:** _____
+
+### R4 — Regenerate Supabase types, remove the `UntypedSupabase` cast  🟠
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+`src/hooks/useTrainingSubmit.ts` casts `supabase as unknown as UntypedSupabase` because the generated types don't include the new tables, which loses compile-time safety on the inserts.
+
+- [ ] Regenerate types (e.g. `supabase gen types typescript --project-id yczcebfaqerlwfalrbjn > src/integrations/supabase/types.ts`).
+- [ ] Remove the `UntypedSupabase` type and `trainingDb` cast; use `supabase.from('training_sessions')` directly.
+- [ ] `npm run build` must stay clean.
+
+### R5 — Make `training_sessions` INSERT RLS case-insensitive  🟡 optional
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+The session INSERT policy is case-sensitive (`submitted_by = auth.jwt()->>'email'`) while the participant policy is case-insensitive (`lower(...) = lower(...)`). They work today because `submitted_by` is set from the same JWT email, but the mismatch is fragile (Microsoft can return mixed-case emails).
+
+- [ ] New migration: drop and recreate the "users can insert training sessions" policy with `with check (lower(submitted_by) = lower(auth.jwt()->>'email'))`.
+
+### R6 — (Optional) tighten `training_sync_queue` INSERT  🟡 optional
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+Supabase advisor flags `rls_policy_always_true` on the sync-queue INSERT (`with check (true)`). This is by-design for Phase 1 (best-effort client writes) but lets any authenticated user insert arbitrary queue rows. Acceptable for an internal app; tighten only if desired (e.g. require `training_id` to match a session the user submitted).
+
+### R7 — (Optional) manual smoke of admin Add/Remove against real SharePoint  🟡 optional
+Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+
+- [ ] As an admin email, add a test colleague; confirm it appears in `Colleagues_Master` with `IsActive: true`.
+- [ ] Remove (deactivate) it; confirm `IsActive` flips to `false` and it disappears from participant search but the SharePoint item still exists (soft-delete).
