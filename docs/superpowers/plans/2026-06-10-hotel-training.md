@@ -20,7 +20,7 @@
 | 4    | Supabase Migration           | Completed   | [x]        | [ ]             | Applied via Supabase connector; RLS verified |
 | 5    | SharePoint Service Layer     | Completed   | [x]        | [ ]             | Build passed; Graph service added |
 | 6    | React Query Hooks            | Completed   | [x]        | [ ]             | Build passed; hooks added |
-| 7    | Training Details Form        | Not Started | [ ]        | [ ]             |       |
+| 7    | Training Details Form        | Completed   | [x]        | [ ]             | Build passed; dynamic Location/Remarks types |
 | 8    | Participants Step            | Not Started | [ ]        | [ ]             |       |
 | 9    | Confirmation Step            | Not Started | [ ]        | [ ]             |       |
 | 10   | Page Orchestrator            | Not Started | [ ]        | [ ]             |       |
@@ -1204,7 +1204,7 @@ Codex must stop here and report:
 
 ## Task 7 — Training Details Form (Step 1)
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -1216,7 +1216,7 @@ Build the Step 1 form: Training Title, Department (from SP column choices), Dura
 
 ### Steps
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```typescript
 // src/components/hotel-training/TrainingDetailsForm.tsx
@@ -1552,13 +1552,13 @@ export function TrainingDetailsForm({ defaultValues, departments, trainers, onNe
 }
 ```
 
-- [ ] **Step 2: Build to verify**
+- [x] **Step 2: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/components/hotel-training/TrainingDetailsForm.tsx
@@ -1567,15 +1567,15 @@ git commit -m "feat(hotel-training): add TrainingDetailsForm (Step 1)"
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] Zod schema rejects `totalParticipants < 1`
-- [ ] Trainer multi-select allows more than one trainer
-- [ ] Past-date warning shown as a `toast.warning` (does not block submission)
-- [ ] Location and Remarks field input types match the `typeAsString` from SP columns endpoint
+- [x] `npm run build` exits with no errors
+- [x] Zod schema rejects `totalParticipants < 1`
+- [x] Trainer multi-select allows more than one trainer
+- [x] Past-date warning shown as a `toast.warning` (does not block submission)
+- [x] Location and Remarks field input types match the `typeAsString` from SP columns endpoint when `locationTypeAsString` / `remarksTypeAsString` props are supplied; runtime Graph verification is still pending because no Microsoft provider token is available in this session
 
 ### Codex completion notes
 
-_Fill in after completing._
+Created `src/components/hotel-training/TrainingDetailsForm.tsx`. Also widened `TrainingDetailsValues.location` / `remarks` and `TrainingSessionPayload.location` / `remarks` to `number | string` so the form can honor runtime SharePoint `typeAsString` values instead of hardcoding unverified Number columns. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Static validation confirmed total participant minimum validation, multi-trainer selection, non-blocking past-date warning, and dynamic Location/Remarks rendering: Number -> number input, Text -> text input for Location, Note/Text -> textarea/text handling for Remarks. Actual `field_5` and `field_7` Graph `typeAsString` values remain unverified because no Microsoft provider token is available in this Codex session.
 
 ### Claude review notes
 
@@ -1586,9 +1586,9 @@ _Fill in after review._
 ### Checkpoint — Task 7
 
 Codex must stop here and report:
-- [ ] File committed
-- [ ] Build result
-- [ ] Confirm `field_5` and `field_7` `typeAsString` was checked — state what the runtime type is and which input type was used
+- [x] File committed
+- [x] Build result
+- [ ] Confirm `field_5` and `field_7` `typeAsString` was checked — not checked in this session because no Microsoft provider token is available; form supports Number/Text/Note via runtime props
 
 **Do not start Task 8 until this checkpoint is reviewed.**
 

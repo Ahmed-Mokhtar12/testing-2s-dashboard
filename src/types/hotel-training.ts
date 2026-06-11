@@ -18,8 +18,8 @@ export interface TrainingDetailsValues {
   department: string;
   durationMinutes: number;
   totalParticipants: number;
-  location?: number;
-  remarks?: number;
+  location?: number | string;
+  remarks?: number | string;
   date: Date;
   hour: number;
   minute: number;

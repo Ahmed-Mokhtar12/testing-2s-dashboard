@@ -169,8 +169,8 @@ export interface TrainingSessionPayload {
   department: string;
   durationMinutes: number;
   totalParticipants: number;
-  location?: number | null;
-  remarks?: number | null;
+  location?: number | string | null;
+  remarks?: number | string | null;
   trainingDate: string;
   trainerNames: string[];
 }
