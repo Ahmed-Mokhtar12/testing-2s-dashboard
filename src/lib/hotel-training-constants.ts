@@ -47,5 +47,18 @@ export const DEPARTMENT_SECTIONS: Record<string, string[]> = {
   'Security': ['Security'],
 };
 
+// Trainer names as they appear in the SharePoint choice column.
+// Update this list to match the choices configured in the Monthly_Training list.
+export const TRAINER_OPTIONS: string[] = [
+  'Ahmed Mokhtar',
+  'Amir Monir',
+  'Xarmaigne Narciso',
+];
+
+// SharePoint column types for Location and Remarks fields.
+// Set to 'Text' or 'Note' if those columns were changed to text in SharePoint.
+export const LOCATION_TYPE_AS_STRING = 'Number';
+export const REMARKS_TYPE_AS_STRING = 'Number';
+
 export const DRAFT_KEY = (email: string) =>
   `hotel-training-draft-${email.toLowerCase()}`;

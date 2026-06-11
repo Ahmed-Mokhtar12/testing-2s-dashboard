@@ -1,15 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '@/hooks/useAuth';
-import { getListColumns, type ListColumnsResult } from '@/services/sharepoint';
+import {
+  DEPARTMENT_SECTIONS,
+  LOCATION_TYPE_AS_STRING,
+  REMARKS_TYPE_AS_STRING,
+  TRAINER_OPTIONS,
+} from '@/lib/hotel-training-constants';
+import type { ListColumnsResult } from '@/services/sharepoint';
+
+const COLUMNS: ListColumnsResult = {
+  departments: Object.keys(DEPARTMENT_SECTIONS),
+  trainers: TRAINER_OPTIONS,
+  locationTypeAsString: LOCATION_TYPE_AS_STRING,
+  remarksTypeAsString: REMARKS_TYPE_AS_STRING,
+};
 
 export function useListColumns() {
-  const { session } = useAuth();
-  const token = session?.provider_token ?? '';
-
-  return useQuery<ListColumnsResult, Error>({
-    queryKey: ['listColumns', token],
-    queryFn: () => getListColumns(token),
-    staleTime: 30 * 60 * 1000,
-    enabled: !!token,
-  });
+  return { data: COLUMNS, isLoading: false };
 }
