@@ -19,7 +19,7 @@
 | 3    | Infrastructure               | Completed   | [x]        | [ ]             | Build passed; source/build route confirmation |
 | 4    | Supabase Migration           | Completed   | [x]        | [ ]             | Applied via Supabase connector; RLS verified |
 | 5    | SharePoint Service Layer     | Completed   | [x]        | [ ]             | Build passed; Graph service added |
-| 6    | React Query Hooks            | Not Started | [ ]        | [ ]             |       |
+| 6    | React Query Hooks            | Completed   | [x]        | [ ]             | Build passed; hooks added |
 | 7    | Training Details Form        | Not Started | [ ]        | [ ]             |       |
 | 8    | Participants Step            | Not Started | [ ]        | [ ]             |       |
 | 9    | Confirmation Step            | Not Started | [ ]        | [ ]             |       |
@@ -956,7 +956,7 @@ Codex must stop here and report:
 
 ## Task 6 — React Query Hooks
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -970,7 +970,7 @@ Create three React Query hooks that wrap the SharePoint service layer: `useColle
 
 ### Steps
 
-- [ ] **Step 1: Create `useColleagues`**
+- [x] **Step 1: Create `useColleagues`**
 
 ```typescript
 // src/hooks/useColleagues.ts
@@ -992,7 +992,7 @@ export function useColleagues() {
 }
 ```
 
-- [ ] **Step 2: Create `useListColumns`**
+- [x] **Step 2: Create `useListColumns`**
 
 ```typescript
 // src/hooks/useListColumns.ts
@@ -1013,7 +1013,7 @@ export function useListColumns() {
 }
 ```
 
-- [ ] **Step 3: Create `useTrainingSubmit`**
+- [x] **Step 3: Create `useTrainingSubmit`**
 
 ```typescript
 // src/hooks/useTrainingSubmit.ts
@@ -1156,7 +1156,7 @@ export function useTrainingSubmit() {
 }
 ```
 
-- [ ] **Step 4: Build to verify**
+- [x] **Step 4: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
@@ -1164,7 +1164,7 @@ npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 
 Expected: no errors. Supabase table type warnings acceptable until types are generated.
 
-- [ ] **Step 5: Commit all three hooks**
+- [x] **Step 5: Commit all three hooks**
 
 ```bash
 git add src/hooks/useColleagues.ts src/hooks/useListColumns.ts src/hooks/useTrainingSubmit.ts
@@ -1173,16 +1173,16 @@ git commit -m "feat(hotel-training): add React Query hooks (colleagues, columns,
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] `useColleagues`: `staleTime` = 5 min, `enabled` only when token present
-- [ ] `useListColumns`: `staleTime` = 30 min
-- [ ] `useTrainingSubmit`: SharePoint write happens first; Supabase write is best-effort; on Supabase failure, inserts into `training_sync_queue` and does NOT throw
-- [ ] `useTrainingSubmit`: when SP participant rows partially fail, returns `failedParticipants` array (non-empty) — does NOT throw; caller (Task 10) decides whether to clear draft
-- [ ] `generateTrainingId()` produces `TRN-yyyyMMddHHmmss` format
+- [x] `npm run build` exits with no errors
+- [x] `useColleagues`: `staleTime` = 5 min, `enabled` only when token present
+- [x] `useListColumns`: `staleTime` = 30 min
+- [x] `useTrainingSubmit`: SharePoint write happens first; Supabase write is best-effort; on Supabase failure, inserts into `training_sync_queue` and does NOT throw
+- [x] `useTrainingSubmit`: when SP participant rows partially fail, returns `failedParticipants` array (non-empty) — does NOT throw; caller (Task 10) decides whether to clear draft
+- [x] `generateTrainingId()` produces `TRN-yyyyMMddHHmmss` format
 
 ### Codex completion notes
 
-_Fill in after completing._
+Created `src/hooks/useColleagues.ts`, `src/hooks/useListColumns.ts`, and `src/hooks/useTrainingSubmit.ts`. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Static validation confirmed `useColleagues` uses a 5-minute stale time and token-gated query, `useListColumns` uses a 30-minute stale time, and `useTrainingSubmit` writes in order: SharePoint session, SharePoint participants, then best-effort Supabase sync. If Supabase sync fails, it inserts into `training_sync_queue`, swallows queue insert failure, and returns `syncStatus: partial` without throwing. If SharePoint participant writes partially fail, it returns the non-empty `failedParticipants` array before Supabase sync. `generateTrainingId()` formats IDs as `TRN-yyyyMMddHHmmss`. A local `UntypedSupabase` cast is used for the new training tables because `src/integrations/supabase/types.ts` has not been regenerated after Task 4.
 
 ### Claude review notes
 
@@ -1193,10 +1193,10 @@ _Fill in after review._
 ### Checkpoint — Task 6
 
 Codex must stop here and report:
-- [ ] All three hook files committed
-- [ ] Build result
-- [ ] Confirm dual-write order: SharePoint session → SharePoint participants → Supabase (never reversed)
-- [ ] Confirm Supabase failure path writes to `training_sync_queue` and does not throw to the caller
+- [x] All three hook files committed
+- [x] Build result
+- [x] Confirm dual-write order: SharePoint session → SharePoint participants → Supabase (never reversed)
+- [x] Confirm Supabase failure path writes to `training_sync_queue` and does not throw to the caller
 
 **Do not start Task 7 until this checkpoint is reviewed.**
 
