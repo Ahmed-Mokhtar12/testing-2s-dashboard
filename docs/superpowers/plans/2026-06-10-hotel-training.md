@@ -18,7 +18,7 @@
 | 2    | Constants                    | Completed   | [x]        | [ ]             | Build passed; Task 2 commit |
 | 3    | Infrastructure               | Completed   | [x]        | [ ]             | Build passed; source/build route confirmation |
 | 4    | Supabase Migration           | Completed   | [x]        | [ ]             | Applied via Supabase connector; RLS verified |
-| 5    | SharePoint Service Layer     | Not Started | [ ]        | [ ]             |       |
+| 5    | SharePoint Service Layer     | Completed   | [x]        | [ ]             | Build passed; Graph service added |
 | 6    | React Query Hooks            | Not Started | [ ]        | [ ]             |       |
 | 7    | Training Details Form        | Not Started | [ ]        | [ ]             |       |
 | 8    | Participants Step            | Not Started | [ ]        | [ ]             |       |
@@ -585,7 +585,7 @@ Codex must stop here and report:
 
 ## Task 5 — SharePoint Service Layer
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -597,7 +597,7 @@ Implement all Microsoft Graph API calls as flat async functions in a single serv
 
 ### Steps
 
-- [ ] **Step 1: Create the service file**
+- [x] **Step 1: Create the service file**
 
 ```typescript
 // src/services/sharepoint.ts
@@ -906,7 +906,7 @@ export async function patchColleague(
 }
 ```
 
-- [ ] **Step 2: Build to verify TypeScript**
+- [x] **Step 2: Build to verify TypeScript**
 
 ```bash
 npm run build 2>&1 | grep -E "error|warning" | head -10
@@ -914,7 +914,7 @@ npm run build 2>&1 | grep -E "error|warning" | head -10
 
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/services/sharepoint.ts
@@ -923,17 +923,17 @@ git commit -m "feat(hotel-training): add SharePoint Graph API service layer"
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] All exported functions present: `graphRequest`, `getSiteId`, `resetSiteIdCache`, `getListColumns`, `getColleagues`, `createTrainingSession`, `createParticipants`, `createColleague`, `patchColleague`
-- [ ] `graphRequest` retries on 429 (reads `Retry-After`, max 3 retries) and shows "SharePoint is busy, retrying…"
-- [ ] `graphRequest` on 401: calls `supabase.auth.refreshSession()`, retries once with the new `provider_token`; if still 401 → "Session expired" toast + throws `SESSION_EXPIRED`
-- [ ] `graphRequest` on network failure while `navigator.onLine === false` → "No connection. Your draft is saved." toast + throws `NETWORK_OFFLINE`
-- [ ] `getColleagues` follows `@odata.nextLink` for pagination
-- [ ] `createParticipants` returns `{ succeeded, failed }` — does not throw on partial row failure
+- [x] `npm run build` exits with no errors
+- [x] All exported functions present: `graphRequest`, `getSiteId`, `resetSiteIdCache`, `getListColumns`, `getColleagues`, `createTrainingSession`, `createParticipants`, `createColleague`, `patchColleague`
+- [x] `graphRequest` retries on 429 (reads `Retry-After`, max 3 retries) and shows "SharePoint is busy, retrying…"
+- [x] `graphRequest` on 401: calls `supabase.auth.refreshSession()`, retries once with the new `provider_token`; if still 401 → "Session expired" toast + throws `SESSION_EXPIRED`
+- [x] `graphRequest` on network failure while `navigator.onLine === false` → "No connection. Your draft is saved." toast + throws `NETWORK_OFFLINE`
+- [x] `getColleagues` follows `@odata.nextLink` for pagination
+- [x] `createParticipants` returns `{ succeeded, failed }` — does not throw on partial row failure
 
 ### Codex completion notes
 
-_Fill in after completing._
+Created `src/services/sharepoint.ts` with the required flat Microsoft Graph API functions. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Static validation confirmed all required exports, 429 retry handling with `Retry-After`, 401 `supabase.auth.refreshSession()` retry-once behavior, offline toast/error handling, colleague pagination through `@odata.nextLink`, participant partial-failure collection, and `patchColleague` PATCHing only the provided fields. Live Graph calls were not executed because no Microsoft provider token is available in this Codex session.
 
 ### Claude review notes
 
@@ -944,11 +944,11 @@ _Fill in after review._
 ### Checkpoint — Task 5
 
 Codex must stop here and report:
-- [ ] File committed
-- [ ] Build result
-- [ ] Confirm `patchColleague` only patches fields passed in — does not hard-delete
-- [ ] Confirm `graphRequest` 401 path refreshes the session and retries once before giving up
-- [ ] Confirm the 429, 401, and offline toasts are wired
+- [x] File committed
+- [x] Build result
+- [x] Confirm `patchColleague` only patches fields passed in — does not hard-delete
+- [x] Confirm `graphRequest` 401 path refreshes the session and retries once before giving up
+- [x] Confirm the 429, 401, and offline toasts are wired
 
 **Do not start Task 6 until this checkpoint is reviewed.**
 
