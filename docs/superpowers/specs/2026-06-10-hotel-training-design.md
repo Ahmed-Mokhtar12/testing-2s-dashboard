@@ -4,6 +4,8 @@
 **Project:** Two Seasons Insights Dashboard
 **Feature:** Hotel Training module (Phase 1)
 
+> **Implementation source of truth:** The step-by-step implementation is in `docs/superpowers/plans/2026-06-10-hotel-training.md`. Codex executes that **plan**. This spec is the design reference. Where a function signature or detail differs between the two, **the plan wins** (e.g. the plan's hooks read `session` internally rather than taking a `token` argument, and `getListColumns(token)` hardcodes the Monthly_Training list id).
+
 ---
 
 ## Overview
@@ -273,8 +275,8 @@ z.object({
   department: z.string().min(1),  // must be one of fetched choices
   durationMinutes: z.number().refine(v => DURATION_OPTIONS.includes(v)),
   totalParticipants: z.number().int().min(1),
-  location: z.string().optional(),
-  remarks: z.string().optional(),
+  location: z.number().optional(),   // default Number; switch to z.string() if runtime typeAsString is Text/Note
+  remarks: z.number().optional(),    // default Number; switch to z.string() if runtime typeAsString is Text/Note
   date: z.date(),
   hour: z.number().int().min(0).max(23),
   minute: z.number().int().min(0).max(55).refine(v => v % 5 === 0),  // 5-min increments

@@ -589,7 +589,7 @@ Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
 
 ### Objective
 
-Implement all Microsoft Graph API calls as flat async functions in a single service file. This layer handles: site ID resolution (with module-level cache), 429 throttling retries, 401 error signalling, colleague pagination via `@odata.nextLink`, training session creation, participant row creation, and colleague add/soft-delete.
+Implement all Microsoft Graph API calls as flat async functions in a single service file. This layer handles: site ID resolution (with module-level cache), 429 throttling retries (with a "SharePoint is busy" toast), 401 → silent `refreshSession()` + retry once (then "Session expired" toast), offline detection ("No connection" toast), colleague pagination via `@odata.nextLink`, training session creation, participant row creation, and colleague add/soft-delete.
 
 ### Files to modify/create
 
@@ -602,6 +602,8 @@ Implement all Microsoft Graph API calls as flat async functions in a single serv
 ```typescript
 // src/services/sharepoint.ts
 
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import {
   MONTHLY_TRAINING_LIST_ID,
   PARTICIPANTS_LIST_ID,
@@ -625,26 +627,50 @@ export async function graphRequest<T = unknown>(
   url: string,
   options: RequestInit = {},
   retryCount = 0,
+  did401Retry = false,
 ): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(options.headers ?? {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers ?? {}),
+      },
+    });
+  } catch (err) {
+    // Network failure (offline, DNS, CORS preflight failure, etc.)
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('No connection. Your draft is saved.');
+      throw new Error('NETWORK_OFFLINE');
+    }
+    throw err;
+  }
 
+  // 429 throttling: read Retry-After, show message, wait, retry up to 3 times.
   if (res.status === 429) {
     if (retryCount >= 3) throw new Error('SharePoint throttling: max retries exceeded');
     const retryAfter = parseInt(res.headers.get('Retry-After') ?? '10', 10);
+    toast.message('SharePoint is busy, retrying…');
     await delay(retryAfter * 1000);
-    return graphRequest<T>(token, url, options, retryCount + 1);
+    return graphRequest<T>(token, url, options, retryCount + 1, did401Retry);
   }
 
+  // 401: refresh the Supabase session once (provider_token), retry with the new token.
+  // offline_access scope (added in Task 3) is what lets Supabase return a fresh provider_token.
   if (res.status === 401) {
-    const err = new Error('GRAPH_401');
-    throw err;
+    if (did401Retry) {
+      toast.error('Session expired — please sign in again.');
+      throw new Error('SESSION_EXPIRED');
+    }
+    const { data, error } = await supabase.auth.refreshSession();
+    const newToken = data.session?.provider_token;
+    if (error || !newToken) {
+      toast.error('Session expired — please sign in again.');
+      throw new Error('SESSION_EXPIRED');
+    }
+    return graphRequest<T>(newToken, url, options, retryCount, true);
   }
 
   if (!res.ok) {
@@ -899,7 +925,9 @@ git commit -m "feat(hotel-training): add SharePoint Graph API service layer"
 
 - [ ] `npm run build` exits with no errors
 - [ ] All exported functions present: `graphRequest`, `getSiteId`, `resetSiteIdCache`, `getListColumns`, `getColleagues`, `createTrainingSession`, `createParticipants`, `createColleague`, `patchColleague`
-- [ ] `graphRequest` retries on 429 (reads `Retry-After`, max 3 retries)
+- [ ] `graphRequest` retries on 429 (reads `Retry-After`, max 3 retries) and shows "SharePoint is busy, retrying…"
+- [ ] `graphRequest` on 401: calls `supabase.auth.refreshSession()`, retries once with the new `provider_token`; if still 401 → "Session expired" toast + throws `SESSION_EXPIRED`
+- [ ] `graphRequest` on network failure while `navigator.onLine === false` → "No connection. Your draft is saved." toast + throws `NETWORK_OFFLINE`
 - [ ] `getColleagues` follows `@odata.nextLink` for pagination
 - [ ] `createParticipants` returns `{ succeeded, failed }` — does not throw on partial row failure
 
@@ -919,6 +947,8 @@ Codex must stop here and report:
 - [ ] File committed
 - [ ] Build result
 - [ ] Confirm `patchColleague` only patches fields passed in — does not hard-delete
+- [ ] Confirm `graphRequest` 401 path refreshes the session and retries once before giving up
+- [ ] Confirm the 429, 401, and offline toasts are wired
 
 **Do not start Task 6 until this checkpoint is reviewed.**
 
