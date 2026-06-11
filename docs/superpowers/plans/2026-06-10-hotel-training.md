@@ -17,7 +17,7 @@
 | 1    | Types                        | Completed   | [x]        | [ ]             | Build passed; commit e07b3e6 |
 | 2    | Constants                    | Completed   | [x]        | [ ]             | Build passed; Task 2 commit |
 | 3    | Infrastructure               | Completed   | [x]        | [ ]             | Build passed; source/build route confirmation |
-| 4    | Supabase Migration           | Not Started | [ ]        | [ ]             |       |
+| 4    | Supabase Migration           | Completed   | [x]        | [ ]             | Applied via Supabase connector; RLS verified |
 | 5    | SharePoint Service Layer     | Not Started | [ ]        | [ ]             |       |
 | 6    | React Query Hooks            | Not Started | [ ]        | [ ]             |       |
 | 7    | Training Details Form        | Not Started | [ ]        | [ ]             |       |
@@ -434,7 +434,7 @@ Codex must stop here and report:
 
 ## Task 4 — Supabase Migration
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -446,7 +446,7 @@ Create the three Supabase tables (`training_sessions`, `training_participants`, 
 
 ### Steps
 
-- [ ] **Step 1: Create migration file**
+- [x] **Step 1: Create migration file**
 
 ```sql
 -- supabase/migrations/20260610120000_hotel_training.sql
@@ -538,7 +538,7 @@ create policy "admins can read sync queue"
   ));
 ```
 
-- [ ] **Step 2: Apply migration via Supabase CLI (if available) or dashboard**
+- [x] **Step 2: Apply migration via Supabase CLI (if available) or dashboard**
 
 ```bash
 # If supabase CLI is installed:
@@ -546,7 +546,7 @@ npx supabase db push
 # Or apply via Supabase dashboard → SQL editor → paste the file contents
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add supabase/migrations/20260610120000_hotel_training.sql
@@ -555,16 +555,16 @@ git commit -m "feat(hotel-training): add Supabase migration for training tables 
 
 ### Validation / Expected result
 
-- [ ] Migration file exists at `supabase/migrations/20260610120000_hotel_training.sql`
-- [ ] All three tables created: `training_sessions`, `training_participants`, `training_sync_queue`
-- [ ] RLS enabled on all three tables
-- [ ] `training_participants` insert policy uses subquery (not `with check(true)`)
-- [ ] `training_sessions(training_id)` has `unique` constraint
-- [ ] Migration applied successfully (no SQL errors)
+- [x] Migration file exists at `supabase/migrations/20260610120000_hotel_training.sql`
+- [x] All three tables created: `training_sessions`, `training_participants`, `training_sync_queue`
+- [x] RLS enabled on all three tables
+- [x] `training_participants` insert policy uses subquery (not `with check(true)`)
+- [x] `training_sessions(training_id)` has `unique` constraint
+- [x] Migration applied successfully (no SQL errors)
 
 ### Codex completion notes
 
-_Fill in after completing: migration output, any SQL errors._
+Created `supabase/migrations/20260610120000_hotel_training.sql`. `npx supabase db push` could not apply locally because the project is not linked (`Cannot find project ref. Have you run supabase link?`). Applied successfully through the Supabase connector to project `yczcebfaqerlwfalrbjn` with migration name `hotel_training`; connector returned `{"success": true}` and the remote migration list includes `20260611163338 hotel_training`. Verification SQL returned `rowsecurity = true` for `training_sessions`, `training_participants`, and `training_sync_queue`. Policy query returned the six expected SELECT/INSERT policies. Constraint query confirmed `training_sessions_training_id_key`, participant `(training_id, row_no)` unique, participant `(training_id, employee_id)` unique, and participant `training_id` FK.
 
 ### Claude review notes
 
@@ -575,9 +575,9 @@ _Fill in after review._
 ### Checkpoint — Task 4
 
 Codex must stop here and report:
-- [ ] Migration file committed
-- [ ] Migration applied (paste SQL output or Supabase CLI output)
-- [ ] Confirm RLS is active on all three tables (check Supabase dashboard or run `select tablename, rowsecurity from pg_tables where schemaname = 'public'`)
+- [x] Migration file committed
+- [x] Migration applied (paste SQL output or Supabase CLI output)
+- [x] Confirm RLS is active on all three tables (check Supabase dashboard or run `select tablename, rowsecurity from pg_tables where schemaname = 'public'`)
 
 **Do not start Task 5 until this checkpoint is reviewed.**
 
