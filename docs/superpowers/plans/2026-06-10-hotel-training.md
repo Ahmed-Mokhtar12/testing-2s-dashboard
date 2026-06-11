@@ -22,7 +22,7 @@
 | 6    | React Query Hooks            | Completed   | [x]        | [ ]             | Build passed; hooks added |
 | 7    | Training Details Form        | Completed   | [x]        | [ ]             | Build passed; dynamic Location/Remarks types |
 | 8    | Participants Step            | Completed   | [x]        | [ ]             | Build passed; participant selection added |
-| 9    | Confirmation Step            | Not Started | [ ]        | [ ]             |       |
+| 9    | Confirmation Step            | Completed   | [x]        | [ ]             | Build passed; confirmation UI added |
 | 10   | Page Orchestrator            | Not Started | [ ]        | [ ]             |       |
 | 11   | Admin Panel                  | Not Started | [ ]        | [ ]             |       |
 | 12   | Draft Autosave Validation    | Not Started | [ ]        | [ ]             |       |
@@ -1848,7 +1848,7 @@ Codex must stop here and report:
 
 ## Task 9 — Confirmation Step (Step 3)
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -1863,7 +1863,7 @@ Build the read-only review screen shown before final submission. Displays traini
 **Files:**
 - Create: `src/components/hotel-training/ConfirmationStep.tsx`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```typescript
 // src/components/hotel-training/ConfirmationStep.tsx
@@ -1981,13 +1981,13 @@ export function ConfirmationStep({ trainingDetails, participants, isPending, onB
 }
 ```
 
-- [ ] **Step 2: Build to verify**
+- [x] **Step 2: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/components/hotel-training/ConfirmationStep.tsx
@@ -1996,15 +1996,15 @@ git commit -m "feat(hotel-training): add ConfirmationStep (Step 3)"
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] All training detail fields displayed in a 2-column key/value layout
-- [ ] Participants table shows: row number, name, employee ID, position, section, department
-- [ ] Back and Submit buttons disabled while `isPending === true`
-- [ ] Spinner shown on Submit button while pending
+- [x] `npm run build` exits with no errors
+- [x] All training detail fields displayed in a 2-column key/value layout
+- [x] Participants table shows: row number, name, employee ID, position, section, department
+- [x] Back and Submit buttons disabled while `isPending === true`
+- [x] Spinner shown on Submit button while pending
 
 ### Codex completion notes
 
-_Fill in after completing._
+Created `src/components/hotel-training/ConfirmationStep.tsx`. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Static validation confirmed the two-column key/value training details layout, participants table columns for row number/name/employee ID/position/section/department, disabled Back and Confirm buttons while `isPending` is true, and a spinning `Loader2` submit state.
 
 ### Claude review notes
 
@@ -2015,9 +2015,9 @@ _Fill in after review._
 ### Checkpoint — Task 9
 
 Codex must stop here and report:
-- [ ] File committed
-- [ ] Build result
-- [ ] Confirm buttons are disabled during submission (`isPending` prop)
+- [x] File committed
+- [x] Build result
+- [x] Confirm buttons are disabled during submission (`isPending` prop)
 
 **Do not start Task 10 until this checkpoint is reviewed.**
 
