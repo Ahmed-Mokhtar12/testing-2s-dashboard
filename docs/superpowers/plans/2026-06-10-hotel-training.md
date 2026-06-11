@@ -21,7 +21,7 @@
 | 5    | SharePoint Service Layer     | Completed   | [x]        | [ ]             | Build passed; Graph service added |
 | 6    | React Query Hooks            | Completed   | [x]        | [ ]             | Build passed; hooks added |
 | 7    | Training Details Form        | Completed   | [x]        | [ ]             | Build passed; dynamic Location/Remarks types |
-| 8    | Participants Step            | Not Started | [ ]        | [ ]             |       |
+| 8    | Participants Step            | Completed   | [x]        | [ ]             | Build passed; participant selection added |
 | 9    | Confirmation Step            | Not Started | [ ]        | [ ]             |       |
 | 10   | Page Orchestrator            | Not Started | [ ]        | [ ]             |       |
 | 11   | Admin Panel                  | Not Started | [ ]        | [ ]             |       |
@@ -1596,7 +1596,7 @@ Codex must stop here and report:
 
 ## Task 8 — Participants Step (Step 2)
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -1613,7 +1613,7 @@ Build the Step 2 UI: exactly `totalParticipants` rows, each row is a searchable 
 - Create: `src/components/hotel-training/ParticipantRow.tsx`
 - Create: `src/components/hotel-training/ParticipantsStep.tsx`
 
-- [ ] **Step 1: Create `ParticipantRow`**
+- [x] **Step 1: Create `ParticipantRow`**
 
 ```typescript
 // src/components/hotel-training/ParticipantRow.tsx
@@ -1724,7 +1724,7 @@ export function ParticipantRow({ row, allColleagues, selectedEmployeeIds, onChan
 }
 ```
 
-- [ ] **Step 2: Create `ParticipantsStep`**
+- [x] **Step 2: Create `ParticipantsStep`**
 
 ```typescript
 // src/components/hotel-training/ParticipantsStep.tsx
@@ -1801,13 +1801,13 @@ export function ParticipantsStep({ participants, allColleagues, onBack, onNext, 
 }
 ```
 
-- [ ] **Step 3: Build to verify**
+- [x] **Step 3: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/hotel-training/ParticipantRow.tsx src/components/hotel-training/ParticipantsStep.tsx
@@ -1816,17 +1816,17 @@ git commit -m "feat(hotel-training): add ParticipantRow and ParticipantsStep (St
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] Row count equals `totalParticipants` — no more, no fewer rows rendered
-- [ ] Duplicate employee ID shows error and blocks navigation to Step 3
-- [ ] Empty row shows error and blocks navigation to Step 3
-- [ ] Inactive colleagues (`isActive: false`) do NOT appear in any row's dropdown
-- [ ] Already-selected IDs are excluded from other rows' dropdown options
-- [ ] Each row has `data-testid="participant-select-{rowNo}"`
+- [x] `npm run build` exits with no errors
+- [x] Row count equals `totalParticipants` — no more, no fewer rows rendered
+- [x] Duplicate employee ID shows error and blocks navigation to Step 3
+- [x] Empty row shows error and blocks navigation to Step 3
+- [x] Inactive colleagues (`isActive: false`) do NOT appear in any row's dropdown
+- [x] Already-selected IDs are excluded from other rows' dropdown options
+- [x] Each row has `data-testid="participant-select-{rowNo}"`
 
 ### Codex completion notes
 
-_Fill in after completing._
+Created `src/components/hotel-training/ParticipantRow.tsx` and `src/components/hotel-training/ParticipantsStep.tsx`. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Static validation confirmed `ParticipantsStep` renders exactly `participants.map(...)` rows, blocks navigation when any row is empty, detects duplicates by `employeeId`, and passes selected employee IDs down to each row. `ParticipantRow` filters to `colleague.isActive`, excludes already-selected employee IDs except for the current row selection, supports name/employee ID search, and sets `data-testid="participant-select-{rowNo}"` on each row trigger.
 
 ### Claude review notes
 
@@ -1837,10 +1837,10 @@ _Fill in after review._
 ### Checkpoint — Task 8
 
 Codex must stop here and report:
-- [ ] Both files committed
-- [ ] Build result
-- [ ] Confirm inactive colleagues are filtered out
-- [ ] Confirm duplicate detection uses employee ID (not name)
+- [x] Both files committed
+- [x] Build result
+- [x] Confirm inactive colleagues are filtered out
+- [x] Confirm duplicate detection uses employee ID (not name)
 
 **Do not start Task 9 until this checkpoint is reviewed.**
 
