@@ -39,12 +39,13 @@ type ColumnType = 'Number' | 'Text' | 'Note' | string;
 type FormValues = TrainingDetailsValues;
 
 interface Props {
-  defaultValues?: TrainingDetailsValues | null;
+  defaultValues?: Partial<TrainingDetailsValues> | null;
   departments: string[];
   trainers: string[];
   locationTypeAsString?: ColumnType;
   remarksTypeAsString?: ColumnType;
   onNext: (values: TrainingDetailsValues) => void;
+  onDraftChange?: (values: Partial<TrainingDetailsValues>) => void;
 }
 
 function isNumberColumn(typeAsString?: ColumnType) {
@@ -109,6 +110,7 @@ export function TrainingDetailsForm({
   locationTypeAsString = 'Number',
   remarksTypeAsString = 'Number',
   onNext,
+  onDraftChange,
 }: Props) {
   const locationIsNumber = isNumberColumn(locationTypeAsString);
   const remarksIsNumber = isNumberColumn(remarksTypeAsString);
@@ -123,6 +125,7 @@ export function TrainingDetailsForm({
     register,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -139,6 +142,30 @@ export function TrainingDetailsForm({
           minute: 0,
         },
   });
+
+  React.useEffect(() => {
+    if (!defaultValues) return;
+
+    reset({
+      title: '',
+      department: '',
+      trainerNames: [],
+      hour: 9,
+      minute: 0,
+      ...defaultValues,
+      date: defaultValues.date ? new Date(defaultValues.date) : undefined,
+    });
+  }, [defaultValues, reset]);
+
+  React.useEffect(() => {
+    if (!onDraftChange) return;
+
+    const subscription = watch((values) => {
+      onDraftChange(values as Partial<TrainingDetailsValues>);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [onDraftChange, watch]);
 
   const selectedTrainers = watch('trainerNames') ?? [];
   const [trainerOpen, setTrainerOpen] = React.useState(false);

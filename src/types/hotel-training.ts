@@ -30,7 +30,7 @@ export type WizardStep = 1 | 2 | 3;
 export type SuccessState = 'full' | 'partial' | null;
 
 export interface HotelTrainingDraft {
-  trainingDetails: TrainingDetailsValues | null;
+  trainingDetails: Partial<TrainingDetailsValues> | null;
   participants: ParticipantRow[];
   step: WizardStep;
   savedAt: string;

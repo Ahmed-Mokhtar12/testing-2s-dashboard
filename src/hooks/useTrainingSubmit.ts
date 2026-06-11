@@ -134,18 +134,21 @@ export function useTrainingSubmit() {
         }
       } catch (err) {
         syncStatus = 'partial';
-        await trainingDb
-          .from('training_sync_queue')
-          .insert({
-            training_id: trainingId,
-            payload: {
-              trainingDetails,
-              participants: rows,
-              sharepointId,
-            },
-            failure_reason: err instanceof Error ? err.message : String(err),
-          })
-          .catch(() => undefined);
+        try {
+          await trainingDb
+            .from('training_sync_queue')
+            .insert({
+              training_id: trainingId,
+              payload: {
+                trainingDetails,
+                participants: rows,
+                sharepointId,
+              },
+              failure_reason: err instanceof Error ? err.message : String(err),
+            });
+        } catch {
+          // Best-effort sync queue write; SharePoint remains the source of truth.
+        }
       }
 
       return { trainingId, sharepointId, syncStatus, failedParticipants: [] };

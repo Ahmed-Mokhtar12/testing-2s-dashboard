@@ -49,9 +49,12 @@ export default function HotelTraining() {
 
   const [step, setStep] = useState<WizardStep>(1);
   const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValues | null>(null);
+  const [draftTrainingDetails, setDraftTrainingDetails] = useState<Partial<TrainingDetailsValues> | null>(null);
+  const [restoredDraftDetails, setRestoredDraftDetails] = useState<Partial<TrainingDetailsValues> | null>(null);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [successState, setSuccessState] = useState<SuccessState>(null);
   const [draftDate, setDraftDate] = useState<string | null>(null);
+  const [detailsFormVersion, setDetailsFormVersion] = useState(0);
   const [reduceConfirm, setReduceConfirm] = useState<{
     newCount: number;
     pendingDetails: TrainingDetailsValues;
@@ -82,7 +85,7 @@ export default function HotelTraining() {
     debounceRef.current = setTimeout(() => {
       try {
         const draft: HotelTrainingDraft = {
-          trainingDetails,
+          trainingDetails: draftTrainingDetails ?? trainingDetails,
           participants,
           step,
           savedAt: new Date().toISOString(),
@@ -98,7 +101,7 @@ export default function HotelTraining() {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [trainingDetails, participants, step, draftKeyStr, successState, draftDate]);
+  }, [trainingDetails, draftTrainingDetails, participants, step, draftKeyStr, successState, draftDate]);
 
   const restoreDraft = useCallback(() => {
     try {
@@ -106,14 +109,15 @@ export default function HotelTraining() {
       if (!raw) return;
 
       const draft = JSON.parse(raw) as HotelTrainingDraft;
-      setTrainingDetails(
-        draft.trainingDetails
-          ? {
-              ...draft.trainingDetails,
-              date: new Date(draft.trainingDetails.date),
-            }
-          : null,
-      );
+      const restoredDetails = draft.trainingDetails
+        ? {
+            ...draft.trainingDetails,
+            date: draft.trainingDetails.date ? new Date(draft.trainingDetails.date) : undefined,
+          }
+        : null;
+
+      setRestoredDraftDetails(restoredDetails);
+      setDraftTrainingDetails(restoredDetails);
       setParticipants(draft.participants ?? []);
       setStep(1);
       setDraftDate(null);
@@ -142,6 +146,8 @@ export default function HotelTraining() {
 
   const applyStep1 = (values: TrainingDetailsValues, newCount: number, previousCount: number) => {
     setTrainingDetails(values);
+    setDraftTrainingDetails(values);
+    setRestoredDraftDetails(null);
 
     if (newCount > previousCount) {
       setParticipants((previous) => [
@@ -241,6 +247,9 @@ export default function HotelTraining() {
               setSuccessState(null);
               setStep(1);
               setTrainingDetails(null);
+              setDraftTrainingDetails(null);
+              setRestoredDraftDetails(null);
+              setDetailsFormVersion((version) => version + 1);
               setParticipants([]);
             }}
           >
@@ -282,7 +291,16 @@ export default function HotelTraining() {
               <Button type="button" size="sm" variant="destructive" onClick={handleReduceConfirm}>
                 Yes, reduce
               </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setReduceConfirm(null)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setReduceConfirm(null);
+                  setDraftTrainingDetails(trainingDetails);
+                  setDetailsFormVersion((version) => version + 1);
+                }}
+              >
                 Cancel
               </Button>
             </div>
@@ -329,11 +347,13 @@ export default function HotelTraining() {
         <>
           {step === 1 && (
             <TrainingDetailsForm
-              defaultValues={trainingDetails}
+              key={detailsFormVersion}
+              defaultValues={trainingDetails ?? restoredDraftDetails}
               departments={columns?.departments ?? []}
               trainers={columns?.trainers ?? []}
               locationTypeAsString={columns?.locationTypeAsString ?? 'Number'}
               remarksTypeAsString={columns?.remarksTypeAsString ?? 'Number'}
+              onDraftChange={setDraftTrainingDetails}
               onNext={handleStep1Next}
             />
           )}
