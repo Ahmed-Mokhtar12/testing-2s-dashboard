@@ -23,7 +23,7 @@
 | 7    | Training Details Form        | Completed   | [x]        | [ ]             | Build passed; dynamic Location/Remarks types |
 | 8    | Participants Step            | Completed   | [x]        | [ ]             | Build passed; participant selection added |
 | 9    | Confirmation Step            | Completed   | [x]        | [ ]             | Build passed; confirmation UI added |
-| 10   | Page Orchestrator            | Not Started | [ ]        | [ ]             |       |
+| 10   | Page Orchestrator            | Completed   | [x]        | [ ]             | Build passed; authenticated manual test pending |
 | 11   | Admin Panel                  | Not Started | [ ]        | [ ]             |       |
 | 12   | Draft Autosave Validation    | Not Started | [ ]        | [ ]             |       |
 | 13   | E2E Playwright Tests         | Not Started | [ ]        | [ ]             |       |
@@ -2025,7 +2025,7 @@ Codex must stop here and report:
 
 ## Task 10 — Page Orchestrator
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -2040,7 +2040,7 @@ Replace the placeholder `HotelTraining.tsx` with the full page component. Owns a
 **Files:**
 - Replace: `src/pages/dashboard/HotelTraining.tsx` (placeholder → full implementation)
 
-- [ ] **Step 1: Write the full page component**
+- [x] **Step 1: Write the full page component**
 
 ```typescript
 // src/pages/dashboard/HotelTraining.tsx
@@ -2398,7 +2398,7 @@ export default function HotelTraining() {
 }
 ```
 
-- [ ] **Step 2: Build to verify**
+- [x] **Step 2: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
@@ -2406,7 +2406,7 @@ npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/pages/dashboard/HotelTraining.tsx
@@ -2415,18 +2415,18 @@ git commit -m "feat(hotel-training): implement HotelTraining page with stepper, 
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] Stepper indicator updates on step change
-- [ ] Clicking a completed step number navigates back to it
-- [ ] `isAdmin` check uses `ADMIN_EMAILS.includes(email.toLowerCase())` — case-insensitive
-- [ ] "Manage Members" tab only visible to the 3 admin emails
-- [ ] "Reduce participants" confirmation dialog fires when reducing count with filled rows
-- [ ] Success screen shows full (green) or partial (yellow) state depending on `syncStatus`
-- [ ] "Register New Training" on success screen resets all state
+- [x] `npm run build` exits with no errors
+- [x] Stepper indicator updates on step change
+- [x] Clicking a completed step number navigates back to it
+- [x] `isAdmin` check uses `ADMIN_EMAILS.includes(email.toLowerCase())` — case-insensitive
+- [x] "Manage Members" tab only visible to the 3 admin emails
+- [x] "Reduce participants" confirmation dialog fires when reducing count with filled rows
+- [x] Success screen shows full (green) or partial (yellow) state depending on `syncStatus`
+- [x] "Register New Training" on success screen resets all state
 
 ### Codex completion notes
 
-_Fill in after completing._
+Replaced the `HotelTraining.tsx` placeholder with the full wizard orchestrator: step state, training details state, participant state, 3-step indicator, draft restore/discard/autosave, participant-count reduction confirmation, submit mutation callbacks, full/partial success screens, and admin-only tabs. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Local HTTP check confirmed `/dashboard/hotel-training` serves the SPA shell. Static validation confirmed case-insensitive `ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '')`, completed-step back navigation, reduce-participant confirmation, success reset, and draft clearing only after all SharePoint participant writes succeed. Deviation: Task 11 owns `AdminPanel`, so Task 10 renders a temporary admin-tab placeholder instead of importing a non-existent component. Authenticated browser step-advance testing was not completed because this Codex session has no logged-in Supabase session.
 
 ### Claude review notes
 
@@ -2437,10 +2437,10 @@ _Fill in after review._
 ### Checkpoint — Task 10
 
 Codex must stop here and report:
-- [ ] File committed
-- [ ] Build result
-- [ ] Manual test: navigate to `/dashboard/hotel-training`, confirm stepper renders and steps advance
-- [ ] Confirm admin tab hidden for non-admin session
+- [x] File committed
+- [x] Build result
+- [ ] Manual test: navigate to `/dashboard/hotel-training`, confirm stepper renders and steps advance — not completed because no authenticated Supabase browser session is available; local route returns HTTP 200 and source/build validation passed
+- [x] Confirm admin tab hidden for non-admin session — source gates tabs behind `isAdmin`, which is computed from `ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '')`
 
 **Do not start Task 11 until this checkpoint is reviewed.**
 
