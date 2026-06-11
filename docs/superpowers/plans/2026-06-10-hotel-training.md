@@ -24,7 +24,7 @@
 | 8    | Participants Step            | Completed   | [x]        | [ ]             | Build passed; participant selection added |
 | 9    | Confirmation Step            | Completed   | [x]        | [ ]             | Build passed; confirmation UI added |
 | 10   | Page Orchestrator            | Completed   | [x]        | [ ]             | Build passed; authenticated manual test pending |
-| 11   | Admin Panel                  | Not Started | [ ]        | [ ]             |       |
+| 11   | Admin Panel                  | Completed   | [x]        | [ ]             | Build passed; admin panel wired |
 | 12   | Draft Autosave Validation    | Not Started | [ ]        | [ ]             |       |
 | 13   | E2E Playwright Tests         | Not Started | [ ]        | [ ]             |       |
 | 14   | Final Self-Review & Cleanup  | Not Started | [ ]        | [ ]             |       |
@@ -2448,7 +2448,7 @@ Codex must stop here and report:
 
 ## Task 11 — Admin Panel
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed / [ ] Blocked
+Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
@@ -2465,7 +2465,7 @@ Build the three admin components rendered under the "Manage Members" tab: `AddMe
 **Files:**
 - Create: `src/components/hotel-training/AddMemberForm.tsx`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```typescript
 // src/components/hotel-training/AddMemberForm.tsx
@@ -2622,7 +2622,7 @@ export function AddMemberForm() {
 }
 ```
 
-- [ ] **Step 2: Create `RemoveMemberForm`**
+- [x] **Step 2: Create `RemoveMemberForm`**
 
 ```typescript
 // src/components/hotel-training/RemoveMemberForm.tsx
@@ -2780,7 +2780,7 @@ export function RemoveMemberForm() {
 }
 ```
 
-- [ ] **Step 3: Create `AdminPanel`**
+- [x] **Step 3: Create `AdminPanel`**
 
 ```typescript
 // src/components/hotel-training/AdminPanel.tsx
@@ -2809,7 +2809,7 @@ export function AdminPanel() {
 }
 ```
 
-- [ ] **Step 4: Build to verify**
+- [x] **Step 4: Build to verify**
 
 ```bash
 npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
@@ -2817,7 +2817,7 @@ npm run build 2>&1 | grep -E "^.*(error|Error)" | head -10
 
 Expected: no errors.
 
-- [ ] **Step 5: Commit all three admin components**
+- [x] **Step 5: Commit all three admin components**
 
 ```bash
 git add src/components/hotel-training/AddMemberForm.tsx src/components/hotel-training/RemoveMemberForm.tsx src/components/hotel-training/AdminPanel.tsx
@@ -2826,17 +2826,17 @@ git commit -m "feat(hotel-training): add admin panel (AddMemberForm, RemoveMembe
 
 ### Validation / Expected result
 
-- [ ] `npm run build` exits with no errors
-- [ ] `AddMemberForm`: Employee ID uniqueness checked against BOTH active and inactive colleagues
-- [ ] `AddMemberForm`: Employee ID must be numeric; Name and Position must be letters only
-- [ ] `RemoveMemberForm`: Only active colleagues shown in search
-- [ ] `RemoveMemberForm`: Uses `patchColleague(..., { IsActive: false })` — never deletes the SP item
-- [ ] `RemoveMemberForm`: Confirmation dialog appears before deactivation
-- [ ] `AdminPanel`: Section and Department dropdowns are cascading (Section disabled until Department selected)
+- [x] `npm run build` exits with no errors
+- [x] `AddMemberForm`: Employee ID uniqueness checked against BOTH active and inactive colleagues
+- [x] `AddMemberForm`: Employee ID must be numeric; Name and Position must be letters only
+- [x] `RemoveMemberForm`: Only active colleagues shown in search
+- [x] `RemoveMemberForm`: Uses `patchColleague(..., { IsActive: false })` — never deletes the SP item
+- [x] `RemoveMemberForm`: Confirmation dialog appears before deactivation
+- [x] `AdminPanel`: Section and Department dropdowns are cascading (Section disabled until Department selected)
 
 ### Codex completion notes
 
-_Fill in after completing._
+Created `src/components/hotel-training/AddMemberForm.tsx`, `src/components/hotel-training/RemoveMemberForm.tsx`, and `src/components/hotel-training/AdminPanel.tsx`, and wired `AdminPanel` into the existing admin tab in `HotelTraining.tsx`. `npm run build` completed successfully with the same existing Vite warnings as prior tasks. Static validation confirmed both admin forms re-check `ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '')` before API calls; add-member uniqueness checks `colleagues.some(...)` across the full colleague query result, including active and inactive records; add-member schema requires numeric employee IDs and letters/spaces for name and position; section selection is disabled until a department is selected and resets when department changes; remove-member search filters to `colleague.isActive`; removal uses `patchColleague(token, selected.id, { IsActive: false })` and never performs a delete; an `AlertDialog` confirmation is shown before deactivation.
 
 ### Claude review notes
 
@@ -2847,10 +2847,10 @@ _Fill in after review._
 ### Checkpoint — Task 11
 
 Codex must stop here and report:
-- [ ] All three files committed
-- [ ] Build result
-- [ ] Confirm remove member uses `IsActive: false` patch — NOT a DELETE request
-- [ ] Confirm add member checks uniqueness across active AND inactive colleagues
+- [x] All three files committed
+- [x] Build result
+- [x] Confirm remove member uses `IsActive: false` patch — NOT a DELETE request
+- [x] Confirm add member checks uniqueness across active AND inactive colleagues
 
 **Do not start Task 12 until this checkpoint is reviewed.**
 

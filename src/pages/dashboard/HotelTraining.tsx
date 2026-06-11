@@ -10,6 +10,7 @@ import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { ConfirmationStep } from '@/components/hotel-training/ConfirmationStep';
 import { ParticipantsStep } from '@/components/hotel-training/ParticipantsStep';
 import { TrainingDetailsForm } from '@/components/hotel-training/TrainingDetailsForm';
+import { AdminPanel } from '@/components/hotel-training/AdminPanel';
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
 import { useListColumns } from '@/hooks/useListColumns';
@@ -36,15 +37,6 @@ function makeEmptyRows(count: number): ParticipantRow[] {
   return Array.from({ length: count }, (_, index) => ({ rowNo: index + 1, colleague: null }));
 }
 
-function AdminPanelPending() {
-  return (
-    <Alert>
-      <AlertDescription>
-        Member management is added in the next implementation task.
-      </AlertDescription>
-    </Alert>
-  );
-}
 
 export default function HotelTraining() {
   const { user } = useAuth();
@@ -382,7 +374,7 @@ export default function HotelTraining() {
             {registerTrainingContent}
           </TabsContent>
           <TabsContent value="admin" className="pt-4">
-            <AdminPanelPending />
+            <AdminPanel />
           </TabsContent>
         </Tabs>
       ) : (
