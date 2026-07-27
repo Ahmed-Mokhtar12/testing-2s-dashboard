@@ -22,4 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.env.superpowers/
+.env
+.superpowers/
+supabase/.temp/
+test-results/
