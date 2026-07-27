@@ -2945,7 +2945,7 @@ Status: [ ] Not Started / [ ] In Progress / [x] Completed / [ ] Blocked
 
 ### Objective
 
-Write and run 6 Playwright tests covering: happy path submit, duplicate participant blocking, admin tab visibility, draft restore, reduce-participants confirmation, and Supabase sync failure with partial success. All tests mock the Graph API via `page.route()` — no real SharePoint calls.
+Write and run 6 Playwright tests (now 8 — trainer-choices test and colleague-failure test added 2026-07-27) covering: happy path submit, duplicate participant blocking, admin tab visibility, draft restore, reduce-participants confirmation, and Supabase sync failure with partial success. All tests mock the Graph API via `page.route()` — no real SharePoint calls.
 
 ### Files to modify/create
 
@@ -3459,7 +3459,7 @@ Navigate to `http://localhost:5173/dashboard/hotel-training` and verify each ite
 
 - [ ] `npm run build` exits cleanly
 - [ ] `npm run lint` exits cleanly
-- [ ] All 6 Playwright tests pass
+- [ ] All 6 Playwright tests pass (now 8 — trainer-choices test and colleague-failure test added 2026-07-27)
 - [ ] All rows in spec cross-check table filled and confirmed
 - [ ] No existing dashboard routes broken (`/dashboard/reviews`, `/dashboard/whatsapp`, etc.)
 
@@ -3506,6 +3506,28 @@ Codex must stop here and report:
 ---
 
 ## Follow-Up Punch-List for Codex (R1–R7)
+
+> **2026-07-27 update:** The delegated (browser `provider_token`) Graph
+> architecture was replaced by app-credential Edge Functions
+> (`sp-read-colleagues`, `sp-read-columns`, `sp-submit-training`,
+> `sp-manage-colleague`) — see
+> `docs/superpowers/plans/2026-07-27-hotel-training-server-side-completion.md`.
+> All four functions are deployed and the `Sites.Selected` site-level grant is
+> live (colleague reads return 200 with 335 colleagues).
+>
+> Status: R2 (code half) done via `sp-read-colleagues`; R3 obsolete
+> (`provider_token` is no longer used anywhere — browser OAuth is now
+> identity-only); R4 done (types regenerated, `UntypedSupabase` cast removed);
+> R5 done (migration `20260727100000`); R6 accepted as-is for Phase 1. R1,
+> the runtime half of R2, and R7 are pending the supervised live
+> verification — Task 15 of the new plan.
+>
+> **Amendment:** `TrainerName_x002e_` on `Monthly_Training` turned out to be a
+> multi-select **People Picker** column, not the MultiChoice this spec/plan
+> assumed. `sp-submit-training` writes trainers as person LookupIds resolved
+> against the site's User Information List; the trainer dropdown itself is
+> sourced from the `TRAINER_OPTIONS` constants, since the live column exposes
+> no `.choices` to read.
 
 > **None of these block the build or tests.** R1–R4 are **runtime verifications that require a real Microsoft Graph token** — every automated test so far used mocked Graph API, so the real SharePoint round-trip has not yet been exercised. Do these in a signed-in browser session before calling the feature production-ready. R5–R7 are optional hardening.
 

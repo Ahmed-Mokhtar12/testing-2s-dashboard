@@ -116,6 +116,18 @@ supabase/migrations/
 
 ## Authentication & Token Acquisition
 
+> **2026-07-27 architecture pivot:** Browser OAuth now provides **identity
+> only** (`email profile openid offline_access` — no `Sites.ReadWrite.All`
+> and no Graph scopes reach the browser). All SharePoint reads/writes go
+> through four Supabase Edge Functions (`sp-read-colleagues`,
+> `sp-read-columns`, `sp-submit-training`, `sp-manage-colleague`) running
+> under an app-only credential with the `Sites.Selected` **Application**
+> permission, granted per-site to the training site. The delegated-token
+> design documented below — `session.provider_token`, the CSP `connect-src`
+> addition for `graph.microsoft.com` — is **superseded**. See
+> `docs/superpowers/plans/2026-07-27-hotel-training-server-side-completion.md`
+> for the current design.
+
 ### Scope extension
 
 `signInWithAzure()` in `AuthContext.tsx` is updated to:

@@ -55,10 +55,10 @@ The app uses a document-level Content Security Policy in `index.html` with these
   Allows app styles plus Google Fonts stylesheets.
 - `font-src 'self' https://fonts.gstatic.com data:`
   Allows locally bundled fonts, Google-hosted font files, and data URLs when needed.
-- `connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*`
-  Permits Supabase API/realtime traffic and local development servers.
-- `img-src 'self' data: blob: https://*.supabase.co https://lovable.dev`
-  Allows app images, uploaded blobs, Supabase-hosted assets, and the existing Lovable Open Graph asset.
+- `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://login.microsoftonline.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*`
+  Permits Supabase API/realtime traffic, Microsoft sign-in (identity only — no Graph calls originate in the browser), and local development servers.
+- `img-src 'self' data: blob: https://*.supabase.co https://2s-dashboard.digitlab.ai`
+  Allows app images, uploaded blobs, Supabase-hosted assets, and the app's own hosted Open Graph image.
 - `worker-src 'self' blob: https://cdnjs.cloudflare.com`
   Supports browser workers used by document-processing dependencies.
 - `frame-ancestors 'none'`
