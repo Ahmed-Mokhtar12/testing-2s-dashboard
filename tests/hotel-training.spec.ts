@@ -150,4 +150,16 @@ test.describe('Hotel Training', () => {
     await expect(page.getByText('Training saved to SharePoint. Dashboard sync pending.')).toBeVisible({ timeout: 10_000 });
     await expect.poll(async () => page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith('hotel-training-draft-')))).toBe(false);
   });
+
+  test('colleague load failure surfaces an error instead of empty dropdowns', async ({ page }) => {
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockColumnsFunction(page);
+    await mockSubmitFunction(page);
+    await mockManageColleagueFunction(page);
+    await mockColleaguesFunction(page, { failure: true });
+    await mockSupabaseRest(page);
+    await page.goto('/dashboard/hotel-training');
+
+    await expect(page.getByText(/Could not load colleagues from SharePoint/i)).toBeVisible({ timeout: 15_000 });
+  });
 });
