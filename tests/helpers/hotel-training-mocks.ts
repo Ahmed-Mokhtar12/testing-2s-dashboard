@@ -77,6 +77,27 @@ export const MOCK_COLUMNS = {
   ],
 };
 
+// The sp-read-columns Edge Function returns the flattened ListColumnsResult
+// shape (not the raw Graph { value: [...] } shape).
+export const MOCK_COLUMNS_FLAT = {
+  departments: ['Engineering', 'Finance', 'Front Office', 'Human Resources'],
+  trainers: ['Ahmed Mokhtar', 'Amir Monir'],
+  locationTypeAsString: 'Number',
+  remarksTypeAsString: 'Number',
+};
+
+export async function mockColumnsFunction(page: Page) {
+  await page.route(
+    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-columns`,
+    async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, body: 'ok' });
+      }
+      return route.fulfill({ json: MOCK_COLUMNS_FLAT });
+    },
+  );
+}
+
 const PROJECT_REF = 'yczcebfaqerlwfalrbjn';
 const AUTH_KEY = `sb-${PROJECT_REF}-auth-token`;
 

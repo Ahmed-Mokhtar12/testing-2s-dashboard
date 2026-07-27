@@ -1,12 +1,14 @@
+import { useQuery } from '@tanstack/react-query';
 import {
   DEPARTMENT_SECTIONS,
   LOCATION_TYPE_AS_STRING,
   REMARKS_TYPE_AS_STRING,
   TRAINER_OPTIONS,
 } from '@/lib/hotel-training-constants';
+import { invokeReadColumns } from '@/services/sharepoint';
 import type { ListColumnsResult } from '@/services/sharepoint';
 
-const COLUMNS: ListColumnsResult = {
+const STATIC_FALLBACK: ListColumnsResult = {
   departments: Object.keys(DEPARTMENT_SECTIONS),
   trainers: TRAINER_OPTIONS,
   locationTypeAsString: LOCATION_TYPE_AS_STRING,
@@ -14,5 +16,24 @@ const COLUMNS: ListColumnsResult = {
 };
 
 export function useListColumns() {
-  return { data: COLUMNS, isLoading: false };
+  return useQuery<ListColumnsResult>({
+    queryKey: ['listColumns'],
+    queryFn: async (): Promise<ListColumnsResult> => {
+      try {
+        const live = await invokeReadColumns();
+        return {
+          // Departments must match DEPARTMENT_SECTIONS (the dept→section
+          // cascade is code-defined), so they always come from constants.
+          departments: Object.keys(DEPARTMENT_SECTIONS),
+          trainers: live.trainers.length > 0 ? live.trainers : TRAINER_OPTIONS,
+          locationTypeAsString: live.locationTypeAsString || LOCATION_TYPE_AS_STRING,
+          remarksTypeAsString: live.remarksTypeAsString || REMARKS_TYPE_AS_STRING,
+        };
+      } catch (err) {
+        console.error('[useListColumns] Falling back to constants:', err);
+        return STATIC_FALLBACK;
+      }
+    },
+    staleTime: 30 * 60 * 1000,
+  });
 }

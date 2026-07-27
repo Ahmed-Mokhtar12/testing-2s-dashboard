@@ -11,6 +11,29 @@ import type { Colleague } from '@/types/hotel-training';
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
+// supabase.functions.invoke wraps a non-2xx response in a FunctionsHttpError
+// whose `message` is generic. The real reason lives in the response body.
+export async function extractInvokeError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response }).context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.json();
+      if (body && typeof body.error === 'string') return body.error;
+    } catch {
+      /* response had no JSON body; fall through */
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function invokeReadColumns(): Promise<ListColumnsResult> {
+  const { data, error } = await supabase.functions.invoke('sp-read-columns');
+  if (error) {
+    throw new Error(await extractInvokeError(error));
+  }
+  return data as ListColumnsResult;
+}
+
 let cachedSiteId: string | null = null;
 
 function delay(ms: number) {

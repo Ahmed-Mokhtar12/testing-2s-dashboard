@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   mockColleaguesFunction,
+  mockColumnsFunction,
   mockGraphAPI,
   mockSupabaseRest,
   setMockAuthSession,
@@ -14,6 +15,7 @@ async function openHotelTraining(page: Page, email = USER_EMAIL, opts: { supabas
   await setMockAuthSession(page, email);
   await mockGraphAPI(page);
   await mockColleaguesFunction(page);
+  await mockColumnsFunction(page);
   await mockSupabaseRest(page, { trainingSessionFailure: opts.supabaseFailure });
   await page.goto('/dashboard/hotel-training');
   await expect(page.getByText('Hotel Training').first()).toBeVisible();
@@ -122,6 +124,17 @@ test.describe('Hotel Training', () => {
     await expect(page.getByText('Reducing participant count will remove filled entries. Continue?')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByLabel('Total Participants')).toHaveValue('3');
+  });
+
+  test('trainer name dropdown uses live Graph column choices, not hardcoded options', async ({ page }) => {
+    // MOCK_COLUMNS returns ['Ahmed Mokhtar', 'Amir Monir'] for TrainerName_x002e_.
+    // TRAINER_OPTIONS (hardcoded) has a third entry: 'Xarmaigne Narciso'.
+    // If the dropdown reads live Graph data, 'Xarmaigne Narciso' must be absent.
+    await openHotelTraining(page);
+    await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
+    await expect(page.getByRole('option', { name: 'Xarmaigne Narciso' })).toHaveCount(0);
+    await expect(page.getByRole('option', { name: 'Ahmed Mokhtar' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Amir Monir' })).toBeVisible();
   });
 
   test('Supabase sync failure shows partial success banner and clears draft', async ({ page }) => {
