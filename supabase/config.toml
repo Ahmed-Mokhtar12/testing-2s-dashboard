@@ -59,3 +59,6 @@ verify_jwt = true
 
 [functions.sp-read-columns]
 verify_jwt = true
+
+[functions.sp-submit-training]
+verify_jwt = true

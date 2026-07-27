@@ -1,0 +1,193 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
+import { corsHeaders, json } from '../_shared/http.ts';
+import { getCallerEmail } from '../_shared/auth.ts';
+
+interface ParticipantRow {
+  rowNo: number;
+  employeeId: string;
+  colleagueName: string;
+  position: string;
+  section: string;
+  department: string;
+}
+
+interface SubmitBody {
+  trainingId: string;
+  title: string;
+  department: string;
+  durationMinutes: number;
+  totalParticipants: number;
+  location: string | number | null;
+  remarks: string | number | null;
+  trainingDate: string;
+  trainerNames: string[];
+  participants: ParticipantRow[];
+}
+
+// TrainerName_x002e_ is a multi-select People Picker; trainers must be written
+// as person LookupIds, resolved via the site's hidden User Information List.
+// The three trainers are the three admins. MUST stay in sync with
+// TRAINER_OPTIONS / ADMIN_EMAILS in src/lib/hotel-training-constants.ts.
+const TRAINER_EMAILS: Record<string, string> = {
+  'Ahmed Mokhtar': 'ahmed.mokhtar@2seasonshotels.com',
+  'Amir Monir': 'amir.monir@2seasonshotels.com',
+  'Xarmaigne Narciso': 'xarmaigne.narciso@2seasonshotels.com',
+};
+
+// Site's hidden User Information List id — discovered empirically via a
+// temporary diagnostic deploy (see task report); stable per site.
+const UIL_LIST_ID = '265691f8-3786-4e9f-932f-79835f30a6cf';
+
+const lookupIdCache = new Map<string, number>();
+
+async function resolveTrainerLookupIds(
+  token: string,
+  siteId: string,
+  names: string[],
+): Promise<{ ids: number[]; unresolved: string[] }> {
+  const ids: number[] = [];
+  const unresolved: string[] = [];
+  const toResolve = names.filter((n) => !lookupIdCache.has(TRAINER_EMAILS[n] ?? ''));
+
+  if (toResolve.length > 0) {
+    let url: string | null =
+      `${GRAPH_BASE}/sites/${siteId}/lists/${UIL_LIST_ID}/items` +
+      '?$top=500&$expand=fields($select=EMail,Title)';
+    while (url) {
+      const data = await graphFetch<{
+        value: Array<{ id: string; fields: { EMail?: string; Title?: string } }>;
+        '@odata.nextLink'?: string;
+      }>(token, url);
+      for (const item of data.value) {
+        const email = item.fields.EMail?.toLowerCase();
+        if (email) lookupIdCache.set(email, Number(item.id));
+      }
+      url = data['@odata.nextLink'] ?? null;
+    }
+  }
+
+  for (const name of names) {
+    const email = TRAINER_EMAILS[name]?.toLowerCase();
+    const id = email ? lookupIdCache.get(email) : undefined;
+    if (id === undefined) unresolved.push(name);
+    else ids.push(id);
+  }
+  return { ids, unresolved };
+}
+
+function badRequest(body: SubmitBody): string | null {
+  if (!body.trainingId || !/^TRN-\d{14}$/.test(body.trainingId)) return 'Invalid trainingId.';
+  if (!body.title?.trim()) return 'Title is required.';
+  if (!body.department?.trim()) return 'Department is required.';
+  if (!Number.isFinite(body.durationMinutes) || body.durationMinutes <= 0) return 'Invalid duration.';
+  if (!Array.isArray(body.trainerNames) || body.trainerNames.length === 0) return 'At least one trainer is required.';
+  const unknown = body.trainerNames.filter((n) => !(n in TRAINER_EMAILS));
+  if (unknown.length > 0) return `Unknown trainer(s): ${unknown.join(', ')}.`;
+  if (!body.trainingDate || Number.isNaN(Date.parse(body.trainingDate))) return 'Invalid training date.';
+  if (!Array.isArray(body.participants) || body.participants.length === 0) return 'At least one participant is required.';
+  if (body.participants.length !== body.totalParticipants) {
+    return `Participant count mismatch: expected ${body.totalParticipants}, got ${body.participants.length}.`;
+  }
+  return null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders(req) });
+  }
+  if (req.method !== 'POST') {
+    return json(req, { error: 'Method not allowed' }, 405);
+  }
+  if (!haveAzureCreds()) {
+    return json(req, { error: 'Missing Azure credentials: set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET as Supabase secrets.' }, 503);
+  }
+
+  const caller = await getCallerEmail(req);
+  if (!caller) {
+    return json(req, { error: 'Not authenticated.' }, 401);
+  }
+
+  let body: SubmitBody;
+  try {
+    body = await req.json();
+  } catch {
+    return json(req, { error: 'Invalid JSON body.' }, 400);
+  }
+
+  const invalid = badRequest(body);
+  if (invalid) {
+    return json(req, { error: invalid }, 400);
+  }
+
+  try {
+    const token = await getAppToken();
+    const siteId = await getSiteId(token);
+
+    const { ids: trainerIds, unresolved } = await resolveTrainerLookupIds(
+      token,
+      siteId,
+      body.trainerNames,
+    );
+    if (unresolved.length > 0) {
+      return json(req, {
+        error: `Could not resolve trainer account(s) in SharePoint: ${unresolved.join(', ')}. ` +
+          'The trainer must have visited the site at least once.',
+      }, 400);
+    }
+
+    const session = await graphFetch<{ id: string }>(
+      token,
+      `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.monthlyTraining}/items`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          fields: {
+            Title: body.title,
+            field_1: body.department,
+            field_4: body.durationMinutes,
+            field_5: body.location ?? null,
+            field_6: body.totalParticipants,
+            field_7: body.remarks ?? null,
+            field_8: body.trainingDate,
+            'TrainerName_x002e_LookupId@odata.type': 'Collection(Edm.Int32)',
+            TrainerName_x002e_LookupId: trainerIds,
+          },
+        }),
+      },
+    );
+
+    const failedParticipants: Array<{ row: ParticipantRow; error: string }> = [];
+    for (const row of body.participants) {
+      try {
+        await graphFetch(
+          token,
+          `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.participants}/items`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              fields: {
+                Title: row.colleagueName,
+                TrainingID: body.trainingId,
+                RowNo: row.rowNo,
+                EmployeeID: row.employeeId,
+                ColleagueName: row.colleagueName,
+                Position: row.position,
+                Section: row.section,
+                Department: row.department,
+              },
+            }),
+          },
+        );
+      } catch (err) {
+        failedParticipants.push({ row, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return json(req, { sharepointId: session.id, failedParticipants });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('sp-submit-training error:', message);
+    return json(req, { error: message }, 500);
+  }
+});
