@@ -110,6 +110,22 @@ export async function mockSubmitFunction(page: Page) {
   );
 }
 
+export async function mockManageColleagueFunction(page: Page) {
+  await page.route(
+    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-manage-colleague`,
+    async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, body: 'ok' });
+      }
+      const body = route.request().postDataJSON() as { action?: string };
+      if (body?.action === 'add') {
+        return route.fulfill({ json: { id: 'col-new' } });
+      }
+      return route.fulfill({ json: { ok: true } });
+    },
+  );
+}
+
 const PROJECT_REF = 'yczcebfaqerlwfalrbjn';
 const AUTH_KEY = `sb-${PROJECT_REF}-auth-token`;
 

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
-import { createColleague } from '@/services/sharepoint';
+import { invokeManageColleague } from '@/services/sharepoint';
 import { ADMIN_EMAILS, DEPARTMENT_SECTIONS } from '@/lib/hotel-training-constants';
 
 const schema = z.object({
@@ -30,7 +30,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export function AddMemberForm() {
-  const { session, user } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: colleagues = [] } = useColleagues();
   const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
@@ -55,12 +55,6 @@ export function AddMemberForm() {
       return;
     }
 
-    const token = session?.provider_token;
-    if (!token) {
-      toast.error('No Microsoft session token. Please sign in again.');
-      return;
-    }
-
     const exists = colleagues.some((colleague) => colleague.employeeId === values.employeeId);
     if (exists) {
       setError('employeeId', { message: 'This Employee ID already exists.' });
@@ -68,12 +62,15 @@ export function AddMemberForm() {
     }
 
     try {
-      await createColleague(token, {
-        employeeId: values.employeeId,
-        colleagueName: values.name,
-        position: values.position,
-        section: values.section,
-        department: values.department,
+      await invokeManageColleague({
+        action: 'add',
+        colleague: {
+          employeeId: values.employeeId,
+          colleagueName: values.name,
+          position: values.position,
+          section: values.section,
+          department: values.department,
+        },
       });
 
       await queryClient.invalidateQueries({ queryKey: ['colleagues'] });

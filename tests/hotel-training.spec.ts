@@ -3,6 +3,7 @@ import {
   mockColleaguesFunction,
   mockColumnsFunction,
   mockGraphAPI,
+  mockManageColleagueFunction,
   mockSubmitFunction,
   mockSupabaseRest,
   setMockAuthSession,
@@ -18,6 +19,7 @@ async function openHotelTraining(page: Page, email = USER_EMAIL, opts: { supabas
   await mockColleaguesFunction(page);
   await mockColumnsFunction(page);
   await mockSubmitFunction(page);
+  await mockManageColleagueFunction(page);
   await mockSupabaseRest(page, { trainingSessionFailure: opts.supabaseFailure });
   await page.goto('/dashboard/hotel-training');
   await expect(page.getByText('Hotel Training').first()).toBeVisible();

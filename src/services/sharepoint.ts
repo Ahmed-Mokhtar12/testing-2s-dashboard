@@ -345,3 +345,19 @@ export async function patchColleague(
     { method: 'PATCH', body: JSON.stringify(patch) },
   );
 }
+
+export type ManageColleagueRequest =
+  | { action: 'add'; colleague: NewColleaguePayload }
+  | { action: 'deactivate'; itemId: string };
+
+export async function invokeManageColleague(
+  request: ManageColleagueRequest,
+): Promise<{ id?: string; ok?: boolean }> {
+  const { data, error } = await supabase.functions.invoke('sp-manage-colleague', {
+    body: request,
+  });
+  if (error) {
+    throw new Error(await extractInvokeError(error));
+  }
+  return data as { id?: string; ok?: boolean };
+}

@@ -23,12 +23,12 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
-import { patchColleague } from '@/services/sharepoint';
+import { invokeManageColleague } from '@/services/sharepoint';
 import { ADMIN_EMAILS } from '@/lib/hotel-training-constants';
 import type { Colleague } from '@/types/hotel-training';
 
 export function RemoveMemberForm() {
-  const { session, user } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: colleagues = [] } = useColleagues();
   const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
@@ -54,15 +54,9 @@ export function RemoveMemberForm() {
     }
     if (!selected) return;
 
-    const token = session?.provider_token;
-    if (!token) {
-      toast.error('No Microsoft session token.');
-      return;
-    }
-
     setRemoving(true);
     try {
-      await patchColleague(token, selected.id, { IsActive: false });
+      await invokeManageColleague({ action: 'deactivate', itemId: selected.id });
       await queryClient.invalidateQueries({ queryKey: ['colleagues'] });
       setSelected(null);
       setConfirming(false);
