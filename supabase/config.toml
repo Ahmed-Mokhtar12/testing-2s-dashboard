@@ -53,3 +53,6 @@ verify_jwt = true
 
 [functions.whatsapp-control-status]
 verify_jwt = false
+
+[functions.sp-read-colleagues]
+verify_jwt = true
