@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.sp-read-colleagues]
 verify_jwt = true
+
+[functions.sp-read-columns]
+verify_jwt = true
