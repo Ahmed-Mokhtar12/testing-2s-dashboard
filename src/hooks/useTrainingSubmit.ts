@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeSubmitTraining, type ParticipantPayload } from '@/services/sharepoint';
 import type { TrainingDetailsValues, ParticipantRow } from '@/types/hotel-training';
+import type { Json } from '@/integrations/supabase/types';
 
 function generateTrainingId(): string {
   const now = new Date();
@@ -21,15 +22,6 @@ export interface SubmitResult {
   syncStatus: 'synced' | 'partial';
   failedParticipants: Array<{ row: ParticipantPayload; error: string }>;
 }
-
-type UntypedSupabase = {
-  from: (table: string) => {
-    insert: (values: unknown) => Promise<{ error: Error | null }>;
-    update: (values: unknown) => { eq: (column: string, value: unknown) => Promise<{ error: Error | null }> };
-  };
-};
-
-const trainingDb = supabase as unknown as UntypedSupabase;
 
 export function useTrainingSubmit() {
   const { session } = useAuth();
@@ -88,7 +80,7 @@ export function useTrainingSubmit() {
       let syncStatus: 'synced' | 'partial' = 'synced';
 
       try {
-        const { error: sessionError } = await trainingDb.from('training_sessions').insert({
+        const { error: sessionError } = await supabase.from('training_sessions').insert({
           sharepoint_id: sharepointId,
           training_id: trainingId,
           title: trainingDetails.title,
@@ -106,7 +98,7 @@ export function useTrainingSubmit() {
           throw sessionError;
         }
 
-        const { error: participantError } = await trainingDb.from('training_participants').insert(
+        const { error: participantError } = await supabase.from('training_participants').insert(
           rows.map((row) => ({
             training_id: trainingId,
             row_no: row.rowNo,
@@ -119,7 +111,7 @@ export function useTrainingSubmit() {
         );
 
         if (participantError) {
-          await trainingDb
+          await supabase
             .from('training_sessions')
             .update({ sync_status: 'partial' })
             .eq('training_id', trainingId);
@@ -128,7 +120,7 @@ export function useTrainingSubmit() {
       } catch (err) {
         syncStatus = 'partial';
         try {
-          await trainingDb
+          await supabase
             .from('training_sync_queue')
             .insert({
               training_id: trainingId,
@@ -136,7 +128,7 @@ export function useTrainingSubmit() {
                 trainingDetails,
                 participants: rows,
                 sharepointId,
-              },
+              } as unknown as Json,
               failure_reason: err instanceof Error ? err.message : String(err),
             });
         } catch {

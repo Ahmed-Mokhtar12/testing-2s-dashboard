@@ -14,7 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      burst_email: {
+      "2s burst_email": {
         Row: {
           create_at: string | null
           file_link: string | null
@@ -50,7 +50,7 @@ export type Database = {
         }
         Relationships: []
       }
-      burst_messaging: {
+      "2s burst_messaging": {
         Row: {
           attachment_url: string | null
           created_at: string | null
@@ -83,6 +83,177 @@ export type Database = {
           message_text?: string | null
           message_type?: string | null
           sender_number?: string | null
+        }
+        Relationships: []
+      }
+      "2s_email_threads_24Hrs_Deleted": {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          id: number
+          internet_message_id: string | null
+          last_direction: string | null
+          last_email_cc: string | null
+          last_email_to: string | null
+          last_guest_name: string | null
+          last_subject_summary: string | null
+          last_update_at: string | null
+          normalized_category: string | null
+          outlook_message_id: string | null
+          sender_number: string
+          sent_at: string | null
+          status: string
+          subject: string | null
+          thread_key: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          internet_message_id?: string | null
+          last_direction?: string | null
+          last_email_cc?: string | null
+          last_email_to?: string | null
+          last_guest_name?: string | null
+          last_subject_summary?: string | null
+          last_update_at?: string | null
+          normalized_category?: string | null
+          outlook_message_id?: string | null
+          sender_number: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          thread_key: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          internet_message_id?: string | null
+          last_direction?: string | null
+          last_email_cc?: string | null
+          last_email_to?: string | null
+          last_guest_name?: string | null
+          last_subject_summary?: string | null
+          last_update_at?: string | null
+          normalized_category?: string | null
+          outlook_message_id?: string | null
+          sender_number?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          thread_key?: string
+        }
+        Relationships: []
+      }
+      "2s-dashboard_AI_Chat": {
+        Row: {
+          ai_response: string | null
+          created_at: string
+          id: string
+          is_archived: boolean
+          session_id: string
+          user_id: string | null
+          user_message: string | null
+        }
+        Insert: {
+          ai_response?: string | null
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          session_id: string
+          user_id?: string | null
+          user_message?: string | null
+        }
+        Update: {
+          ai_response?: string | null
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          session_id?: string
+          user_id?: string | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      "2Seasons_Sera_Email_Log": {
+        Row: {
+          arrival: string | null
+          category: string | null
+          conversation_id: string | null
+          created_at: string
+          departure: string | null
+          email_cc: string | null
+          email_subject: string | null
+          email_to: string | null
+          email_type: string
+          guest_email: string | null
+          guest_name: string | null
+          id: number
+          internet_message_id: string | null
+          nature_of_request: string | null
+          outlook_message_id: string | null
+          sender_name: string | null
+          sender_number: string | null
+          sent_at: string
+          thread_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          arrival?: string | null
+          category?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          departure?: string | null
+          email_cc?: string | null
+          email_subject?: string | null
+          email_to?: string | null
+          email_type: string
+          guest_email?: string | null
+          guest_name?: string | null
+          id?: number
+          internet_message_id?: string | null
+          nature_of_request?: string | null
+          outlook_message_id?: string | null
+          sender_name?: string | null
+          sender_number?: string | null
+          sent_at?: string
+          thread_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arrival?: string | null
+          category?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          departure?: string | null
+          email_cc?: string | null
+          email_subject?: string | null
+          email_to?: string | null
+          email_type?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          id?: number
+          internet_message_id?: string | null
+          nature_of_request?: string | null
+          outlook_message_id?: string | null
+          sender_name?: string | null
+          sender_number?: string | null
+          sent_at?: string
+          thread_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      alembic_version: {
+        Row: {
+          version_num: string
+        }
+        Insert: {
+          version_num: string
+        }
+        Update: {
+          version_num?: string
         }
         Relationships: []
       }
@@ -191,102 +362,54 @@ export type Database = {
         }
         Relationships: []
       }
-      "Conducted Training": {
+      competitor_hotel_rates: {
         Row: {
+          availability: string | null
+          check_in_date: string
+          check_out_date: string | null
           created_at: string
+          currency: string
+          hotel_name: string
           id: number
-          "Summary of the training": string | null
+          nights: number
+          notes: string | null
+          rate_aed: number | null
+          rate_original: number | null
+          room_type: string | null
+          scraped_at: string
+          source: string
         }
         Insert: {
+          availability?: string | null
+          check_in_date: string
+          check_out_date?: string | null
           created_at?: string
+          currency?: string
+          hotel_name: string
           id?: number
-          "Summary of the training"?: string | null
+          nights?: number
+          notes?: string | null
+          rate_aed?: number | null
+          rate_original?: number | null
+          room_type?: string | null
+          scraped_at?: string
+          source?: string
         }
         Update: {
+          availability?: string | null
+          check_in_date?: string
+          check_out_date?: string | null
           created_at?: string
+          currency?: string
+          hotel_name?: string
           id?: number
-          "Summary of the training"?: string | null
-        }
-        Relationships: []
-      }
-      conducted_training: {
-        Row: {
-          created_at: string
-          embedding: string | null
-          id: number
-          summary_of_the_training: string | null
-        }
-        Insert: {
-          created_at: string
-          embedding?: string | null
-          id?: number
-          summary_of_the_training?: string | null
-        }
-        Update: {
-          created_at?: string
-          embedding?: string | null
-          id?: number
-          summary_of_the_training?: string | null
-        }
-        Relationships: []
-      }
-      email_threads: {
-        Row: {
-          conversation_id: string | null
-          created_at: string
-          id: number
-          internet_message_id: string | null
-          last_direction: string | null
-          last_email_cc: string | null
-          last_email_to: string | null
-          last_guest_name: string | null
-          last_subject_summary: string | null
-          last_update_at: string | null
-          normalized_category: string | null
-          outlook_message_id: string | null
-          sender_number: string
-          sent_at: string | null
-          status: string
-          subject: string | null
-          thread_key: string
-        }
-        Insert: {
-          conversation_id?: string | null
-          created_at?: string
-          id?: number
-          internet_message_id?: string | null
-          last_direction?: string | null
-          last_email_cc?: string | null
-          last_email_to?: string | null
-          last_guest_name?: string | null
-          last_subject_summary?: string | null
-          last_update_at?: string | null
-          normalized_category?: string | null
-          outlook_message_id?: string | null
-          sender_number: string
-          sent_at?: string | null
-          status?: string
-          subject?: string | null
-          thread_key: string
-        }
-        Update: {
-          conversation_id?: string | null
-          created_at?: string
-          id?: number
-          internet_message_id?: string | null
-          last_direction?: string | null
-          last_email_cc?: string | null
-          last_email_to?: string | null
-          last_guest_name?: string | null
-          last_subject_summary?: string | null
-          last_update_at?: string | null
-          normalized_category?: string | null
-          outlook_message_id?: string | null
-          sender_number?: string
-          sent_at?: string | null
-          status?: string
-          subject?: string | null
-          thread_key?: string
+          nights?: number
+          notes?: string | null
+          rate_aed?: number | null
+          rate_original?: number | null
+          room_type?: string | null
+          scraped_at?: string
+          source?: string
         }
         Relationships: []
       }
@@ -530,45 +653,489 @@ export type Database = {
         }
         Relationships: []
       }
-      reviews: {
+      prompt_patch_history: {
         Row: {
-          Author: string | null
-          Date: string | null
-          "Hotel Name": string | null
+          applied_changes: Json | null
+          created_at: string
+          dry_run: boolean | null
+          evaluator_workflow_id: string | null
           id: number
-          Language: string | null
-          "Response Text": string | null
-          Score: number | null
-          Source: string | null
-          Text: string | null
-          Title: string | null
-          URL: string | null
+          new_prompt_full_text: string | null
+          new_prompt_hash: string | null
+          old_prompt_full_text: string | null
+          old_prompt_hash: string | null
+          patch_status: string | null
+          reviewer_output: Json | null
+          skipped_changes: Json | null
+          target_agent_name: string | null
+          target_workflow_backup_json: Json | null
+          target_workflow_id: string | null
+          target_workflow_name: string | null
+          validation_output: Json | null
         }
         Insert: {
-          Author?: string | null
-          Date?: string | null
-          "Hotel Name"?: string | null
+          applied_changes?: Json | null
+          created_at?: string
+          dry_run?: boolean | null
+          evaluator_workflow_id?: string | null
           id?: number
-          Language?: string | null
-          "Response Text"?: string | null
-          Score?: number | null
-          Source?: string | null
-          Text?: string | null
-          Title?: string | null
-          URL?: string | null
+          new_prompt_full_text?: string | null
+          new_prompt_hash?: string | null
+          old_prompt_full_text?: string | null
+          old_prompt_hash?: string | null
+          patch_status?: string | null
+          reviewer_output?: Json | null
+          skipped_changes?: Json | null
+          target_agent_name?: string | null
+          target_workflow_backup_json?: Json | null
+          target_workflow_id?: string | null
+          target_workflow_name?: string | null
+          validation_output?: Json | null
         }
         Update: {
-          Author?: string | null
-          Date?: string | null
-          "Hotel Name"?: string | null
+          applied_changes?: Json | null
+          created_at?: string
+          dry_run?: boolean | null
+          evaluator_workflow_id?: string | null
           id?: number
-          Language?: string | null
-          "Response Text"?: string | null
-          Score?: number | null
-          Source?: string | null
-          Text?: string | null
-          Title?: string | null
-          URL?: string | null
+          new_prompt_full_text?: string | null
+          new_prompt_hash?: string | null
+          old_prompt_full_text?: string | null
+          old_prompt_hash?: string | null
+          patch_status?: string | null
+          reviewer_output?: Json | null
+          skipped_changes?: Json | null
+          target_agent_name?: string | null
+          target_workflow_backup_json?: Json | null
+          target_workflow_id?: string | null
+          target_workflow_name?: string | null
+          validation_output?: Json | null
+        }
+        Relationships: []
+      }
+      regression_run_history: {
+        Row: {
+          block_reason: string | null
+          created_at: string
+          critical_failures: number | null
+          detailed_results: Json | null
+          deterministic_overrides: number | null
+          evaluator_run_id: string | null
+          id: number
+          original_prompt_hash: string | null
+          patch_blocked: boolean | null
+          patched_prompt_hash: string | null
+          regression_passed: boolean | null
+          regression_score: number | null
+          suite_name: string | null
+          suite_version: number | null
+          test_cases_failed: number | null
+          test_cases_passed: number | null
+          test_cases_total: number | null
+        }
+        Insert: {
+          block_reason?: string | null
+          created_at?: string
+          critical_failures?: number | null
+          detailed_results?: Json | null
+          deterministic_overrides?: number | null
+          evaluator_run_id?: string | null
+          id?: number
+          original_prompt_hash?: string | null
+          patch_blocked?: boolean | null
+          patched_prompt_hash?: string | null
+          regression_passed?: boolean | null
+          regression_score?: number | null
+          suite_name?: string | null
+          suite_version?: number | null
+          test_cases_failed?: number | null
+          test_cases_passed?: number | null
+          test_cases_total?: number | null
+        }
+        Update: {
+          block_reason?: string | null
+          created_at?: string
+          critical_failures?: number | null
+          detailed_results?: Json | null
+          deterministic_overrides?: number | null
+          evaluator_run_id?: string | null
+          id?: number
+          original_prompt_hash?: string | null
+          patch_blocked?: boolean | null
+          patched_prompt_hash?: string | null
+          regression_passed?: boolean | null
+          regression_score?: number | null
+          suite_name?: string | null
+          suite_version?: number | null
+          test_cases_failed?: number | null
+          test_cases_passed?: number | null
+          test_cases_total?: number | null
+        }
+        Relationships: []
+      }
+      regression_test_cases: {
+        Row: {
+          active: boolean | null
+          category: string
+          context: string | null
+          created_at: string
+          critical: boolean | null
+          expected_behaviors: Json
+          expected_language: string
+          forbidden_behaviors: Json
+          guest_input: string
+          id: number
+          severity: string
+          suite_name: string
+          suite_version: number
+          weight: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          category: string
+          context?: string | null
+          created_at?: string
+          critical?: boolean | null
+          expected_behaviors?: Json
+          expected_language?: string
+          forbidden_behaviors?: Json
+          guest_input: string
+          id?: number
+          severity?: string
+          suite_name?: string
+          suite_version?: number
+          weight?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          category?: string
+          context?: string | null
+          created_at?: string
+          critical?: boolean | null
+          expected_behaviors?: Json
+          expected_language?: string
+          forbidden_behaviors?: Json
+          guest_input?: string
+          id?: number
+          severity?: string
+          suite_name?: string
+          suite_version?: number
+          weight?: number | null
+        }
+        Relationships: []
+      }
+      sera_email_evaluation_history: {
+        Row: {
+          action_breakdown: Json | null
+          date_range_end: string
+          date_range_start: string
+          email_agent_prompt_chars: number | null
+          email_agent_prompt_hash: string | null
+          emails_evaluated: number
+          evaluated_at: string
+          evaluation_duration_ms: number | null
+          evaluator_model: string | null
+          executive_summary: string | null
+          id: number
+          overall_score: number
+          per_criterion: Json
+          raw_evaluator_output: Json | null
+          recommendations: Json | null
+          score_delta_from_previous: number | null
+          status: string
+          strengths: Json | null
+          top_weaknesses: Json | null
+        }
+        Insert: {
+          action_breakdown?: Json | null
+          date_range_end: string
+          date_range_start: string
+          email_agent_prompt_chars?: number | null
+          email_agent_prompt_hash?: string | null
+          emails_evaluated: number
+          evaluated_at?: string
+          evaluation_duration_ms?: number | null
+          evaluator_model?: string | null
+          executive_summary?: string | null
+          id?: number
+          overall_score: number
+          per_criterion: Json
+          raw_evaluator_output?: Json | null
+          recommendations?: Json | null
+          score_delta_from_previous?: number | null
+          status: string
+          strengths?: Json | null
+          top_weaknesses?: Json | null
+        }
+        Update: {
+          action_breakdown?: Json | null
+          date_range_end?: string
+          date_range_start?: string
+          email_agent_prompt_chars?: number | null
+          email_agent_prompt_hash?: string | null
+          emails_evaluated?: number
+          evaluated_at?: string
+          evaluation_duration_ms?: number | null
+          evaluator_model?: string | null
+          executive_summary?: string | null
+          id?: number
+          overall_score?: number
+          per_criterion?: Json
+          raw_evaluator_output?: Json | null
+          recommendations?: Json | null
+          score_delta_from_previous?: number | null
+          status?: string
+          strengths?: Json | null
+          top_weaknesses?: Json | null
+        }
+        Relationships: []
+      }
+      sera_email_inbox_log: {
+        Row: {
+          action: string | null
+          ai_summary: string | null
+          bcc_emails: string | null
+          body_preview: string | null
+          category: string | null
+          cc_emails: string | null
+          cc_only_should_reply: boolean | null
+          confidence: string | null
+          context_found: Json | null
+          conversation_id: string | null
+          decision_json: Json | null
+          draft_created: boolean | null
+          draft_id: string | null
+          email_sent: boolean | null
+          error_message: string | null
+          from_email: string | null
+          from_name: string | null
+          id: string
+          internet_message_id: string | null
+          is_directly_addressed_to_sera: boolean | null
+          matched_identifiers: Json | null
+          message_id: string | null
+          priority: string | null
+          processed_at: string | null
+          received_at: string | null
+          send_gate_result: Json | null
+          send_mode: string | null
+          sent_at: string | null
+          sent_bcc: string | null
+          sent_cc: string | null
+          sent_message_id: string | null
+          sent_status: string | null
+          sent_subject: string | null
+          sent_to: string | null
+          sera_recipient_role: string | null
+          subject: string | null
+          subject_clean: string | null
+          to_emails: string | null
+        }
+        Insert: {
+          action?: string | null
+          ai_summary?: string | null
+          bcc_emails?: string | null
+          body_preview?: string | null
+          category?: string | null
+          cc_emails?: string | null
+          cc_only_should_reply?: boolean | null
+          confidence?: string | null
+          context_found?: Json | null
+          conversation_id?: string | null
+          decision_json?: Json | null
+          draft_created?: boolean | null
+          draft_id?: string | null
+          email_sent?: boolean | null
+          error_message?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          internet_message_id?: string | null
+          is_directly_addressed_to_sera?: boolean | null
+          matched_identifiers?: Json | null
+          message_id?: string | null
+          priority?: string | null
+          processed_at?: string | null
+          received_at?: string | null
+          send_gate_result?: Json | null
+          send_mode?: string | null
+          sent_at?: string | null
+          sent_bcc?: string | null
+          sent_cc?: string | null
+          sent_message_id?: string | null
+          sent_status?: string | null
+          sent_subject?: string | null
+          sent_to?: string | null
+          sera_recipient_role?: string | null
+          subject?: string | null
+          subject_clean?: string | null
+          to_emails?: string | null
+        }
+        Update: {
+          action?: string | null
+          ai_summary?: string | null
+          bcc_emails?: string | null
+          body_preview?: string | null
+          category?: string | null
+          cc_emails?: string | null
+          cc_only_should_reply?: boolean | null
+          confidence?: string | null
+          context_found?: Json | null
+          conversation_id?: string | null
+          decision_json?: Json | null
+          draft_created?: boolean | null
+          draft_id?: string | null
+          email_sent?: boolean | null
+          error_message?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          internet_message_id?: string | null
+          is_directly_addressed_to_sera?: boolean | null
+          matched_identifiers?: Json | null
+          message_id?: string | null
+          priority?: string | null
+          processed_at?: string | null
+          received_at?: string | null
+          send_gate_result?: Json | null
+          send_mode?: string | null
+          sent_at?: string | null
+          sent_bcc?: string | null
+          sent_cc?: string | null
+          sent_message_id?: string | null
+          sent_status?: string | null
+          sent_subject?: string | null
+          sent_to?: string | null
+          sera_recipient_role?: string | null
+          subject?: string | null
+          subject_clean?: string | null
+          to_emails?: string | null
+        }
+        Relationships: []
+      }
+      sera_email_threads: {
+        Row: {
+          context_snapshot: Json | null
+          conversation_id: string | null
+          created_at: string | null
+          from_email: string | null
+          from_name: string | null
+          id: string
+          internet_message_id: string | null
+          last_action: string | null
+          last_category: string | null
+          last_direction: string | null
+          last_message_id: string | null
+          last_update_at: string | null
+          status: string | null
+          subject_clean: string | null
+          thread_key: string
+          updated_at: string | null
+        }
+        Insert: {
+          context_snapshot?: Json | null
+          conversation_id?: string | null
+          created_at?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          internet_message_id?: string | null
+          last_action?: string | null
+          last_category?: string | null
+          last_direction?: string | null
+          last_message_id?: string | null
+          last_update_at?: string | null
+          status?: string | null
+          subject_clean?: string | null
+          thread_key: string
+          updated_at?: string | null
+        }
+        Update: {
+          context_snapshot?: Json | null
+          conversation_id?: string | null
+          created_at?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          internet_message_id?: string | null
+          last_action?: string | null
+          last_category?: string | null
+          last_direction?: string | null
+          last_message_id?: string | null
+          last_update_at?: string | null
+          status?: string | null
+          subject_clean?: string | null
+          thread_key?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sera_voice_evaluation_history: {
+        Row: {
+          calls_evaluated: number
+          date_range_end: string
+          date_range_start: string
+          elevenlabs_prompt_chars: number | null
+          elevenlabs_prompt_hash: string | null
+          evaluated_at: string
+          evaluation_duration_ms: number | null
+          evaluator_model: string | null
+          executive_summary: string | null
+          id: number
+          n8n_routing_prompt_chars: number | null
+          n8n_routing_prompt_hash: string | null
+          overall_score: number
+          per_criterion: Json
+          raw_evaluator_output: Json | null
+          recommendations: Json | null
+          score_delta_from_previous: number | null
+          status: string
+          strengths: Json | null
+          top_weaknesses: Json | null
+        }
+        Insert: {
+          calls_evaluated: number
+          date_range_end: string
+          date_range_start: string
+          elevenlabs_prompt_chars?: number | null
+          elevenlabs_prompt_hash?: string | null
+          evaluated_at?: string
+          evaluation_duration_ms?: number | null
+          evaluator_model?: string | null
+          executive_summary?: string | null
+          id?: number
+          n8n_routing_prompt_chars?: number | null
+          n8n_routing_prompt_hash?: string | null
+          overall_score: number
+          per_criterion: Json
+          raw_evaluator_output?: Json | null
+          recommendations?: Json | null
+          score_delta_from_previous?: number | null
+          status: string
+          strengths?: Json | null
+          top_weaknesses?: Json | null
+        }
+        Update: {
+          calls_evaluated?: number
+          date_range_end?: string
+          date_range_start?: string
+          elevenlabs_prompt_chars?: number | null
+          elevenlabs_prompt_hash?: string | null
+          evaluated_at?: string
+          evaluation_duration_ms?: number | null
+          evaluator_model?: string | null
+          executive_summary?: string | null
+          id?: number
+          n8n_routing_prompt_chars?: number | null
+          n8n_routing_prompt_hash?: string | null
+          overall_score?: number
+          per_criterion?: Json
+          raw_evaluator_output?: Json | null
+          recommendations?: Json | null
+          score_delta_from_previous?: number | null
+          status?: string
+          strengths?: Json | null
+          top_weaknesses?: Json | null
         }
         Relationships: []
       }
@@ -644,30 +1211,164 @@ export type Database = {
         }
         Relationships: []
       }
-      Sop: {
+      training_participants: {
         Row: {
-          department_name: string | null
-          file_id: string
+          colleague_name: string
+          department: string
+          employee_id: string
           id: string
-          section: string | null
-          sop: string | null
-          title: string | null
+          position: string
+          row_no: number
+          section: string
+          training_id: string
         }
         Insert: {
-          department_name?: string | null
-          file_id: string
+          colleague_name: string
+          department: string
+          employee_id: string
           id?: string
-          section?: string | null
-          sop?: string | null
-          title?: string | null
+          position: string
+          row_no: number
+          section: string
+          training_id: string
         }
         Update: {
-          department_name?: string | null
-          file_id?: string
+          colleague_name?: string
+          department?: string
+          employee_id?: string
           id?: string
-          section?: string | null
-          sop?: string | null
-          title?: string | null
+          position?: string
+          row_no?: number
+          section?: string
+          training_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_participants_training_id_fkey"
+            columns: ["training_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["training_id"]
+          },
+        ]
+      }
+      training_sessions: {
+        Row: {
+          department: string
+          duration_minutes: number
+          id: string
+          location: string | null
+          remarks: string | null
+          sharepoint_id: string
+          submitted_at: string
+          submitted_by: string
+          sync_status: string
+          title: string
+          total_participants: number
+          trainer_names: string[]
+          training_date: string
+          training_id: string
+        }
+        Insert: {
+          department: string
+          duration_minutes: number
+          id?: string
+          location?: string | null
+          remarks?: string | null
+          sharepoint_id: string
+          submitted_at?: string
+          submitted_by: string
+          sync_status?: string
+          title: string
+          total_participants: number
+          trainer_names: string[]
+          training_date: string
+          training_id: string
+        }
+        Update: {
+          department?: string
+          duration_minutes?: number
+          id?: string
+          location?: string | null
+          remarks?: string | null
+          sharepoint_id?: string
+          submitted_at?: string
+          submitted_by?: string
+          sync_status?: string
+          title?: string
+          total_participants?: number
+          trainer_names?: string[]
+          training_date?: string
+          training_id?: string
+        }
+        Relationships: []
+      }
+      training_sync_queue: {
+        Row: {
+          created_at: string
+          failure_reason: string | null
+          id: string
+          payload: Json
+          resolved: boolean
+          training_id: string
+        }
+        Insert: {
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          payload: Json
+          resolved?: boolean
+          training_id: string
+        }
+        Update: {
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          payload?: Json
+          resolved?: boolean
+          training_id?: string
+        }
+        Relationships: []
+      }
+      "Two Seasons and Reviews": {
+        Row: {
+          Author: string | null
+          Date: string | null
+          "Hotel Name": string | null
+          id: number
+          Language: string | null
+          "Response Text": string | null
+          Score: number | null
+          Source: string | null
+          Text: string | null
+          Title: string | null
+          URL: string | null
+        }
+        Insert: {
+          Author?: string | null
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number
+          Language?: string | null
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
+        }
+        Update: {
+          Author?: string | null
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number
+          Language?: string | null
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
         }
         Relationships: []
       }
@@ -907,36 +1608,6 @@ export type Database = {
         }
         Relationships: []
       }
-      website_chats: {
-        Row: {
-          ai_response: string | null
-          created_at: string
-          id: string
-          is_archived: boolean
-          session_id: string
-          user_id: string | null
-          user_message: string | null
-        }
-        Insert: {
-          ai_response?: string | null
-          created_at?: string
-          id?: string
-          is_archived?: boolean
-          session_id: string
-          user_id?: string | null
-          user_message?: string | null
-        }
-        Update: {
-          ai_response?: string | null
-          created_at?: string
-          id?: string
-          is_archived?: boolean
-          session_id?: string
-          user_id?: string | null
-          user_message?: string | null
-        }
-        Relationships: []
-      }
       website_email_threads: {
         Row: {
           conversation_id: string | null
@@ -1048,6 +1719,24 @@ export type Database = {
           sent_date?: string
           status?: string
           workflow_id?: string | null
+        }
+        Relationships: []
+      }
+      workflow_state: {
+        Row: {
+          enabled: boolean
+          updated_at: string | null
+          workflow_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          updated_at?: string | null
+          workflow_id: string
+        }
+        Update: {
+          enabled?: boolean
+          updated_at?: string | null
+          workflow_id?: string
         }
         Relationships: []
       }
