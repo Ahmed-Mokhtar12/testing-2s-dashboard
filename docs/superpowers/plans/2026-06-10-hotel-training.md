@@ -92,6 +92,14 @@ field_7  Number     ← or Text/Note
 `field_5 typeAsString:` Not verified yet - provider_token unavailable in Codex session.
 `field_7 typeAsString:` Not verified yet - provider_token unavailable in Codex session.
 
+> **2026-07-27 resolution — CLOSED:** Both `field_5` (Location) and `field_7`
+> (Remarks) were empirically confirmed as SharePoint **Number** columns via the
+> raw Graph `number` column facet on the live list. Graph v1.0 exposes no
+> `typeAsString` property, so the curl check above cannot work as written; the
+> constants `LOCATION_TYPE_AS_STRING` / `REMARKS_TYPE_AS_STRING` = `'Number'`
+> (`src/lib/hotel-training-constants.ts`) are the effective source — and they
+> match reality.
+
 ---
 
 ---
@@ -1590,7 +1598,7 @@ _Fill in after review._
 Codex must stop here and report:
 - [x] File committed
 - [x] Build result
-- [ ] Confirm `field_5` and `field_7` `typeAsString` was checked — not checked in this session because no Microsoft provider token is available; form supports Number/Text/Note via runtime props
+- [ ] Confirm `field_5` and `field_7` `typeAsString` was checked — not checked in this session because no Microsoft provider token is available; form supports Number/Text/Note via runtime props *(2026-07-27: resolved — both empirically confirmed as **Number** via the raw Graph `number` facet; Graph v1.0 has no `typeAsString`, so the `'Number'` constants are the effective source and match reality)*
 
 **Do not start Task 8 until this checkpoint is reviewed.**
 
@@ -3520,7 +3528,12 @@ Codex must stop here and report:
 > identity-only); R4 done (types regenerated, `UntypedSupabase` cast removed);
 > R5 done (migration `20260727100000`); R6 accepted as-is for Phase 1. R1,
 > the runtime half of R2, and R7 are pending the supervised live
-> verification — Task 15 of the new plan.
+> verification — Task 15 of the new plan. The long-open `field_5`/`field_7`
+> "Number vs Text" question is also CLOSED: both empirically confirmed as
+> **Number** columns via the raw Graph `number` facet (Graph v1.0 has no
+> `typeAsString` property; the `LOCATION_TYPE_AS_STRING` /
+> `REMARKS_TYPE_AS_STRING` = `'Number'` constants are the effective source
+> and match reality).
 >
 > **Amendment:** `TrainerName_x002e_` on `Monthly_Training` turned out to be a
 > multi-select **People Picker** column, not the MultiChoice this spec/plan

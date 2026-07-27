@@ -54,15 +54,17 @@ All reads/writes go through Microsoft Graph API (`/sites/{site-id}/lists/{list-i
 | `Title` | Single line text | yes |
 | `field_1` | Choice (single) — Department | yes |
 | `field_4` | Number — Duration (minutes) | yes |
-| `field_5` | **Verify at runtime** — reported as Number; may be Text. See note below | no |
+| `field_5` | **Verify at runtime** — reported as Number; may be Text. See note below *(2026-07-27: confirmed **Number** — see resolution note)* | no |
 | `field_6` | Number — Total Participants | yes (must equal completed participant count exactly) |
-| `field_7` | **Verify at runtime** — reported as Number; may be Text. See note below | no |
+| `field_7` | **Verify at runtime** — reported as Number; may be Text. See note below *(2026-07-27: confirmed **Number** — see resolution note)* | no |
 | `field_8` | DateTime — Date | yes |
 | `TrainerName_x002e_` | Choice (multi-select) — Trainer Name | yes |
 
 > Department and TrainerName choice options are fetched live from Graph (`/lists/{id}/columns`) to stay in sync with Power Apps.
 
 > **⚠ field_5 (Location) and field_7 (Remarks) — verify column types at runtime:** The spec records these as Number, but business use suggests they may be Text. The implementor must call `GET /sites/{siteId}/lists/{listId}/columns`, check `typeAsString` for both fields, and build UI controls accordingly. Number type → number input + numeric Zod. Text type → text/textarea input + string Zod.
+
+> **2026-07-27 resolution — CLOSED:** Both `field_5` (Location) and `field_7` (Remarks) were empirically confirmed as SharePoint **Number** columns via the raw Graph `number` column facet on the live list. Note that Graph v1.0 exposes no `typeAsString` property, so the runtime check described above cannot work as written; the constants `LOCATION_TYPE_AS_STRING` / `REMARKS_TYPE_AS_STRING` = `'Number'` (`src/lib/hotel-training-constants.ts`) are the effective source — and they match reality.
 
 > **⚠ field_6 (Total Participants):** Written to SharePoint as `trainingDetails.totalParticipants`. The submission must validate that completed participant rows equal this value exactly; a mismatch must block the POST.
 
