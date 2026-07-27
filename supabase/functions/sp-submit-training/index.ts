@@ -39,6 +39,12 @@ const TRAINER_EMAILS: Record<string, string> = {
 // temporary diagnostic deploy (see task report); stable per site.
 const UIL_LIST_ID = '265691f8-3786-4e9f-932f-79835f30a6cf';
 
+// Module-scope cache: persists across requests for the lifetime of a warm
+// Deno isolate, with no invalidation. If a trainer's User Information List
+// item is ever deleted and recreated (e.g. the trainer is removed and
+// re-added to the site), this cache could serve a stale LookupId until the
+// isolate recycles. Accepted as self-healing — isolates are short-lived and
+// this scenario is rare — rather than adding cache-busting complexity here.
 const lookupIdCache = new Map<string, number>();
 
 async function resolveTrainerLookupIds(

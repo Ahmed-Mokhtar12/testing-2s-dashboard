@@ -71,7 +71,11 @@ export async function graphFetch<T = unknown>(
   const res = await fetch(url, { ...init, headers });
 
   if (res.status === 429 && retryCount < 3) {
-    const retryAfter = parseInt(res.headers.get('Retry-After') ?? '10', 10);
+    // Retry-After can be either delay-seconds or an HTTP-date; parseInt on an
+    // HTTP-date yields NaN, which would otherwise produce an immediate
+    // (delay(NaN) resolves right away) hot-retry loop against Graph.
+    const parsed = parseInt(res.headers.get('Retry-After') ?? '10', 10);
+    const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 10;
     await delay(retryAfter * 1000);
     return graphFetch<T>(token, url, init, retryCount + 1);
   }

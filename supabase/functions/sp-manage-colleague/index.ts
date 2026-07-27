@@ -82,10 +82,13 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'deactivate') {
-      if (!body.itemId?.trim()) return json(req, { error: 'itemId is required.' }, 400);
+      const itemId = body.itemId?.trim();
+      if (!itemId || !/^\d+$/.test(itemId)) {
+        return json(req, { error: 'itemId must be a numeric SharePoint item id.' }, 400);
+      }
       await graphFetch(
         token,
-        `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items/${body.itemId}/fields`,
+        `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items/${itemId}/fields`,
         { method: 'PATCH', body: JSON.stringify({ IsActive: false }) },
       );
       return json(req, { ok: true });
