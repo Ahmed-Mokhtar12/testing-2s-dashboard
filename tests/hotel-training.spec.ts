@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   mockColleaguesFunction,
   mockColumnsFunction,
-  mockGraphAPI,
   mockManageColleagueFunction,
   mockSubmitFunction,
   mockSupabaseRest,
@@ -15,7 +14,6 @@ const FUTURE_DAY = '15';
 
 async function openHotelTraining(page: Page, email = USER_EMAIL, opts: { supabaseFailure?: boolean } = {}) {
   await setMockAuthSession(page, email);
-  await mockGraphAPI(page);
   await mockColleaguesFunction(page);
   await mockColumnsFunction(page);
   await mockSubmitFunction(page);
@@ -130,10 +128,10 @@ test.describe('Hotel Training', () => {
     await expect(page.getByLabel('Total Participants')).toHaveValue('3');
   });
 
-  test('trainer name dropdown uses live Graph column choices, not hardcoded options', async ({ page }) => {
-    // MOCK_COLUMNS returns ['Ahmed Mokhtar', 'Amir Monir'] for TrainerName_x002e_.
+  test('trainer name dropdown uses live column choices, not hardcoded options', async ({ page }) => {
+    // MOCK_COLUMNS_FLAT returns ['Ahmed Mokhtar', 'Amir Monir'] for trainers.
     // TRAINER_OPTIONS (hardcoded) has a third entry: 'Xarmaigne Narciso'.
-    // If the dropdown reads live Graph data, 'Xarmaigne Narciso' must be absent.
+    // If the dropdown reads live sp-read-columns data, 'Xarmaigne Narciso' must be absent.
     await openHotelTraining(page);
     await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
     await expect(page.getByRole('option', { name: 'Xarmaigne Narciso' })).toHaveCount(0);
