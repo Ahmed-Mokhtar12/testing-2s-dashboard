@@ -1,11 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import {
-  createTrainingSession,
-  createParticipants,
-  type ParticipantPayload,
-} from '@/services/sharepoint';
+import { invokeSubmitTraining, type ParticipantPayload } from '@/services/sharepoint';
 import type { TrainingDetailsValues, ParticipantRow } from '@/types/hotel-training';
 
 function generateTrainingId(): string {
@@ -40,11 +36,6 @@ export function useTrainingSubmit() {
 
   return useMutation<SubmitResult, Error, SubmitInput>({
     mutationFn: async ({ trainingDetails, participants }) => {
-      const token = session?.provider_token;
-      if (!token) {
-        throw new Error('No Microsoft session token. Please sign in again.');
-      }
-
       const completed = participants.filter((participant) => participant.colleague !== null);
       if (completed.length !== trainingDetails.totalParticipants) {
         throw new Error(
@@ -56,17 +47,6 @@ export function useTrainingSubmit() {
       date.setHours(trainingDetails.hour, trainingDetails.minute, 0, 0);
       const isoDate = date.toISOString();
       const trainingId = generateTrainingId();
-
-      const sharepointId = await createTrainingSession(token, {
-        title: trainingDetails.title,
-        department: trainingDetails.department,
-        durationMinutes: trainingDetails.durationMinutes,
-        totalParticipants: trainingDetails.totalParticipants,
-        location: trainingDetails.location ?? null,
-        remarks: trainingDetails.remarks ?? null,
-        trainingDate: isoDate,
-        trainerNames: trainingDetails.trainerNames,
-      });
 
       const rows: ParticipantPayload[] = completed.map((participant, index) => {
         const colleague = participant.colleague;
@@ -85,7 +65,20 @@ export function useTrainingSubmit() {
         };
       });
 
-      const { failed } = await createParticipants(token, rows);
+      const { sharepointId, failedParticipants } = await invokeSubmitTraining({
+        trainingId,
+        title: trainingDetails.title,
+        department: trainingDetails.department,
+        durationMinutes: trainingDetails.durationMinutes,
+        totalParticipants: trainingDetails.totalParticipants,
+        location: trainingDetails.location ?? null,
+        remarks: trainingDetails.remarks ?? null,
+        trainingDate: isoDate,
+        trainerNames: trainingDetails.trainerNames,
+        participants: rows,
+      });
+
+      const failed = failedParticipants;
 
       if (failed.length > 0) {
         return { trainingId, sharepointId, syncStatus: 'partial', failedParticipants: failed };

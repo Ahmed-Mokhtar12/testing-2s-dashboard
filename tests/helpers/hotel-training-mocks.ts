@@ -98,6 +98,18 @@ export async function mockColumnsFunction(page: Page) {
   );
 }
 
+export async function mockSubmitFunction(page: Page) {
+  await page.route(
+    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-submit-training`,
+    async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, body: 'ok' });
+      }
+      return route.fulfill({ json: { sharepointId: MOCK_SP_SESSION_ID, failedParticipants: [] } });
+    },
+  );
+}
+
 const PROJECT_REF = 'yczcebfaqerlwfalrbjn';
 const AUTH_KEY = `sb-${PROJECT_REF}-auth-token`;
 

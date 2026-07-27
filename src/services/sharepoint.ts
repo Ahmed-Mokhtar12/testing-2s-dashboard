@@ -236,6 +236,28 @@ export interface ParticipantPayload {
   department: string;
 }
 
+export type SubmitTrainingRequest = TrainingSessionPayload & {
+  trainingId: string;
+  participants: ParticipantPayload[];
+};
+
+export interface SubmitTrainingResponse {
+  sharepointId: string;
+  failedParticipants: Array<{ row: ParticipantPayload; error: string }>;
+}
+
+export async function invokeSubmitTraining(
+  payload: SubmitTrainingRequest,
+): Promise<SubmitTrainingResponse> {
+  const { data, error } = await supabase.functions.invoke('sp-submit-training', {
+    body: payload,
+  });
+  if (error) {
+    throw new Error(await extractInvokeError(error));
+  }
+  return data as SubmitTrainingResponse;
+}
+
 export interface CreateParticipantsResult {
   succeeded: ParticipantPayload[];
   failed: Array<{ row: ParticipantPayload; error: string }>;
