@@ -62,3 +62,6 @@ verify_jwt = true
 
 [functions.sp-submit-training]
 verify_jwt = true
+
+[functions.sp-manage-colleague]
+verify_jwt = true
