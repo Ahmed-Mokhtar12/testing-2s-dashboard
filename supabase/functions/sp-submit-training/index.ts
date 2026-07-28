@@ -104,8 +104,14 @@ function normalizeTrainers(body: SubmitBody): TrainerRef[] | null {
   if (Array.isArray(body.trainerNames) && body.trainerNames.length > 0) {
     const cleaned: TrainerRef[] = [];
     for (const name of body.trainerNames) {
+      // hasOwnProperty guard: TRAINER_EMAILS is a plain object, so indexing it
+      // with a caller-controlled string (e.g. "toString", "constructor")
+      // would otherwise resolve an inherited Object.prototype member instead
+      // of `undefined`, defeating the `!email` check below.
+      if (typeof name !== 'string' || !Object.prototype.hasOwnProperty.call(TRAINER_EMAILS, name)) {
+        return null;
+      }
       const email = TRAINER_EMAILS[name];
-      if (!email) return null;
       cleaned.push({ displayName: name, email: email.toLowerCase() });
     }
     return cleaned;
@@ -151,7 +157,17 @@ Deno.serve(async (req) => {
     return json(req, { error: 'Invalid JSON body.' }, 400);
   }
 
-  const trainers = normalizeTrainers(body);
+  // Defense in depth: normalizeTrainers is expected to be pure/non-throwing
+  // (see the hasOwnProperty guard above), but this call sits outside the
+  // main try/catch below — any future regression that reintroduces a throw
+  // here must still degrade to a clean 400, not an unhandled crash with no
+  // CORS headers.
+  let trainers: TrainerRef[] | null;
+  try {
+    trainers = normalizeTrainers(body);
+  } catch {
+    trainers = null;
+  }
   const invalid = badRequest(body, trainers);
   if (invalid) {
     return json(req, { error: invalid }, 400);
