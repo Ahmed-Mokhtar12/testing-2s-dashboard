@@ -48,8 +48,11 @@ interface Props {
   onDraftChange?: (values: Partial<TrainingDetailsValues>) => void;
 }
 
+// 'Text' is the safe fallback when the column type is unknown: a text input
+// can carry any value the user types, whereas a wrong 'Number' guess blocks
+// legitimate input.
 function isNumberColumn(typeAsString?: ColumnType) {
-  return (typeAsString ?? 'Number').toLowerCase() === 'number';
+  return (typeAsString ?? 'Text').toLowerCase() === 'number';
 }
 
 function optionalColumnSchema(typeAsString?: ColumnType) {
@@ -84,7 +87,8 @@ function createSchema(locationTypeAsString?: ColumnType, remarksTypeAsString?: C
     totalParticipants: z
       .number({ required_error: 'Total participants is required' })
       .int('Must be a whole number')
-      .min(1, 'Must be at least 1'),
+      .min(1, 'Must be at least 1')
+      .max(15, 'Maximum 15 participants per training'),
     location: optionalColumnSchema(locationTypeAsString),
     remarks: optionalColumnSchema(remarksTypeAsString),
     date: z.date({ required_error: 'Date is required' }),
@@ -114,8 +118,8 @@ export function TrainingDetailsForm({
   defaultValues,
   departments,
   trainerOptions,
-  locationTypeAsString = 'Number',
-  remarksTypeAsString = 'Number',
+  locationTypeAsString = 'Text',
+  remarksTypeAsString = 'Text',
   onNext,
   onDraftChange,
 }: Props) {

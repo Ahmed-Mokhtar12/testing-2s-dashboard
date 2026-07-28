@@ -3,20 +3,32 @@ import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_ID
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 
-// In the current SharePoint schema, this endpoint's live response is
-// effectively constant: `trainers` is always [] because the TrainerName
-// People Picker column has no `choice.choices` (Person columns don't
-// expose choices via Graph), and `typeAsString` is not returned by Graph
-// API v1.0 for these columns, so `locationTypeAsString`/`remarksTypeAsString`
-// always fall back to 'Number'. The endpoint is kept as-is (rather than
-// hardcoding these values client-side) so that if the SharePoint schema
-// changes later — e.g. TrainerName_x002e_ becomes a Choice column, or Graph
-// starts returning typeAsString for these fields — the new values flow
-// through automatically without a code change here or on the client.
+// Graph API v1.0's columnDefinition has NO `typeAsString` property; a
+// column's type is expressed as mutually-exclusive facets on the column
+// object (`text`, `note`, `number`, `choice`, `boolean`, `dateTime`, ...).
+// `locationTypeAsString`/`remarksTypeAsString` are derived from those facets
+// (see columnTypeFromFacets), so when the SharePoint schema changes — e.g.
+// field_5/field_7 switch between Number and Text — the new type flows through
+// automatically without a code change here or on the client. `trainers` is
+// still always [] because TrainerName_x002e_ is a People Picker (Person
+// columns expose no `choice.choices` via Graph); the key is kept for
+// response-shape stability, but the client no longer consumes it.
 interface GraphColumn {
   name: string;
-  typeAsString?: string;
+  text?: unknown;
+  note?: unknown;
+  number?: unknown;
   choice?: { choices: string[] };
+}
+
+// Derives the column type from Graph's mutually-exclusive facets. When no
+// recognized facet is present, default to 'Text': a text input can safely
+// carry any value the user types (and the Supabase mirror stores it as
+// text), whereas wrongly forcing a number input blocks legitimate input.
+function columnTypeFromFacets(column?: GraphColumn): 'Number' | 'Text' {
+  if (column?.number !== undefined) return 'Number';
+  if (column?.text !== undefined || column?.note !== undefined) return 'Text';
+  return 'Text';
 }
 
 Deno.serve(async (req) => {
@@ -50,8 +62,8 @@ Deno.serve(async (req) => {
     return json(req, {
       departments: deptCol?.choice?.choices ?? [],
       trainers: trainerCol?.choice?.choices ?? [],
-      locationTypeAsString: locationCol?.typeAsString ?? 'Number',
-      remarksTypeAsString: remarksCol?.typeAsString ?? 'Number',
+      locationTypeAsString: columnTypeFromFacets(locationCol),
+      remarksTypeAsString: columnTypeFromFacets(remarksCol),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

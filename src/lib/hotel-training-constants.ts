@@ -57,10 +57,13 @@ export const FALLBACK_TRAINERS: TrainerRef[] = [
   { displayName: 'Xarmaigne Narciso', email: 'xarmaigne.narciso@2seasonshotels.com' },
 ];
 
-// SharePoint column types for Location and Remarks fields.
-// Set to 'Text' or 'Note' if those columns were changed to text in SharePoint.
-export const LOCATION_TYPE_AS_STRING = 'Number';
-export const REMARKS_TYPE_AS_STRING = 'Number';
+// Offline fallbacks for the Location/Remarks column types, used only when the
+// sp-read-columns call fails (the live types are read from Graph column
+// facets). 'Text' is the safe default: a text input can carry any value the
+// user types (the mirror stores it as text), whereas a wrong 'Number' guess
+// blocks legitimate input.
+export const LOCATION_TYPE_AS_STRING = 'Text';
+export const REMARKS_TYPE_AS_STRING = 'Text';
 
 export const DRAFT_KEY = (email: string) =>
   `hotel-training-draft-${email.toLowerCase()}`;

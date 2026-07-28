@@ -393,8 +393,8 @@ export default function HotelTraining() {
               defaultValues={trainingDetails ?? restoredDraftDetails}
               departments={columns?.departments ?? []}
               trainerOptions={trainers}
-              locationTypeAsString={columns?.locationTypeAsString ?? 'Number'}
-              remarksTypeAsString={columns?.remarksTypeAsString ?? 'Number'}
+              locationTypeAsString={columns?.locationTypeAsString ?? 'Text'}
+              remarksTypeAsString={columns?.remarksTypeAsString ?? 'Text'}
               onDraftChange={setDraftTrainingDetails}
               onNext={handleStep1Next}
             />

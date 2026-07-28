@@ -125,6 +125,9 @@ function badRequest(body: SubmitBody, trainers: TrainerRef[] | null): string | n
   if (!body.title?.trim()) return 'Title is required.';
   if (!body.department?.trim()) return 'Department is required.';
   if (!Number.isFinite(body.durationMinutes) || body.durationMinutes <= 0) return 'Invalid duration.';
+  if (!Number.isInteger(body.totalParticipants) || body.totalParticipants < 1 || body.totalParticipants > 15) {
+    return 'Total participants must be between 1 and 15.';
+  }
   if (!trainers) return 'At least one valid trainer is required.';
   if (!body.trainingDate || Number.isNaN(Date.parse(body.trainingDate))) return 'Invalid training date.';
   if (!Array.isArray(body.participants) || body.participants.length === 0) return 'At least one participant is required.';

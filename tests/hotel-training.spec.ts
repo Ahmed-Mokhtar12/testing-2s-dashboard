@@ -154,6 +154,45 @@ test.describe('Hotel Training', () => {
     await expect(page.getByLabel('Total Participants')).toHaveValue('3');
   });
 
+  test('total participants above 15 is blocked with an error message', async ({ page }) => {
+    await openHotelTraining(page);
+    await fillTrainingDetails(page, 16, 'Participant Cap Test');
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    await expect(page.getByText('Maximum 15 participants per training')).toBeVisible();
+    // The wizard did not advance: the details form is still shown and the
+    // participants step content is not.
+    await expect(page.getByLabel('Total Participants')).toBeVisible();
+    await expect(page.getByText('Select a colleague for each row. Only active colleagues are shown.')).toHaveCount(0);
+  });
+
+  test('location and remarks accept free text that survives to the confirmation step', async ({ page }) => {
+    const submitBodies: Array<Record<string, unknown>> = [];
+    await openHotelTraining(page, USER_EMAIL, {
+      onSubmitBody: (body) => {
+        submitBodies.push(body as Record<string, unknown>);
+      },
+    });
+    await fillTrainingDetails(page, 1, 'Text Columns Test');
+    await page.getByLabel('Location').fill('Meeting Room 2, 3rd floor');
+    await page.getByLabel('Remarks').fill('Bring the updated evacuation plan.');
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+
+    await selectParticipant(page, 1, 'Alice Smith');
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+
+    // The typed text renders unchanged on the confirmation step.
+    await expect(page.getByText('Meeting Room 2, 3rd floor')).toBeVisible();
+    await expect(page.getByText('Bring the updated evacuation plan.')).toBeVisible();
+
+    // And it is submitted as text, not coerced to numbers.
+    await page.getByRole('button', { name: 'Confirm & Submit' }).last().click();
+    await expect(page.getByText('Training submitted successfully.')).toBeVisible({ timeout: 10_000 });
+    expect(submitBodies).toHaveLength(1);
+    expect(submitBodies[0].location).toBe('Meeting Room 2, 3rd floor');
+    expect(submitBodies[0].remarks).toBe('Bring the updated evacuation plan.');
+  });
+
   test('trainer dropdown lists the live directory with search filtering', async ({ page }) => {
     // MOCK_TRAINERS_FLAT is the sp-read-trainers directory: full display names
     // plus a directory-only person. FALLBACK_TRAINERS (hardcoded) has

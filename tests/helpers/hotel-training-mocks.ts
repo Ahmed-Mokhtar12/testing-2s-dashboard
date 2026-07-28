@@ -15,8 +15,8 @@ export const MOCK_COLLEAGUES_FLAT = [
 // shape (not the raw Graph { value: [...] } shape).
 export const MOCK_COLUMNS_FLAT = {
   departments: ['Engineering', 'Finance', 'Front Office', 'Human Resources'],
-  locationTypeAsString: 'Number',
-  remarksTypeAsString: 'Number',
+  locationTypeAsString: 'Text',
+  remarksTypeAsString: 'Text',
 };
 
 // The sp-read-trainers Edge Function returns the whole enabled directory as
