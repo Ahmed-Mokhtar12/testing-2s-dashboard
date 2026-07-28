@@ -65,3 +65,6 @@ verify_jwt = true
 
 [functions.sp-manage-colleague]
 verify_jwt = true
+
+[functions.sp-read-trainers]
+verify_jwt = true
