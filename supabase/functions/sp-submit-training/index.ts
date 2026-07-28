@@ -12,6 +12,8 @@ interface ParticipantRow {
   department: string;
 }
 
+type TrainerRef = { displayName: string; email: string };
+
 interface SubmitBody {
   trainingId: string;
   title: string;
@@ -21,7 +23,9 @@ interface SubmitBody {
   location: string | number | null;
   remarks: string | number | null;
   trainingDate: string;
-  trainerNames: string[];
+  trainers?: TrainerRef[];
+  // deprecated: legacy clients — remove after client rollout
+  trainerNames?: string[];
   participants: ParticipantRow[];
 }
 
@@ -50,11 +54,11 @@ const lookupIdCache = new Map<string, number>();
 async function resolveTrainerLookupIds(
   token: string,
   siteId: string,
-  names: string[],
+  trainers: TrainerRef[],
 ): Promise<{ ids: number[]; unresolved: string[] }> {
   const ids: number[] = [];
   const unresolved: string[] = [];
-  const toResolve = names.filter((n) => !lookupIdCache.has(TRAINER_EMAILS[n] ?? ''));
+  const toResolve = trainers.filter((t) => !lookupIdCache.has(t.email));
 
   if (toResolve.length > 0) {
     let url: string | null =
@@ -73,23 +77,49 @@ async function resolveTrainerLookupIds(
     }
   }
 
-  for (const name of names) {
-    const email = TRAINER_EMAILS[name]?.toLowerCase();
-    const id = email ? lookupIdCache.get(email) : undefined;
-    if (id === undefined) unresolved.push(name);
+  for (const t of trainers) {
+    const id = lookupIdCache.get(t.email);
+    if (id === undefined) unresolved.push(t.displayName);
     else ids.push(id);
   }
   return { ids, unresolved };
 }
 
-function badRequest(body: SubmitBody): string | null {
+// Accepts the new TrainerRef[] shape, falling back to legacy trainerNames
+// (mapped via TRAINER_EMAILS) for clients not yet redeployed. Returns null
+// if neither shape yields a valid, non-empty trainer list.
+function normalizeTrainers(body: SubmitBody): TrainerRef[] | null {
+  if (Array.isArray(body.trainers) && body.trainers.length > 0) {
+    const cleaned: TrainerRef[] = [];
+    for (const t of body.trainers) {
+      if (!t || typeof t !== 'object') return null;
+      const displayName = typeof t.displayName === 'string' ? t.displayName.trim() : '';
+      const email = typeof t.email === 'string' ? t.email.trim().toLowerCase() : '';
+      if (!displayName || !email.includes('@')) return null;
+      cleaned.push({ displayName, email });
+    }
+    return cleaned;
+  }
+
+  if (Array.isArray(body.trainerNames) && body.trainerNames.length > 0) {
+    const cleaned: TrainerRef[] = [];
+    for (const name of body.trainerNames) {
+      const email = TRAINER_EMAILS[name];
+      if (!email) return null;
+      cleaned.push({ displayName: name, email: email.toLowerCase() });
+    }
+    return cleaned;
+  }
+
+  return null;
+}
+
+function badRequest(body: SubmitBody, trainers: TrainerRef[] | null): string | null {
   if (!body.trainingId || !/^TRN-\d{14}$/.test(body.trainingId)) return 'Invalid trainingId.';
   if (!body.title?.trim()) return 'Title is required.';
   if (!body.department?.trim()) return 'Department is required.';
   if (!Number.isFinite(body.durationMinutes) || body.durationMinutes <= 0) return 'Invalid duration.';
-  if (!Array.isArray(body.trainerNames) || body.trainerNames.length === 0) return 'At least one trainer is required.';
-  const unknown = body.trainerNames.filter((n) => !(n in TRAINER_EMAILS));
-  if (unknown.length > 0) return `Unknown trainer(s): ${unknown.join(', ')}.`;
+  if (!trainers) return 'At least one valid trainer is required.';
   if (!body.trainingDate || Number.isNaN(Date.parse(body.trainingDate))) return 'Invalid training date.';
   if (!Array.isArray(body.participants) || body.participants.length === 0) return 'At least one participant is required.';
   if (body.participants.length !== body.totalParticipants) {
@@ -121,7 +151,8 @@ Deno.serve(async (req) => {
     return json(req, { error: 'Invalid JSON body.' }, 400);
   }
 
-  const invalid = badRequest(body);
+  const trainers = normalizeTrainers(body);
+  const invalid = badRequest(body, trainers);
   if (invalid) {
     return json(req, { error: invalid }, 400);
   }
@@ -133,12 +164,13 @@ Deno.serve(async (req) => {
     const { ids: trainerIds, unresolved } = await resolveTrainerLookupIds(
       token,
       siteId,
-      body.trainerNames,
+      trainers as TrainerRef[],
     );
     if (unresolved.length > 0) {
       return json(req, {
-        error: `Could not resolve trainer account(s) in SharePoint: ${unresolved.join(', ')}. ` +
-          'The trainer must have visited the site at least once.',
+        error: `Trainer(s) not found on the SharePoint site: ${unresolved.join(', ')}. ` +
+          'A trainer must open the Training Record SharePoint site at least once before they ' +
+          'can be recorded. Your draft is saved — ask them to visit the site, then submit again.',
       }, 400);
     }
 
