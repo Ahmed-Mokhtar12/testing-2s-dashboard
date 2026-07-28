@@ -15,10 +15,37 @@ export const MOCK_COLLEAGUES_FLAT = [
 // shape (not the raw Graph { value: [...] } shape).
 export const MOCK_COLUMNS_FLAT = {
   departments: ['Engineering', 'Finance', 'Front Office', 'Human Resources'],
-  trainers: ['Ahmed Mokhtar', 'Amir Monir'],
   locationTypeAsString: 'Number',
   remarksTypeAsString: 'Number',
 };
+
+// The sp-read-trainers Edge Function returns the whole enabled directory as
+// TrainerRef objects, sorted by displayName. Directory entries carry full
+// display names (unlike the short-name fallback constants), and include a
+// person who exists only in the directory.
+export const MOCK_TRAINERS_FLAT = [
+  { displayName: 'Ahmed Mokhtar Elsayed Elaktaa', email: 'ahmed.mokhtar@2seasonshotels.com' },
+  { displayName: 'Amir Monir Aziz', email: 'amir.monir@2seasonshotels.com' },
+  { displayName: 'Sara Directory-Only', email: 'sara.new@2seasonshotels.com' },
+];
+
+export async function mockTrainersFunction(
+  page: Page,
+  opts: { failure?: boolean } = {},
+) {
+  await page.route(
+    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-trainers`,
+    async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, body: 'ok' });
+      }
+      if (opts.failure) {
+        return route.fulfill({ status: 500, json: { error: 'Graph request failed.' } });
+      }
+      return route.fulfill({ json: MOCK_TRAINERS_FLAT });
+    },
+  );
+}
 
 export async function mockColumnsFunction(page: Page) {
   await page.route(
@@ -32,13 +59,17 @@ export async function mockColumnsFunction(page: Page) {
   );
 }
 
-export async function mockSubmitFunction(page: Page) {
+export async function mockSubmitFunction(
+  page: Page,
+  opts: { onBody?: (body: unknown) => void } = {},
+) {
   await page.route(
     `https://${PROJECT_REF}.supabase.co/functions/v1/sp-submit-training`,
     async (route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, body: 'ok' });
       }
+      opts.onBody?.(route.request().postDataJSON());
       return route.fulfill({ json: { sharepointId: MOCK_SP_SESSION_ID, failedParticipants: [] } });
     },
   );

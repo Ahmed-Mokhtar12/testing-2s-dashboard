@@ -5,6 +5,7 @@ import {
   mockManageColleagueFunction,
   mockSubmitFunction,
   mockSupabaseRest,
+  mockTrainersFunction,
   setMockAuthSession,
 } from './helpers/hotel-training-mocks';
 
@@ -12,11 +13,20 @@ const ADMIN_EMAIL = 'ahmed.mokhtar@2seasonshotels.com';
 const USER_EMAIL = 'user@2seasonshotels.com';
 const FUTURE_DAY = '15';
 
-async function openHotelTraining(page: Page, email = USER_EMAIL, opts: { supabaseFailure?: boolean } = {}) {
+async function openHotelTraining(
+  page: Page,
+  email = USER_EMAIL,
+  opts: {
+    supabaseFailure?: boolean;
+    trainersFailure?: boolean;
+    onSubmitBody?: (body: unknown) => void;
+  } = {},
+) {
   await setMockAuthSession(page, email);
   await mockColleaguesFunction(page);
   await mockColumnsFunction(page);
-  await mockSubmitFunction(page);
+  await mockTrainersFunction(page, { failure: opts.trainersFailure });
+  await mockSubmitFunction(page, { onBody: opts.onSubmitBody });
   await mockManageColleagueFunction(page);
   await mockSupabaseRest(page, { trainingSessionFailure: opts.supabaseFailure });
   await page.goto('/dashboard/hotel-training');
@@ -43,7 +53,7 @@ async function fillTrainingDetails(page: Page, totalParticipants: number, title 
   await selectByTriggerText(page, /00|Min/, '00');
 
   await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
-  await page.getByRole('option', { name: 'Ahmed Mokhtar' }).click();
+  await page.getByRole('option', { name: 'Ahmed Mokhtar Elsayed Elaktaa' }).click();
   await page.keyboard.press('Escape');
 }
 
@@ -60,7 +70,12 @@ async function selectParticipant(page: Page, rowNo: number, name: string) {
 
 test.describe('Hotel Training', () => {
   test('happy path: submit training with 3 participants shows success screen', async ({ page }) => {
-    await openHotelTraining(page);
+    const submitBodies: Array<Record<string, unknown>> = [];
+    await openHotelTraining(page, USER_EMAIL, {
+      onSubmitBody: (body) => {
+        submitBodies.push(body as Record<string, unknown>);
+      },
+    });
     await goToParticipants(page, 3);
 
     await selectParticipant(page, 1, 'Alice Smith');
@@ -74,6 +89,13 @@ test.describe('Hotel Training', () => {
 
     await expect(page.getByText('Training submitted successfully.')).toBeVisible({ timeout: 10_000 });
     await expect.poll(async () => page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith('hotel-training-draft-')))).toBe(false);
+
+    // The client must send the new TrainerRef shape, not the legacy names array.
+    expect(submitBodies).toHaveLength(1);
+    expect(submitBodies[0].trainers).toEqual([
+      { displayName: 'Ahmed Mokhtar Elsayed Elaktaa', email: 'ahmed.mokhtar@2seasonshotels.com' },
+    ]);
+    expect(submitBodies[0]).not.toHaveProperty('trainerNames');
   });
 
   test('duplicate participant is blocked by excluding already-selected employee IDs', async ({ page }) => {
@@ -83,8 +105,12 @@ test.describe('Hotel Training', () => {
     await selectParticipant(page, 1, 'Alice Smith');
     await page.getByTestId('participant-select-2').click();
 
+    // Wait for the dropdown to be open (another option visible) before
+    // asserting absence — toHaveCount(0) would pass vacuously pre-open.
+    await expect(page.getByRole('option', { name: /Bob Jones/ })).toBeVisible();
     await expect(page.getByRole('option', { name: /Alice Smith/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
+    await expect(page.getByRole('option', { name: /Bob Jones/ })).toHaveCount(0);
     await page.getByRole('button', { name: /Next: Review/ }).click();
     await expect(page.getByText('Please select all participants before continuing.')).toBeVisible();
   });
@@ -128,15 +154,68 @@ test.describe('Hotel Training', () => {
     await expect(page.getByLabel('Total Participants')).toHaveValue('3');
   });
 
-  test('trainer name dropdown uses live column choices, not hardcoded options', async ({ page }) => {
-    // MOCK_COLUMNS_FLAT returns ['Ahmed Mokhtar', 'Amir Monir'] for trainers.
-    // TRAINER_OPTIONS (hardcoded) has a third entry: 'Xarmaigne Narciso'.
-    // If the dropdown reads live sp-read-columns data, 'Xarmaigne Narciso' must be absent.
+  test('trainer dropdown lists the live directory with search filtering', async ({ page }) => {
+    // MOCK_TRAINERS_FLAT is the sp-read-trainers directory: full display names
+    // plus a directory-only person. FALLBACK_TRAINERS (hardcoded) has
+    // 'Xarmaigne Narciso' — if the dropdown reads the live directory, that
+    // name must be absent and the directory-only person present.
     await openHotelTraining(page);
     await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
+    await expect(page.getByRole('option', { name: 'Sara Directory-Only' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Ahmed Mokhtar Elsayed Elaktaa' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Amir Monir Aziz' })).toBeVisible();
     await expect(page.getByRole('option', { name: 'Xarmaigne Narciso' })).toHaveCount(0);
-    await expect(page.getByRole('option', { name: 'Ahmed Mokhtar' })).toBeVisible();
-    await expect(page.getByRole('option', { name: 'Amir Monir' })).toBeVisible();
+
+    // Typing narrows the list.
+    await page.getByPlaceholder('Search trainers...').fill('Directory');
+    await expect(page.getByRole('option', { name: 'Sara Directory-Only' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Ahmed Mokhtar Elsayed Elaktaa' })).toHaveCount(0);
+    await expect(page.getByRole('option', { name: 'Amir Monir Aziz' })).toHaveCount(0);
+  });
+
+  test('trainer directory failure falls back to the three known trainers', async ({ page }) => {
+    await openHotelTraining(page, USER_EMAIL, { trainersFailure: true });
+    await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
+    await expect(page.getByRole('option', { name: 'Ahmed Mokhtar', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Amir Monir', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Xarmaigne Narciso' })).toBeVisible();
+
+    // The fallback entries are actually selectable.
+    await page.getByRole('option', { name: 'Xarmaigne Narciso' }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('combobox').filter({ hasText: 'Xarmaigne Narciso' })).toBeVisible();
+  });
+
+  test('legacy draft with plain trainer names restores to a trainer badge', async ({ page }) => {
+    const legacyDraft = {
+      trainingDetails: {
+        title: 'Legacy Draft Training',
+        trainerNames: ['Ahmed Mokhtar'],
+      },
+      participants: [],
+      step: 1,
+      savedAt: new Date().toISOString(),
+    };
+    await page.addInitScript(
+      ({ key, value }) => {
+        window.localStorage.setItem(key, value);
+      },
+      {
+        key: `hotel-training-draft-${USER_EMAIL}`,
+        value: JSON.stringify(legacyDraft),
+      },
+    );
+
+    await openHotelTraining(page);
+    await expect(page.getByText(/You have an unsaved draft from/)).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: 'Restore' }).click();
+
+    await expect(page.getByLabel('Training Title')).toHaveValue('Legacy Draft Training');
+    // The legacy name string was migrated to a TrainerRef via FALLBACK_TRAINERS
+    // and renders as a badge in the trainer combobox trigger.
+    await expect(
+      page.getByRole('combobox').filter({ hasText: 'Ahmed Mokhtar' }),
+    ).toBeVisible();
   });
 
   test('Supabase sync failure shows partial success banner and clears draft', async ({ page }) => {
@@ -154,6 +233,7 @@ test.describe('Hotel Training', () => {
   test('colleague load failure surfaces an error instead of empty dropdowns', async ({ page }) => {
     await setMockAuthSession(page, USER_EMAIL);
     await mockColumnsFunction(page);
+    await mockTrainersFunction(page);
     await mockSubmitFunction(page);
     await mockManageColleagueFunction(page);
     await mockColleaguesFunction(page, { failure: true });

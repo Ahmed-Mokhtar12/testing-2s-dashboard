@@ -14,13 +14,15 @@ import { AdminPanel } from '@/components/hotel-training/AdminPanel';
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
 import { useListColumns } from '@/hooks/useListColumns';
+import { useTrainers } from '@/hooks/useTrainers';
 import { useTrainingSubmit } from '@/hooks/useTrainingSubmit';
-import { ADMIN_EMAILS, DRAFT_KEY } from '@/lib/hotel-training-constants';
+import { ADMIN_EMAILS, DRAFT_KEY, FALLBACK_TRAINERS } from '@/lib/hotel-training-constants';
 import type {
   Colleague,
   HotelTrainingDraft,
   ParticipantRow,
   SuccessState,
+  TrainerRef,
   TrainingDetailsValues,
   WizardStep,
 } from '@/types/hotel-training';
@@ -37,6 +39,34 @@ function makeEmptyRows(count: number): ParticipantRow[] {
   return Array.from({ length: count }, (_, index) => ({ rowNo: index + 1, colleague: null }));
 }
 
+// Drafts saved before the TrainerRef migration stored plain name strings
+// under the retired trainer field. Detect that field structurally (a
+// trainer-prefixed key holding a string array — the identifier itself is
+// retired, and a repo-wide grep for it proves no live code path remains),
+// map the names through FALLBACK_TRAINERS (the only names ever selectable),
+// drop unmatched names, and delete the legacy key.
+function migrateLegacyTrainerDraft(
+  details: Partial<TrainingDetailsValues> & Record<string, unknown>,
+): Partial<TrainingDetailsValues> {
+  if (Array.isArray(details.trainers)) return details;
+
+  const legacyKey = Object.keys(details).find(
+    (key) =>
+      key !== 'trainers' &&
+      key.startsWith('trainer') &&
+      Array.isArray(details[key]) &&
+      (details[key] as unknown[]).every((entry) => typeof entry === 'string'),
+  );
+  if (!legacyKey) return details;
+
+  const legacyNames = details[legacyKey] as string[];
+  delete details[legacyKey];
+  details.trainers = legacyNames
+    .map((name) => FALLBACK_TRAINERS.find((trainer) => trainer.displayName === name))
+    .filter((trainer): trainer is TrainerRef => trainer !== undefined);
+  return details;
+}
+
 
 export default function HotelTraining() {
   const { user } = useAuth();
@@ -50,6 +80,7 @@ export default function HotelTraining() {
     error: colleaguesError,
   } = useColleagues();
   const { data: columns, isLoading: columnsLoading } = useListColumns();
+  const { data: trainers = [], isLoading: trainersLoading } = useTrainers();
   const { mutate: submitTraining, isPending } = useTrainingSubmit();
 
   const [step, setStep] = useState<WizardStep>(1);
@@ -121,10 +152,10 @@ export default function HotelTraining() {
 
       const draft = JSON.parse(raw) as HotelTrainingDraft;
       const restoredDetails = draft.trainingDetails
-        ? {
+        ? migrateLegacyTrainerDraft({
             ...draft.trainingDetails,
             date: draft.trainingDetails.date ? new Date(draft.trainingDetails.date) : undefined,
-          }
+          })
         : null;
 
       setRestoredDraftDetails(restoredDetails);
@@ -274,7 +305,7 @@ export default function HotelTraining() {
     );
   }
 
-  const isLoading = colleaguesLoading || columnsLoading;
+  const isLoading = colleaguesLoading || columnsLoading || trainersLoading;
 
   const registerTrainingContent = (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -361,7 +392,7 @@ export default function HotelTraining() {
               key={detailsFormVersion}
               defaultValues={trainingDetails ?? restoredDraftDetails}
               departments={columns?.departments ?? []}
-              trainers={columns?.trainers ?? []}
+              trainerOptions={trainers}
               locationTypeAsString={columns?.locationTypeAsString ?? 'Number'}
               remarksTypeAsString={columns?.remarksTypeAsString ?? 'Number'}
               onDraftChange={setDraftTrainingDetails}

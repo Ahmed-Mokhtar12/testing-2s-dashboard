@@ -66,7 +66,7 @@ export function useTrainingSubmit() {
         location: trainingDetails.location ?? null,
         remarks: trainingDetails.remarks ?? null,
         trainingDate: isoDate,
-        trainerNames: trainingDetails.trainerNames,
+        trainers: trainingDetails.trainers,
         participants: rows,
       });
 
@@ -89,7 +89,7 @@ export function useTrainingSubmit() {
           location: trainingDetails.location != null ? String(trainingDetails.location) : null,
           remarks: trainingDetails.remarks != null ? String(trainingDetails.remarks) : null,
           training_date: isoDate,
-          trainer_names: trainingDetails.trainerNames,
+          trainer_names: trainingDetails.trainers.map((trainer) => trainer.displayName),
           total_participants: trainingDetails.totalParticipants,
           submitted_by: userEmail,
         });

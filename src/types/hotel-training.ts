@@ -13,6 +13,13 @@ export interface ParticipantRow {
   colleague: Colleague | null;
 }
 
+// A person from the company directory who can be recorded as a trainer.
+// The lowercased email is the stable identity key end-to-end.
+export interface TrainerRef {
+  displayName: string;
+  email: string;
+}
+
 export interface TrainingDetailsValues {
   title: string;
   department: string;
@@ -23,7 +30,7 @@ export interface TrainingDetailsValues {
   date: Date;
   hour: number;
   minute: number;
-  trainerNames: string[];
+  trainers: TrainerRef[];
 }
 
 export type WizardStep = 1 | 2 | 3;

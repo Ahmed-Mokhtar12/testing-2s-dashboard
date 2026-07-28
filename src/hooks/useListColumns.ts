@@ -3,14 +3,12 @@ import {
   DEPARTMENT_SECTIONS,
   LOCATION_TYPE_AS_STRING,
   REMARKS_TYPE_AS_STRING,
-  TRAINER_OPTIONS,
 } from '@/lib/hotel-training-constants';
 import { invokeReadColumns } from '@/services/sharepoint';
 import type { ListColumnsResult } from '@/services/sharepoint';
 
 const STATIC_FALLBACK: ListColumnsResult = {
   departments: Object.keys(DEPARTMENT_SECTIONS),
-  trainers: TRAINER_OPTIONS,
   locationTypeAsString: LOCATION_TYPE_AS_STRING,
   remarksTypeAsString: REMARKS_TYPE_AS_STRING,
 };
@@ -25,7 +23,6 @@ export function useListColumns() {
           // Departments must match DEPARTMENT_SECTIONS (the dept→section
           // cascade is code-defined), so they always come from constants.
           departments: Object.keys(DEPARTMENT_SECTIONS),
-          trainers: live.trainers.length > 0 ? live.trainers : TRAINER_OPTIONS,
           locationTypeAsString: live.locationTypeAsString || LOCATION_TYPE_AS_STRING,
           remarksTypeAsString: live.remarksTypeAsString || REMARKS_TYPE_AS_STRING,
         };

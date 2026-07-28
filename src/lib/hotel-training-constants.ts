@@ -1,3 +1,5 @@
+import type { TrainerRef } from '@/types/hotel-training';
+
 export const MONTHLY_TRAINING_LIST_ID = 'aa8fe143-854d-4646-a423-89bc44bb217d';
 export const PARTICIPANTS_LIST_ID = '73f67c6d-f327-4c14-aa68-2b718afcd132';
 export const COLLEAGUES_LIST_ID = '8bdc10b9-01c8-4310-8a16-48eb83020d7e';
@@ -47,12 +49,12 @@ export const DEPARTMENT_SECTIONS: Record<string, string[]> = {
   'Security': ['Security'],
 };
 
-// Trainer names as they appear in the SharePoint choice column.
-// Update this list to match the choices configured in the Monthly_Training list.
-export const TRAINER_OPTIONS: string[] = [
-  'Ahmed Mokhtar',
-  'Amir Monir',
-  'Xarmaigne Narciso',
+// Known trainers used when the live directory fetch fails (or returns empty)
+// and to migrate legacy drafts that stored trainer names as plain strings.
+export const FALLBACK_TRAINERS: TrainerRef[] = [
+  { displayName: 'Ahmed Mokhtar', email: 'ahmed.mokhtar@2seasonshotels.com' },
+  { displayName: 'Amir Monir', email: 'amir.monir@2seasonshotels.com' },
+  { displayName: 'Xarmaigne Narciso', email: 'xarmaigne.narciso@2seasonshotels.com' },
 ];
 
 // SharePoint column types for Location and Remarks fields.

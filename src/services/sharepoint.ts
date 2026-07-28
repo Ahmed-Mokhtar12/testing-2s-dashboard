@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { TrainerRef } from '@/types/hotel-training';
 
 // supabase.functions.invoke wraps a non-2xx response in a FunctionsHttpError
 // whose `message` is generic. The real reason lives in the response body.
@@ -25,9 +26,21 @@ export async function invokeReadColumns(): Promise<ListColumnsResult> {
 
 export interface ListColumnsResult {
   departments: string[];
-  trainers: string[];
   locationTypeAsString: string;
   remarksTypeAsString: string;
+}
+
+// The whole enabled company directory, sorted by displayName, emails
+// lowercased — served by the sp-read-trainers Edge Function.
+export async function invokeReadTrainers(): Promise<TrainerRef[]> {
+  const { data, error } = await supabase.functions.invoke('sp-read-trainers');
+  if (error) {
+    throw new Error(await extractInvokeError(error));
+  }
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected response shape from sp-read-trainers.');
+  }
+  return data as TrainerRef[];
 }
 
 export interface TrainingSessionPayload {
@@ -38,7 +51,7 @@ export interface TrainingSessionPayload {
   location?: number | string | null;
   remarks?: number | string | null;
   trainingDate: string;
-  trainerNames: string[];
+  trainers: TrainerRef[];
 }
 
 export interface ParticipantPayload {

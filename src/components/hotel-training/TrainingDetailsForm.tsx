@@ -29,7 +29,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { DURATION_OPTIONS } from '@/lib/hotel-training-constants';
 import { cn } from '@/lib/utils';
-import type { TrainingDetailsValues } from '@/types/hotel-training';
+import type { TrainerRef, TrainingDetailsValues } from '@/types/hotel-training';
 
 const DURATION_MINUTES = DURATION_OPTIONS.map((duration) => duration.minutes) as [number, ...number[]];
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
@@ -41,7 +41,7 @@ type FormValues = TrainingDetailsValues;
 interface Props {
   defaultValues?: Partial<TrainingDetailsValues> | null;
   departments: string[];
-  trainers: string[];
+  trainerOptions: TrainerRef[];
   locationTypeAsString?: ColumnType;
   remarksTypeAsString?: ColumnType;
   onNext: (values: TrainingDetailsValues) => void;
@@ -95,7 +95,14 @@ function createSchema(locationTypeAsString?: ColumnType, remarksTypeAsString?: C
       .min(0)
       .max(55)
       .refine((value) => value % 5 === 0, 'Minutes must be in 5-min increments'),
-    trainerNames: z.array(z.string()).min(1, 'At least one trainer is required'),
+    trainers: z
+      .array(
+        z.object({
+          displayName: z.string().min(1),
+          email: z.string().min(1),
+        }),
+      )
+      .min(1, 'At least one trainer is required'),
   });
 }
 
@@ -106,7 +113,7 @@ function toNumberOrUndefined(value: string) {
 export function TrainingDetailsForm({
   defaultValues,
   departments,
-  trainers,
+  trainerOptions,
   locationTypeAsString = 'Number',
   remarksTypeAsString = 'Number',
   onNext,
@@ -137,7 +144,7 @@ export function TrainingDetailsForm({
       : {
           title: '',
           department: '',
-          trainerNames: [],
+          trainers: [],
           hour: 9,
           minute: 0,
         },
@@ -149,7 +156,7 @@ export function TrainingDetailsForm({
     reset({
       title: '',
       department: '',
-      trainerNames: [],
+      trainers: [],
       hour: 9,
       minute: 0,
       ...defaultValues,
@@ -167,7 +174,7 @@ export function TrainingDetailsForm({
     return () => subscription.unsubscribe();
   }, [onDraftChange, watch]);
 
-  const selectedTrainers = watch('trainerNames') ?? [];
+  const selectedTrainers = watch('trainers') ?? [];
   const [trainerOpen, setTrainerOpen] = React.useState(false);
 
   const onSubmit = (values: FormValues) => {
@@ -342,18 +349,18 @@ export function TrainingDetailsForm({
                 {selectedTrainers.length > 0 ? (
                   selectedTrainers.map((trainer) => (
                     <Badge
-                      key={trainer}
+                      key={trainer.email}
                       variant="secondary"
                       onClick={(event) => {
                         event.stopPropagation();
                         setValue(
-                          'trainerNames',
-                          selectedTrainers.filter((selected) => selected !== trainer),
+                          'trainers',
+                          selectedTrainers.filter((selected) => selected.email !== trainer.email),
                           { shouldValidate: true },
                         );
                       }}
                     >
-                      {trainer}
+                      {trainer.displayName}
                       <X className="ml-1 h-3 w-3" />
                     </Badge>
                   ))
@@ -370,21 +377,21 @@ export function TrainingDetailsForm({
               <CommandList>
                 <CommandEmpty>No trainer found.</CommandEmpty>
                 <CommandGroup>
-                  {trainers.map((trainer) => {
-                    const selected = selectedTrainers.includes(trainer);
+                  {trainerOptions.map((trainer) => {
+                    const selected = selectedTrainers.some((current) => current.email === trainer.email);
                     return (
                       <CommandItem
-                        key={trainer}
-                        value={trainer}
+                        key={trainer.email}
+                        value={`${trainer.displayName} ${trainer.email}`}
                         onSelect={() => {
                           const next = selected
-                            ? selectedTrainers.filter((current) => current !== trainer)
+                            ? selectedTrainers.filter((current) => current.email !== trainer.email)
                             : [...selectedTrainers, trainer];
-                          setValue('trainerNames', next, { shouldValidate: true });
+                          setValue('trainers', next, { shouldValidate: true });
                         }}
                       >
                         <Check className={cn('mr-2 h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                        {trainer}
+                        {trainer.displayName}
                       </CommandItem>
                     );
                   })}
@@ -393,7 +400,10 @@ export function TrainingDetailsForm({
             </Command>
           </PopoverContent>
         </Popover>
-        {errors.trainerNames && <p className="text-sm text-destructive">{errors.trainerNames.message}</p>}
+        {errors.trainers && <p className="text-sm text-destructive">{errors.trainers.message}</p>}
+        <p className="text-xs text-muted-foreground">
+          Trainers must have opened the Training Record SharePoint site at least once.
+        </p>
       </div>
 
       <div className="space-y-1.5">
