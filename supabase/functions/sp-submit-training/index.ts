@@ -51,6 +51,32 @@ const UIL_LIST_ID = '265691f8-3786-4e9f-932f-79835f30a6cf';
 // this scenario is rare — rather than adding cache-busting complexity here.
 const lookupIdCache = new Map<string, number>();
 
+// Extracts every identity key (lowercased email-like value) carried by a UIL
+// item's fields. Which field holds the identity varies with how the user was
+// materialized on the site: EMail is frequently EMPTY for users added via
+// group membership / directory sync, while the login lives in a claims string
+// in Name and/or UserName (e.g. "i:0#.f|membership|x@y.com"), and some
+// tenants expose UserPrincipalName. Only values that look like an email
+// (contain "@") are indexed.
+function extractIdentityKeys(fields: Record<string, unknown>): string[] {
+  const keys: string[] = [];
+  const pushIfEmail = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const v = value.trim().toLowerCase();
+    if (v.includes('@')) keys.push(v);
+  };
+  pushIfEmail(fields.EMail);
+  for (const claims of [fields.Name, fields.UserName]) {
+    if (typeof claims !== 'string') continue;
+    // Claims format: take the substring after the LAST "|"; a plain value
+    // (no "|") is used as-is when it contains "@".
+    const raw = claims.trim();
+    pushIfEmail(raw.includes('|') ? raw.slice(raw.lastIndexOf('|') + 1) : raw);
+  }
+  pushIfEmail(fields.UserPrincipalName);
+  return keys;
+}
+
 async function resolveTrainerLookupIds(
   token: string,
   siteId: string,
@@ -60,27 +86,49 @@ async function resolveTrainerLookupIds(
   const unresolved: string[] = [];
   const toResolve = trainers.filter((t) => !lookupIdCache.has(t.email));
 
+  let itemsScanned = 0;
   if (toResolve.length > 0) {
+    // Deliberately no $select on fields: UIL internal field names vary by
+    // tenant and $select on a missing field can error, so fetch the full
+    // field set and read defensively in extractIdentityKeys.
     let url: string | null =
       `${GRAPH_BASE}/sites/${siteId}/lists/${UIL_LIST_ID}/items` +
-      '?$top=500&$expand=fields($select=EMail,Title)';
+      '?$top=500&$expand=fields';
     while (url) {
       const data = await graphFetch<{
-        value: Array<{ id: string; fields: { EMail?: string; Title?: string } }>;
+        value: Array<{ id: string; fields: Record<string, unknown> }>;
         '@odata.nextLink'?: string;
       }>(token, url);
       for (const item of data.value) {
-        const email = item.fields.EMail?.toLowerCase();
-        if (email) lookupIdCache.set(email, Number(item.id));
+        itemsScanned += 1;
+        for (const key of extractIdentityKeys(item.fields)) {
+          // First wins: per item, EMail-derived keys are pushed first, and an
+          // earlier item's claim on a key is never overwritten by a later
+          // item — so EMail-based matches stay stable.
+          if (!lookupIdCache.has(key)) lookupIdCache.set(key, Number(item.id));
+        }
       }
       url = data['@odata.nextLink'] ?? null;
     }
   }
 
+  const unresolvedDomains = new Set<string>();
   for (const t of trainers) {
     const id = lookupIdCache.get(t.email);
-    if (id === undefined) unresolved.push(t.displayName);
-    else ids.push(id);
+    if (id === undefined) {
+      unresolved.push(t.displayName);
+      unresolvedDomains.add(t.email.slice(t.email.lastIndexOf('@') + 1));
+    } else {
+      ids.push(id);
+    }
+  }
+  if (unresolved.length > 0) {
+    // Server-log-only breadcrumb for future diagnosis. Domains only — never
+    // full addresses — and the client-facing 400 body is unchanged.
+    console.error(
+      `sp-submit-training: UIL scan=${itemsScanned} items, keys=${lookupIdCache.size}, ` +
+        `unresolved domains=[${[...unresolvedDomains].join(', ')}]`,
+    );
   }
   return { ids, unresolved };
 }
