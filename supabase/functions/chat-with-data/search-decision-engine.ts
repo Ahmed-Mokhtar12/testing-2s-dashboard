@@ -3,6 +3,7 @@ export interface SearchDecisionResult {
   hasRichDatabaseContext: boolean;
   searchReason: string;
   isTrainingQuery: boolean;
+  isWhatsAppQuery: boolean;
 }
 
 export class SearchDecisionEngine {
@@ -47,6 +48,12 @@ export class SearchDecisionEngine {
       message.toLowerCase().includes(keyword.toLowerCase())
     );
 
+    // WhatsApp/chat questions must stay eligible for the query_whatsapp_chats
+    // tool — never force search_web for them. Training takes precedence when
+    // both match (e.g. "attendance" alone shouldn't be overridden).
+    const whatsappKeywords = ['whatsapp', 'chat history', 'guest chat', 'guest message', 'conversations', 'واتساب', 'محادثات'];
+    const isWhatsAppQuery = !isTrainingQuery && whatsappKeywords.some(k => message.toLowerCase().includes(k));
+
     // Decision logic
     let requiresWebsiteSearch = false;
     let searchReason = '';
@@ -54,6 +61,9 @@ export class SearchDecisionEngine {
     if (isTrainingQuery) {
       requiresWebsiteSearch = false;
       searchReason = 'Training question — leave tool choice to the model';
+    } else if (isWhatsAppQuery) {
+      requiresWebsiteSearch = false;
+      searchReason = 'WhatsApp/chat question — leave tool choice to the model';
     } else if (!hasRichDatabaseContext && hasRealTimeRequest) {
       requiresWebsiteSearch = true;
       searchReason = 'No database context available and user requests current information';
@@ -70,6 +80,7 @@ export class SearchDecisionEngine {
       hasRealTimeRequest,
       hasServiceInquiry,
       isTrainingQuery,
+      isWhatsAppQuery,
       requiresWebsiteSearch,
       searchReason
     });
@@ -78,10 +89,11 @@ export class SearchDecisionEngine {
       requiresWebsiteSearch,
       hasRichDatabaseContext,
       searchReason,
-      isTrainingQuery
+      isTrainingQuery,
+      isWhatsAppQuery
     };
   }
-  
+
   static determineToolChoice(searchDecision: SearchDecisionResult): any {
     if (searchDecision.isTrainingQuery) {
       // 'auto' proved unreliable for training questions (the model sometimes
@@ -90,6 +102,12 @@ export class SearchDecisionEngine {
       return {
         type: 'function',
         function: { name: 'query_training_records' }
+      };
+    }
+    if (searchDecision.isWhatsAppQuery) {
+      return {
+        type: 'function',
+        function: { name: 'query_whatsapp_chats' }
       };
     }
     if (searchDecision.requiresWebsiteSearch) {

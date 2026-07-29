@@ -1,0 +1,71 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
+import { buildDateRange } from './training-aggregator.ts';
+import { aggregateWhatsApp } from './whatsapp-aggregator.ts';
+import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
+
+export const WHATSAPP_TOOL_NAME = 'query_whatsapp_chats';
+const ROW_CAP = 4000;
+const UNAVAILABLE = JSON.stringify({ error: 'WhatsApp chat data is temporarily unavailable. Tell the user you could not access the chat records right now.' });
+
+export class WhatsAppQueryService {
+  private authHeader: string;
+  constructor(authHeader?: string) { this.authHeader = authHeader ?? ''; }
+
+  getAvailableFunctions() {
+    return [{
+      name: WHATSAPP_TOOL_NAME,
+      description: "Query guest WhatsApp conversations (the dashboard's Chat History table). Returns EXACT computed statistics: total messages, unique guests, human vs AI handled, per-day breakdown, and optional message samples. ALWAYS use this tool for ANY question about WhatsApp messages, guest chats, conversations, or senders. Never estimate chat numbers yourself.",
+      parameters: {
+        type: 'object',
+        properties: {
+          date_from: { type: 'string', description: 'Start date (inclusive), YYYY-MM-DD, Dubai time. Omit for no lower bound.' },
+          date_to: { type: 'string', description: 'End date (inclusive), YYYY-MM-DD, Dubai time. Omit for no upper bound.' },
+          phone_number: { type: 'string', description: 'Filter to one guest phone number (digits, partial match allowed).' },
+          detail: { type: 'string', enum: ['summary', 'messages'], description: 'summary (default): totals only. messages: also include up to 30 recent message excerpts.' },
+        },
+        required: [],
+      },
+    }];
+  }
+
+  async executeFunction(functionName: string, args: any): Promise<string> {
+    if (functionName !== WHATSAPP_TOOL_NAME) return JSON.stringify({ error: `Unknown function: ${functionName}` });
+    try {
+      const range = buildDateRange(args?.date_from, args?.date_to);
+      if (range.error) return JSON.stringify({ error: range.error });
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: this.authHeader } } },
+      );
+      let q = supabase.from('Chat History')
+        .select('created_at,"Sender Number",Name,"Sender Message","Ai Reply",human_reply,is_human_controlled')
+        .order('created_at', { ascending: false }).limit(ROW_CAP);
+      if (range.fromISO) q = q.gte('created_at', range.fromISO);
+      if (range.toExclusiveISO) q = q.lt('created_at', range.toExclusiveISO);
+      if (args?.phone_number) q = q.ilike('Sender Number', `%${String(args.phone_number).replace(/\D/g, '')}%`);
+      const { data, error } = await q;
+      if (error) { console.error('❌ query_whatsapp_chats failed:', error); return UNAVAILABLE; }
+      if (!data?.length) {
+        const kind = await classifyEmptyResult('Chat History', (probe: any) => {
+          if (range.fromISO) probe = probe.gte('created_at', range.fromISO);
+          if (range.toExclusiveISO) probe = probe.lt('created_at', range.toExclusiveISO);
+          if (args?.phone_number) probe = probe.ilike('Sender Number', `%${String(args.phone_number).replace(/\D/g, '')}%`);
+          return probe;
+        });
+        return emptyResultPayload(kind, { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null });
+      }
+      const summary = aggregateWhatsApp(data.map((r: any) => ({
+        created_at: r.created_at, sender: r['Sender Number'] ?? 'unknown', name: r.Name ?? null, humanControlled: !!r.is_human_controlled,
+      })));
+      const result: any = { status: 'ok', filters: { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null, phone_number: args?.phone_number ?? null }, ...summary };
+      if (data.length === ROW_CAP) result.truncation_note = `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent messages in range.`;
+      if (args?.detail === 'messages') {
+        result.messages = data.slice(0, 30).map((r: any) => ({
+          at: r.created_at, from: r['Sender Number'], name: r.Name,
+          guest: (r['Sender Message'] ?? '').slice(0, 200), reply: ((r.human_reply ?? r['Ai Reply']) ?? '').slice(0, 200),
+        }));
+      }
+      return JSON.stringify(result);
+    } catch (e) { console.error('❌ query_whatsapp_chats crashed:', e); return UNAVAILABLE; }
+  }
+}

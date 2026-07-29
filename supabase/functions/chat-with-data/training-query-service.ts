@@ -6,6 +6,7 @@ import {
   TrainingQueryFilters,
   TrainingSessionRow,
 } from './training-aggregator.ts';
+import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
 
 export const TRAINING_TOOL_NAME = 'query_training_records';
 
@@ -106,12 +107,10 @@ export class TrainingQueryService {
 
       const sessionRows = (sessions ?? []) as TrainingSessionRow[];
 
-      // Department filter matched nothing → tell the model which departments exist.
-      if (sessionRows.length === 0 && filters.department) {
-        const result: Record<string, unknown> = {
-          filters_applied: filters,
-          no_training_records_found: true,
-        };
+      // No sessions visible to this user-scoped query. Rather than assert
+      // "no records exist" (RLS can silently hide rows behind an identical
+      // empty result), probe existence with the service role and classify.
+      if (sessionRows.length === 0) {
         const { data: deptRows, error: deptError } = await supabase
           .from('training_sessions')
           .select('department')
@@ -119,27 +118,38 @@ export class TrainingQueryService {
           .limit(DEPARTMENT_SCAN_CAP);
         if (deptError) {
           console.error('❌ query_training_records department scan failed:', deptError);
-          result.departments_available_note = 'The list of existing departments could not be loaded right now.';
-        } else {
-          result.departments_available = [...new Set((deptRows ?? []).map((r: any) => r.department).filter(Boolean))];
         }
-        return JSON.stringify(result);
+        // A non-admin's user-scoped scan legitimately sees none — omit the
+        // key entirely rather than claim an empty list of departments.
+        const departmentsAvailable = deptError
+          ? []
+          : [...new Set((deptRows ?? []).map((r: any) => r.department).filter(Boolean))];
+
+        const kind = await classifyEmptyResult('training_sessions', (q) => {
+          if (range.fromISO) q = q.gte('training_date', range.fromISO);
+          if (range.toExclusiveISO) q = q.lt('training_date', range.toExclusiveISO);
+          if (filters.department) q = q.ilike('department', `%${filters.department}%`);
+          return q;
+        });
+        return emptyResultPayload(kind, {
+          date_from: filters.date_from ?? null,
+          date_to: filters.date_to ?? null,
+          ...(departmentsAvailable.length ? { departments_available: departmentsAvailable } : {}),
+        });
       }
 
-      let participantRows: TrainingParticipantRow[] = [];
-      if (sessionRows.length > 0) {
-        const ids = sessionRows.map((s) => s.training_id);
-        const { data: participants, error: participantsError } = await supabase
-          .from('training_participants')
-          .select('training_id, employee_id, colleague_name, position, section, department')
-          .in('training_id', ids)
-          .limit(PARTICIPANT_CAP);
-        if (participantsError) {
-          console.error('❌ query_training_records participants query failed:', participantsError);
-          return UNAVAILABLE;
-        }
-        participantRows = (participants ?? []) as TrainingParticipantRow[];
+      // sessionRows is non-empty here — the empty case already returned above.
+      const ids = sessionRows.map((s) => s.training_id);
+      const { data: participants, error: participantsError } = await supabase
+        .from('training_participants')
+        .select('training_id, employee_id, colleague_name, position, section, department')
+        .in('training_id', ids)
+        .limit(PARTICIPANT_CAP);
+      if (participantsError) {
+        console.error('❌ query_training_records participants query failed:', participantsError);
+        return UNAVAILABLE;
       }
+      const participantRows = (participants ?? []) as TrainingParticipantRow[];
 
       const truncated = sessionRows.length >= SESSION_CAP || participantRows.length >= PARTICIPANT_CAP;
       const result = aggregateTrainingData(sessionRows, participantRows, filters, truncated);

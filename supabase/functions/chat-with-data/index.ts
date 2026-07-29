@@ -15,6 +15,7 @@ import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 import { DataAvailabilityChecker } from './data-availability-checker.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
+import { QUERY_TOOL_NAMES } from './function-call-handler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -147,11 +148,13 @@ serve(async (req) => {
     let aiChoice = await callOpenAI(context, message, consultantPrompt, authHeader);
     
     // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication.
-    // Skipped when the answer was computed by query_training_records — those
-    // numbers come from the database, and the fabrication regexes (e.g.
-    // /booking.*\d+/) misfire on business wording around them.
-    if (aiChoice.executedTools?.includes('query_training_records')) {
-      console.log('🎓 Skipping Data Honesty Engine — answer built from query_training_records data');
+    // Skipped when the answer was computed by a domain query tool (training,
+    // WhatsApp, …) — those numbers come from the database, and the
+    // fabrication regexes (e.g. /booking.*\d+/) misfire on business wording
+    // around them.
+    const usedQueryTool = aiChoice.executedTools?.some((t: string) => QUERY_TOOL_NAMES.includes(t));
+    if (usedQueryTool) {
+      console.log('🎓 Skipping Data Honesty Engine — answer built from a query-tool result');
     } else {
       console.log('🔧 Applying Data Honesty Engine...');
       aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(

@@ -1,6 +1,9 @@
 import { SearchService } from './search-service.ts';
 import { OpenAIMessage } from './openai-client.ts';
 import { TrainingQueryService, TRAINING_TOOL_NAME } from './training-query-service.ts';
+import { WhatsAppQueryService, WHATSAPP_TOOL_NAME } from './whatsapp-query-service.ts';
+
+export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME];
 
 export interface ToolCall {
   id: string;
@@ -19,18 +22,21 @@ export interface FunctionExecutionResult {
 export class FunctionCallHandler {
   private searchService: SearchService;
   private trainingQueryService: TrainingQueryService;
+  private whatsappQueryService: WhatsAppQueryService;
 
   constructor(authHeader?: string) {
     this.searchService = new SearchService();
     this.trainingQueryService = new TrainingQueryService(authHeader);
+    this.whatsappQueryService = new WhatsAppQueryService(authHeader);
   }
-  
+
   getAvailableTools(): any[] {
     const searchFunctions = this.searchService.getAvailableFunctions();
     const trainingFunctions = this.trainingQueryService.getAvailableFunctions();
+    const whatsappFunctions = this.whatsappQueryService.getAvailableFunctions();
     const actionFunctions = this.getActionFunctions();
 
-    return [...searchFunctions, ...trainingFunctions, ...actionFunctions];
+    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...actionFunctions];
   }
   
   getActionFunctions(): any[] {
@@ -65,6 +71,13 @@ export class FunctionCallHandler {
         });
       } else if (functionName === TRAINING_TOOL_NAME) {
         const content = await this.trainingQueryService.executeFunction(functionName, functionArgs);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content
+        });
+      } else if (functionName === WHATSAPP_TOOL_NAME) {
+        const content = await this.whatsappQueryService.executeFunction(functionName, functionArgs);
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
