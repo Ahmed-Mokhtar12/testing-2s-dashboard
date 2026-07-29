@@ -1,5 +1,6 @@
 import { SearchService } from './search-service.ts';
 import { OpenAIMessage } from './openai-client.ts';
+import { TrainingQueryService, TRAINING_TOOL_NAME } from './training-query-service.ts';
 
 export interface ToolCall {
   id: string;
@@ -17,16 +18,19 @@ export interface FunctionExecutionResult {
 
 export class FunctionCallHandler {
   private searchService: SearchService;
-  
+  private trainingQueryService: TrainingQueryService;
+
   constructor() {
     this.searchService = new SearchService();
+    this.trainingQueryService = new TrainingQueryService();
   }
   
   getAvailableTools(): any[] {
     const searchFunctions = this.searchService.getAvailableFunctions();
+    const trainingFunctions = this.trainingQueryService.getAvailableFunctions();
     const actionFunctions = this.getActionFunctions();
-    
-    return [...searchFunctions, ...actionFunctions];
+
+    return [...searchFunctions, ...trainingFunctions, ...actionFunctions];
   }
   
   getActionFunctions(): any[] {
@@ -58,6 +62,13 @@ export class FunctionCallHandler {
           role: 'tool',
           tool_call_id: toolCall.id,
           content: 'Sending actions are disabled in this product. Reply to the user with a normal text answer only. Do not ask for confirmation and do not generate send_email, send_sms, or send_whatsapp actions.'
+        });
+      } else if (functionName === TRAINING_TOOL_NAME) {
+        const content = await this.trainingQueryService.executeFunction(functionName, functionArgs);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content
         });
       } else {
         console.warn(`⚠️ Unknown function: ${functionName}`);
