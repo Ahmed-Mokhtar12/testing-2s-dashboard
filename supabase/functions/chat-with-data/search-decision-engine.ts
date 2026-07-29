@@ -83,6 +83,15 @@ export class SearchDecisionEngine {
   }
   
   static determineToolChoice(searchDecision: SearchDecisionResult): any {
+    if (searchDecision.isTrainingQuery) {
+      // 'auto' proved unreliable for training questions (the model sometimes
+      // asks for confirmation or claims the tool is unavailable) — force it,
+      // same pattern as the forced search_web call below.
+      return {
+        type: 'function',
+        function: { name: 'query_training_records' }
+      };
+    }
     if (searchDecision.requiresWebsiteSearch) {
       return {
         type: 'function',
