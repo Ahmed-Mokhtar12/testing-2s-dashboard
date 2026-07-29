@@ -16,6 +16,7 @@ import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 import { DataAvailabilityChecker } from './data-availability-checker.ts';
 import { HonestResponseGenerator } from './honest-response-generator.ts';
+import { getCallerEmail } from '../_shared/auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,18 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Auth gate: only signed-in dashboard users (hotel staff) may consult Sera.
+  // verify_jwt=true already rejects requests without a valid project JWT, but
+  // the public anon key passes that check — this resolves the JWT to a real
+  // auth user, exactly like the sp-* functions.
+  const callerEmail = await getCallerEmail(req);
+  if (!callerEmail) {
+    return new Response(JSON.stringify({ error: 'Not authenticated.' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   // Hoist these so they remain accessible in the catch block for error logging
@@ -43,13 +56,16 @@ serve(async (req) => {
 
     console.log('📩 Received message:', { message, messageId, sessionId });
 
-    // Initialize Supabase with enhanced error handling
+    // User-scoped client: anon key + the caller's JWT, so every query runs
+    // under the caller's identity and RLS applies (no service-role bypass).
+    const authHeader = req.headers.get('Authorization') ?? '';
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
     );
 
-    if (!Deno.env.get('SUPABASE_URL') || !Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+    if (!Deno.env.get('SUPABASE_URL') || !Deno.env.get('SUPABASE_ANON_KEY')) {
       throw new Error('Supabase configuration missing');
     }
 
@@ -146,7 +162,7 @@ serve(async (req) => {
 
     // 🤖 HONEST AI RESPONSE WITH DATA INTEGRITY
     console.log('🤖 Calling OpenAI with honest data-aware context...');
-    let aiChoice = await callOpenAI(context, message, consultantPrompt);
+    let aiChoice = await callOpenAI(context, message, consultantPrompt, authHeader);
     
     // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication.
     // Skipped when the answer was computed by query_training_records — those
@@ -163,7 +179,8 @@ serve(async (req) => {
         specificData,
         context,
         consultantPrompt,
-        callOpenAI
+        // Keep the caller's JWT on regenerated calls so tools stay user-scoped
+        (c: string, m: string, p?: string) => callOpenAI(c, m, p, authHeader)
       );
     }
     

@@ -18,6 +18,12 @@ const UNAVAILABLE = JSON.stringify({
 });
 
 export class TrainingQueryService {
+  private authHeader: string;
+
+  constructor(authHeader?: string) {
+    this.authHeader = authHeader ?? '';
+  }
+
   getAvailableFunctions() {
     return [
       {
@@ -75,9 +81,12 @@ export class TrainingQueryService {
         return JSON.stringify({ error: range.error });
       }
 
+      // User-scoped client (anon key + caller JWT) so training-records RLS
+      // applies to the caller, matching the rest of chat-with-data.
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: this.authHeader } } },
       );
 
       let query = supabase

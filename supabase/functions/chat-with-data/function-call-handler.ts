@@ -20,9 +20,9 @@ export class FunctionCallHandler {
   private searchService: SearchService;
   private trainingQueryService: TrainingQueryService;
 
-  constructor() {
+  constructor(authHeader?: string) {
     this.searchService = new SearchService();
-    this.trainingQueryService = new TrainingQueryService();
+    this.trainingQueryService = new TrainingQueryService(authHeader);
   }
   
   getAvailableTools(): any[] {
