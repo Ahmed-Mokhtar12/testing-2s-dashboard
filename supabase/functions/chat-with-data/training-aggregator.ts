@@ -163,6 +163,8 @@ export function aggregateTrainingData(
     summary: summarize(scopedSessions, scopedParticipants),
   };
 
+  if (truncated) result.truncated = true;
+
   if (scopedSessions.length === 0) {
     result.no_training_records_found = true;
     return result;
@@ -202,6 +204,5 @@ export function aggregateTrainingData(
     });
   }
 
-  if (truncated) result.truncated = true;
   return result;
 }

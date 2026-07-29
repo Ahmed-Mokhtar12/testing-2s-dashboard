@@ -130,3 +130,17 @@ test('aggregate: truncated flag is passed through', () => {
   const r: any = aggregateTrainingData([S({})], [], {}, true);
   assert.equal(r.truncated, true);
 });
+
+test('aggregate: truncated flag appears even on empty results from filters', () => {
+  const sessions = [
+    S({ training_id: 'TRN-1', employee_id: 'E-100' }),
+    S({ training_id: 'TRN-2', employee_id: 'E-101' }),
+  ];
+  const participants = [
+    P({ training_id: 'TRN-1', employee_id: 'E-100' }),
+    P({ training_id: 'TRN-2', employee_id: 'E-101', colleague_name: 'Sara Khan' }),
+  ];
+  const r: any = aggregateTrainingData(sessions, participants, { employee: 'nonexistent' }, true);
+  assert.equal(r.no_training_records_found, true);
+  assert.equal(r.truncated, true);
+});
