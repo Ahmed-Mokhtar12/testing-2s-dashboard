@@ -20,6 +20,7 @@ async function openHotelTraining(
     supabaseFailure?: boolean;
     trainersFailure?: boolean;
     onSubmitBody?: (body: unknown) => void;
+    onManageBody?: (body: unknown) => void;
   } = {},
 ) {
   await setMockAuthSession(page, email);
@@ -27,7 +28,7 @@ async function openHotelTraining(
   await mockColumnsFunction(page);
   await mockTrainersFunction(page, { failure: opts.trainersFailure });
   await mockSubmitFunction(page, { onBody: opts.onSubmitBody });
-  await mockManageColleagueFunction(page);
+  await mockManageColleagueFunction(page, { onBody: opts.onManageBody });
   await mockSupabaseRest(page, { trainingSessionFailure: opts.supabaseFailure });
   await page.goto('/dashboard/hotel-training');
   await expect(page.getByText('Hotel Training').first()).toBeVisible();
@@ -123,6 +124,11 @@ test.describe('Hotel Training', () => {
     const adminPage = await page.context().newPage();
     await openHotelTraining(adminPage, ADMIN_EMAIL);
     await expect(adminPage.getByRole('tab', { name: 'Manage Members' })).toBeVisible();
+
+    await adminPage.getByRole('tab', { name: 'Manage Members' }).click();
+    await expect(adminPage.getByRole('tab', { name: 'Add New Member' })).toBeVisible();
+    await expect(adminPage.getByRole('tab', { name: 'Edit Member' })).toBeVisible();
+    await expect(adminPage.getByRole('tab', { name: 'Remove Member' })).toBeVisible();
   });
 
   test('draft restore banner appears after refresh and restores form', async ({ page }) => {
@@ -280,5 +286,105 @@ test.describe('Hotel Training', () => {
     await page.goto('/dashboard/hotel-training');
 
     await expect(page.getByText(/Could not load colleagues from SharePoint/i)).toBeVisible({ timeout: 15_000 });
+  });
+
+  async function openEditMemberTab(page: Page) {
+    await page.getByRole('tab', { name: 'Manage Members' }).click();
+    await page.getByRole('tab', { name: 'Edit Member' }).click();
+  }
+
+  async function pickEditMember(page: Page, search: string, optionName: RegExp) {
+    await page.getByRole('button', { name: 'Search by name or Employee ID...' }).click();
+    await page.getByPlaceholder('Type name or ID...').fill(search);
+    await page.getByRole('option', { name: optionName }).click();
+  }
+
+  test('edit member: promotion shows old → new confirmation and sends update patch', async ({ page }) => {
+    const bodies: Array<Record<string, unknown>> = [];
+    await openHotelTraining(page, ADMIN_EMAIL, { onManageBody: (b) => bodies.push(b as Record<string, unknown>) });
+    await openEditMemberTab(page);
+    await pickEditMember(page, 'Alice', /Alice Smith/);
+
+    // Nothing changed yet → Save disabled.
+    await expect(page.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+
+    await page.getByLabel('Position').fill('Senior Supervisor');
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+
+    await expect(page.getByText('Position: Supervisor → Senior Supervisor')).toBeVisible();
+    await page.getByRole('button', { name: 'Yes, save changes' }).click();
+    await expect(page.getByText('Member updated successfully.')).toBeVisible();
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toEqual({
+      action: 'update',
+      itemId: 'col-1',
+      patch: {
+        colleagueName: 'Alice Smith',
+        position: 'Senior Supervisor',
+        section: 'Reception Hotel',
+        department: 'Front Office',
+      },
+    });
+  });
+
+  test('edit member: department transfer forces re-selecting a valid section', async ({ page }) => {
+    const bodies: Array<Record<string, unknown>> = [];
+    await openHotelTraining(page, ADMIN_EMAIL, { onManageBody: (b) => bodies.push(b as Record<string, unknown>) });
+    await openEditMemberTab(page);
+    await pickEditMember(page, '1001', /Alice Smith/);
+
+    await selectByTriggerText(page, 'Front Office', 'Engineering');
+    // Section was cleared; saving without one is blocked.
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page.getByText('Section is required')).toBeVisible();
+
+    // Only the new department's sections are offered.
+    await page.getByRole('combobox').filter({ hasText: 'Select section' }).click();
+    await expect(page.getByRole('option', { name: 'Engineering' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Reception Hotel' })).toHaveCount(0);
+    await page.getByRole('option', { name: 'Engineering' }).click();
+
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await page.getByRole('button', { name: 'Yes, save changes' }).click();
+    await expect(page.getByText('Member updated successfully.')).toBeVisible();
+
+    expect(bodies).toHaveLength(1);
+    const patch = (bodies[0] as { patch: Record<string, unknown> }).patch;
+    expect(patch.department).toBe('Engineering');
+    expect(patch.section).toBe('Engineering');
+  });
+
+  test('edit member: inactive member shows badge and reactivates via the switch', async ({ page }) => {
+    const bodies: Array<Record<string, unknown>> = [];
+    await openHotelTraining(page, ADMIN_EMAIL, { onManageBody: (b) => bodies.push(b as Record<string, unknown>) });
+    await openEditMemberTab(page);
+
+    await page.getByRole('button', { name: 'Search by name or Employee ID...' }).click();
+    await page.getByPlaceholder('Type name or ID...').fill('Dave');
+    await expect(page.getByRole('option', { name: /Dave Black/ }).getByText('Inactive')).toBeVisible();
+    await page.getByRole('option', { name: /Dave Black/ }).click();
+
+    // No field changes → Save still disabled until the switch is on.
+    await expect(page.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    await page.getByLabel('Reactivate this member').click();
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+
+    await expect(page.getByText('Will be reactivated')).toBeVisible();
+    await page.getByRole('button', { name: 'Yes, save changes' }).click();
+    await expect(page.getByText('Member updated successfully.')).toBeVisible();
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toEqual({
+      action: 'update',
+      itemId: 'col-4',
+      patch: {
+        colleagueName: 'Dave Black',
+        position: 'Staff',
+        section: 'Security',
+        department: 'Security',
+        reactivate: true,
+      },
+    });
   });
 });

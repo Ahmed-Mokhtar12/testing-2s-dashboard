@@ -75,7 +75,10 @@ export async function mockSubmitFunction(
   );
 }
 
-export async function mockManageColleagueFunction(page: Page) {
+export async function mockManageColleagueFunction(
+  page: Page,
+  opts: { onBody?: (body: unknown) => void } = {},
+) {
   await page.route(
     `https://${PROJECT_REF}.supabase.co/functions/v1/sp-manage-colleague`,
     async (route) => {
@@ -83,6 +86,7 @@ export async function mockManageColleagueFunction(page: Page) {
         return route.fulfill({ status: 200, body: 'ok' });
       }
       const body = route.request().postDataJSON() as { action?: string };
+      opts.onBody?.(body);
       if (body?.action === 'add') {
         return route.fulfill({ json: { id: 'col-new' } });
       }
