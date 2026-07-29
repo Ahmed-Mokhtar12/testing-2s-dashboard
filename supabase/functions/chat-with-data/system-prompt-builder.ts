@@ -2,7 +2,7 @@ import { ConversationData } from './conversation-context-analyzer.ts';
 import { getDubaiTimezoneContext, DEFAULT_LANGUAGE } from './timezone-utils.ts';
 
 export class SystemPromptBuilder {
-  static buildConsultantPrompt(conversationData: ConversationData, dataContext?: string): string {
+  static buildConsultantPrompt(conversationData: ConversationData): string {
     console.log('📝 Building Sera Senior Hospitality Consultant prompt...');
     const timezoneContext = getDubaiTimezoneContext();
 

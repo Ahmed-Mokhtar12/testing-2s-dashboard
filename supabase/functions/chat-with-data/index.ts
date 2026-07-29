@@ -148,7 +148,7 @@ serve(async (req) => {
     console.log('✅ Enhanced context built with document integration');
 
     // Build enhanced system prompt with conversation continuity
-    const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData, context);
+    const consultantPrompt = SystemPromptBuilder.buildConsultantPrompt(conversationData);
     
     // 🎯 DATA AVAILABILITY ASSESSMENT
     console.log('🔍 Assessing data availability...');

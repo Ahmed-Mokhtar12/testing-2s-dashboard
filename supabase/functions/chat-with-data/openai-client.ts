@@ -1,3 +1,5 @@
+import { composeSystemContent } from './message-composer.ts';
+
 export interface OpenAIConfig {
   apiKey: string;
   model: string;
@@ -119,7 +121,7 @@ export class OpenAIClient {
 
   createMessages(context: string, userMessage: string, consultantPrompt?: string): OpenAIMessage[] {
     return [
-      { role: 'system', content: consultantPrompt || context },
+      { role: 'system', content: composeSystemContent(consultantPrompt, context) },
       { role: 'user', content: userMessage }
     ];
   }
