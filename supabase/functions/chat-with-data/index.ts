@@ -148,17 +148,24 @@ serve(async (req) => {
     console.log('🤖 Calling OpenAI with honest data-aware context...');
     let aiChoice = await callOpenAI(context, message, consultantPrompt);
     
-    // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication
-    console.log('🔧 Applying Data Honesty Engine...');
-    aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(
-      aiChoice,
-      message,
-      conversationData,
-      specificData,
-      context,
-      consultantPrompt,
-      callOpenAI
-    );
+    // 🔥 CRITICAL: Apply Data Honesty Engine to prevent fabrication.
+    // Skipped when the answer was computed by query_training_records — those
+    // numbers come from the database, and the fabrication regexes (e.g.
+    // /booking.*\d+/) misfire on business wording around them.
+    if (aiChoice.executedTools?.includes('query_training_records')) {
+      console.log('🎓 Skipping Data Honesty Engine — answer built from query_training_records data');
+    } else {
+      console.log('🔧 Applying Data Honesty Engine...');
+      aiChoice = await ResponseCompletenessEngine.enforceDataHonesty(
+        aiChoice,
+        message,
+        conversationData,
+        specificData,
+        context,
+        consultantPrompt,
+        callOpenAI
+      );
+    }
     
     // Enhanced validation with data utilization scoring
     const validationResult = SmartResponseValidator.validateAIResponse(

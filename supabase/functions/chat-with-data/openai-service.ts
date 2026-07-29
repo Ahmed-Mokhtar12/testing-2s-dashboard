@@ -48,7 +48,11 @@ export async function callOpenAI(context: string, message: string, consultantPro
       'auto'
     );
 
-    return finalResponse.choices[0];
+    const finalChoice = finalResponse.choices[0];
+    // Let downstream validators know which tools produced this answer —
+    // tool-computed data must not be treated as fabrication.
+    finalChoice.executedTools = toolCalls.map((tc: any) => tc.function.name);
+    return finalChoice;
   }
 
   return choice;
