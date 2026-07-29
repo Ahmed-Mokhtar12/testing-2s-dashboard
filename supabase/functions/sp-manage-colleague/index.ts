@@ -19,9 +19,18 @@ interface NewColleague {
   department: string;
 }
 
+interface ColleaguePatch {
+  colleagueName: string;
+  position: string;
+  section: string;
+  department: string;
+  reactivate?: boolean;
+}
+
 type Body =
   | { action: 'add'; colleague: NewColleague }
-  | { action: 'deactivate'; itemId: string };
+  | { action: 'deactivate'; itemId: string }
+  | { action: 'update'; itemId: string; patch: ColleaguePatch };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -90,6 +99,32 @@ Deno.serve(async (req) => {
         token,
         `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items/${itemId}/fields`,
         { method: 'PATCH', body: JSON.stringify({ IsActive: false }) },
+      );
+      return json(req, { ok: true });
+    }
+
+    if (body.action === 'update') {
+      const itemId = body.itemId?.trim();
+      if (!itemId || !/^\d+$/.test(itemId)) {
+        return json(req, { error: 'itemId must be a numeric SharePoint item id.' }, 400);
+      }
+      const p = body.patch;
+      if (!p?.colleagueName?.trim() || !p.position?.trim() || !p.section?.trim() || !p.department?.trim()) {
+        return json(req, { error: 'All colleague fields are required.' }, 400);
+      }
+      const fields: Record<string, unknown> = {
+        Title: p.colleagueName,
+        ColleagueName: p.colleagueName,
+        Position: p.position,
+        Section: p.section,
+        Department: p.department,
+      };
+      // update can only ever reactivate — deactivation stays a separate action
+      if (p.reactivate) fields.IsActive = true;
+      await graphFetch(
+        token,
+        `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items/${itemId}/fields`,
+        { method: 'PATCH', body: JSON.stringify(fields) },
       );
       return json(req, { ok: true });
     }
