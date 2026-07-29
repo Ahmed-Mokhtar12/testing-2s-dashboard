@@ -76,9 +76,8 @@ export class DataAvailabilityChecker {
       availableDataSources.push(this.AVAILABLE_DATA_TYPES.CHAT_HISTORY);
     }
     
-    if (availableData?.conductedTraining?.status === 'fulfilled' && availableData.conductedTraining.value?.data?.length > 0) {
-      availableDataSources.push(this.AVAILABLE_DATA_TYPES.TRAINING);
-    }
+    // Training data is served on demand by the query_training_records tool.
+    availableDataSources.push(this.AVAILABLE_DATA_TYPES.TRAINING);
     
     if (availableData?.documentContext?.status === 'fulfilled' && availableData.documentContext.value?.data?.length > 0) {
       availableDataSources.push(this.AVAILABLE_DATA_TYPES.DOCUMENTS);

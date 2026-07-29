@@ -1,3 +1,5 @@
+import { formatDubaiTimestamp } from './timezone-utils.ts';
+
 export class ContextSectionBuilder {
   static buildRoleAndAccessSection(): string {
     return `📩 Your Role & Database Access:
@@ -96,17 +98,6 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
       });
     }
 
-    // Training Records
-    if (data.conductedTraining?.status === 'fulfilled' && data.conductedTraining.value.data?.length > 0) {
-      sections.push('🎓 STAFF TRAINING RECORDS:');
-      data.conductedTraining.value.data.slice(0, 3).forEach((training: any) => {
-        if (training['Summary of the training']) {
-          sections.push(`• ${training['Summary of the training'].substring(0, 200)}...`);
-        }
-      });
-      sections.push('');
-    }
-
     // Email Communications
     if (data.infoSummary?.status === 'fulfilled' && data.infoSummary.value.data?.length > 0) {
       sections.push('📧 EMAIL COMMUNICATIONS:');
@@ -169,7 +160,7 @@ You are an intelligent AI consultant specialized in hotel management, dedicated 
 📅 DATE HANDLING INSTRUCTIONS:
 - When asked about specific months/years, search the database for that exact period
 - Report exactly what you find, even if the dates seem unexpected
-- Today's reference date is January 2, 2025 (for "recent" calculations only)
+- Today's reference date is ${formatDubaiTimestamp(new Date())} (for "recent" calculations only)
 - But ALWAYS prioritize actual database contents over date logic
 
 Respond professionally as a senior hotel management consultant using the actual operational data from Two Seasons Hotel's database.`;

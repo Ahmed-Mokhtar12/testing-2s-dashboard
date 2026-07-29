@@ -6,7 +6,6 @@ export class ContextDataStatsBuilder {
     const sources = [
       { name: 'Hotel Reviews', data: data.hotelReviews, key: 'hotelReviews' },
       { name: 'Chat History', data: data.chatHistory, key: 'chatHistory' },
-      { name: 'Training Records', data: data.conductedTraining, key: 'conductedTraining' },
       { name: 'Email Summaries', data: data.infoSummary, key: 'infoSummary' },
       { name: 'Long-term Memory', data: data.longTermMemory, key: 'longTermMemory' },
       { name: 'Recent Documents', data: data.recentDocuments, key: 'recentDocuments' },
@@ -34,9 +33,6 @@ export class ContextDataStatsBuilder {
     }
     if (data.chatHistory?.status === 'fulfilled' && data.chatHistory.value.data?.length > 0) {
       sources.push('Chat History');
-    }
-    if (data.conductedTraining?.status === 'fulfilled' && data.conductedTraining.value.data?.length > 0) {
-      sources.push('Training Records');
     }
     if (data.infoSummary?.status === 'fulfilled' && data.infoSummary.value.data?.length > 0) {
       sources.push('Email Communications');

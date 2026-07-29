@@ -84,10 +84,9 @@ serve(async (req) => {
     console.log('📚 Building enhanced context with document integration...');
     
     // Get all available data for context building
-    const [hotelReviews, chatHistory, conductedTraining, infoSummary, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
+    const [hotelReviews, chatHistory, infoSummary, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
       supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('Conducted Training').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.rpc('get_recent_document_context', { limit_count: 10 }),
@@ -97,7 +96,6 @@ serve(async (req) => {
     const allData = {
       hotelReviews,
       chatHistory,
-      conductedTraining,
       infoSummary,
       longTermMemory,
       documentContext,
