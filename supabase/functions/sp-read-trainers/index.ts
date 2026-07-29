@@ -1,52 +1,50 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { haveAzureCreds, getAppToken, graphFetch, GRAPH_BASE } from '../_shared/graph.ts';
+import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
+import { mapUilItemToTrainer, dedupeAndSortTrainers } from './uil-mapper.ts';
 
 interface TrainerRef {
   displayName: string;
   email: string;
 }
 
-// The tenant directory changes rarely; warm isolates skip the multi-page
-// walk entirely and serve straight from this cache.
+// The site's User Information List (UIL) changes rarely; warm isolates skip
+// the multi-page walk entirely and serve straight from this cache.
+//
+// Sourced from the UIL rather than the whole tenant directory: the dropdown
+// must equal the set sp-submit-training can actually resolve trainers
+// against (it addresses the same UIL_LIST_ID — see that function). Listing
+// the full Graph /users directory let people pick shared/role accounts or
+// colleagues who never visited the SharePoint site, which then failed at
+// submit with "Trainer(s) not found on the SharePoint site."
 const CACHE_TTL_MS = 15 * 60 * 1000;
 let cache: { data: TrainerRef[]; fetchedAt: number } | null = null;
 
-async function fetchTrainers(token: string): Promise<TrainerRef[]> {
-  const byEmail = new Map<string, TrainerRef>();
+async function fetchTrainersFromUil(token: string, siteId: string): Promise<TrainerRef[]> {
+  const mapped: Array<ReturnType<typeof mapUilItemToTrainer>> = [];
 
+  // Deliberately no $select on fields: UIL internal field names vary by
+  // tenant and $select on a missing field can error, so fetch the full field
+  // set and read defensively in uil-mapper (mirrors sp-submit-training).
   let url: string | null =
-    `${GRAPH_BASE}/users?$select=id,displayName,mail,userPrincipalName,accountEnabled&$top=999`;
+    `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.uil}/items?$top=500&$expand=fields`;
 
   while (url) {
     const data = await graphFetch<{
-      value: Array<{
-        id: string;
-        displayName?: string | null;
-        mail?: string | null;
-        userPrincipalName?: string | null;
-        accountEnabled?: boolean | null;
-      }>;
+      value: Array<{ id: string; fields: Record<string, unknown> }>;
       '@odata.nextLink'?: string;
     }>(token, url);
 
-    for (const u of data.value) {
-      if (u.accountEnabled === false) continue;
-
-      const displayName = u.displayName?.trim();
-      const email = (u.mail ?? u.userPrincipalName ?? '').trim().toLowerCase();
-      if (!displayName || !email) continue;
-
-      if (!byEmail.has(email)) {
-        byEmail.set(email, { displayName, email });
-      }
+    for (const item of data.value) {
+      mapped.push(mapUilItemToTrainer(item.id, item.fields));
     }
 
     url = data['@odata.nextLink'] ?? null;
   }
 
-  return Array.from(byEmail.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const persons = mapped.filter((t): t is NonNullable<typeof t> => t !== null);
+  return dedupeAndSortTrainers(persons).map((t) => ({ displayName: t.displayName, email: t.mail }));
 }
 
 Deno.serve(async (req) => {
@@ -69,7 +67,8 @@ Deno.serve(async (req) => {
     }
 
     const token = await getAppToken();
-    const trainers = await fetchTrainers(token);
+    const siteId = await getSiteId(token);
+    const trainers = await fetchTrainersFromUil(token, siteId);
     cache = { data: trainers, fetchedAt: Date.now() };
     return json(req, trainers);
   } catch (err) {

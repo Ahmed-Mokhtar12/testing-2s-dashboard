@@ -10,6 +10,11 @@ export const LIST_IDS = {
   colleagues: '8bdc10b9-01c8-4310-8a16-48eb83020d7e',
   monthlyTraining: 'aa8fe143-854d-4646-a423-89bc44bb217d',
   participants: '73f67c6d-f327-4c14-aa68-2b718afcd132',
+  // Site's hidden User Information List. sp-submit-training resolves trainer
+  // LookupIds against this same list via its own local UIL_LIST_ID constant
+  // (see supabase/functions/sp-submit-training/index.ts) — not yet unified
+  // with this entry; that function is left untouched deliberately.
+  uil: '265691f8-3786-4e9f-932f-79835f30a6cf',
 } as const;
 
 export function haveAzureCreds(): boolean {

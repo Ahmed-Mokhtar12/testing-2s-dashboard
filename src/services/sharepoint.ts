@@ -30,8 +30,9 @@ export interface ListColumnsResult {
   remarksTypeAsString: string;
 }
 
-// The whole enabled company directory, sorted by displayName, emails
-// lowercased — served by the sp-read-trainers Edge Function.
+// The SharePoint site's User Information List (people who have visited the
+// site, and are therefore resolvable at submit time), sorted by displayName,
+// emails lowercased — served by the sp-read-trainers Edge Function.
 export async function invokeReadTrainers(): Promise<TrainerRef[]> {
   const { data, error } = await supabase.functions.invoke('sp-read-trainers');
   if (error) {

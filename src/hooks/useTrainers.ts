@@ -3,8 +3,8 @@ import { FALLBACK_TRAINERS } from '@/lib/hotel-training-constants';
 import { invokeReadTrainers } from '@/services/sharepoint';
 import type { TrainerRef } from '@/types/hotel-training';
 
-// Live company directory for the trainer picker; falls back to the three
-// known trainers when the directory call fails or returns nothing.
+// Live SharePoint site User Information List for the trainer picker; falls
+// back to the three known trainers when the call fails or returns nothing.
 export function useTrainers() {
   return useQuery<TrainerRef[]>({
     queryKey: ['trainers'],
