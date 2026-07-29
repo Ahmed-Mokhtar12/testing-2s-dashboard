@@ -94,9 +94,18 @@ export interface NewColleaguePayload {
   department: string;
 }
 
+export interface ColleaguePatchPayload {
+  colleagueName: string;
+  position: string;
+  section: string;
+  department: string;
+  reactivate?: boolean;
+}
+
 export type ManageColleagueRequest =
   | { action: 'add'; colleague: NewColleaguePayload }
-  | { action: 'deactivate'; itemId: string };
+  | { action: 'deactivate'; itemId: string }
+  | { action: 'update'; itemId: string; patch: ColleaguePatchPayload };
 
 export async function invokeManageColleague(
   request: ManageColleagueRequest,
