@@ -12,6 +12,14 @@ export interface WhatsAppSummary {
 const dubaiFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' });
 export function dubaiDateKey(iso: string): string { return dubaiFmt.format(new Date(iso)); }
 
+// Strips a phone_number filter down to digits only. Non-numeric input (e.g. a
+// guest name typed into the phone_number arg) collapses to '' — callers MUST
+// treat an empty digest as "no usable filter" rather than passing it into an
+// ilike('%%') pattern, which would silently match every row.
+export function phoneDigits(raw: unknown): string {
+  return raw === undefined || raw === null ? '' : String(raw).replace(/\D/g, '');
+}
+
 export function aggregateWhatsApp(rows: WhatsAppRow[]): WhatsAppSummary {
   const guests = new Set<string>();
   const byDay = new Map<string, { messages: number; guests: Set<string> }>();

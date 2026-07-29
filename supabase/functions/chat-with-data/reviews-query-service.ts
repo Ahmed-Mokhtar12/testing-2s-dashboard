@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
+import { buildDateRange } from './training-aggregator.ts';
 import { aggregateReviews } from './reviews-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
 
@@ -32,6 +33,15 @@ export class ReviewsQueryService {
   async executeFunction(functionName: string, args: any): Promise<string> {
     if (functionName !== REVIEWS_TOOL_NAME) return JSON.stringify({ error: `Unknown function: ${functionName}` });
     try {
+      // 'Date' is a plain YYYY-MM-DD date-typed column (not a timestamp), so
+      // we filter on date keys directly rather than the ISO bounds this
+      // helper builds. buildDateRange is reused purely to validate format and
+      // to detect a reversed range (via its `swapped` flag); when swapped, we
+      // reorder the original date-key strings for the actual filter.
+      const range = buildDateRange(args?.date_from, args?.date_to);
+      if (range.error) return JSON.stringify({ error: range.error });
+      const dateFrom = range.swapped ? (args?.date_to ?? null) : (args?.date_from ?? null);
+      const dateTo = range.swapped ? (args?.date_from ?? null) : (args?.date_to ?? null);
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: this.authHeader } } },
@@ -39,8 +49,8 @@ export class ReviewsQueryService {
       let q = supabase.from('Two Seasons and Reviews')
         .select('"Date",Source,Score,Author,Title,Text,"Hotel Name"')
         .order('Date', { ascending: false }).limit(ROW_CAP);
-      if (args?.date_from) q = q.gte('Date', args.date_from);
-      if (args?.date_to) q = q.lte('Date', args.date_to);
+      if (dateFrom) q = q.gte('Date', dateFrom);
+      if (dateTo) q = q.lte('Date', dateTo);
       if (args?.source) q = q.ilike('Source', `%${args.source}%`);
       if (typeof args?.min_score === 'number') q = q.gte('Score', args.min_score);
       if (typeof args?.max_score === 'number') q = q.lte('Score', args.max_score);
@@ -48,8 +58,8 @@ export class ReviewsQueryService {
       if (error) { console.error('❌ query_reviews failed:', error); return UNAVAILABLE; }
       if (!data?.length) {
         const kind = await classifyEmptyResult('Two Seasons and Reviews', (probe: any) => {
-          if (args?.date_from) probe = probe.gte('Date', args.date_from);
-          if (args?.date_to) probe = probe.lte('Date', args.date_to);
+          if (dateFrom) probe = probe.gte('Date', dateFrom);
+          if (dateTo) probe = probe.lte('Date', dateTo);
           if (args?.source) probe = probe.ilike('Source', `%${args.source}%`);
           if (typeof args?.min_score === 'number') probe = probe.gte('Score', args.min_score);
           if (typeof args?.max_score === 'number') probe = probe.lte('Score', args.max_score);
@@ -69,6 +79,7 @@ export class ReviewsQueryService {
         ...summary,
       };
       if (data.length === ROW_CAP) result.truncation_note = `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent reviews in range.`;
+      if (range.swapped) result.note = 'date_from and date_to were reversed and have been swapped.';
       if (args?.detail === 'reviews') {
         result.reviews = data.slice(0, 20).map((r: any) => ({
           date: r.Date, source: r.Source, score: r.Score === null ? null : Number(r.Score), author: r.Author, title: r.Title,

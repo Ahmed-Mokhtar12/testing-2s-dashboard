@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { buildDateRange } from './training-aggregator.ts';
-import { aggregateWhatsApp } from './whatsapp-aggregator.ts';
+import { aggregateWhatsApp, phoneDigits } from './whatsapp-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
 
 export const WHATSAPP_TOOL_NAME = 'query_whatsapp_chats';
@@ -33,6 +33,13 @@ export class WhatsAppQueryService {
     try {
       const range = buildDateRange(args?.date_from, args?.date_to);
       if (range.error) return JSON.stringify({ error: range.error });
+      const phoneDigest = phoneDigits(args?.phone_number);
+      if (args?.phone_number && !phoneDigest) {
+        return JSON.stringify({
+          status: 'invalid_phone_number',
+          instruction_to_model: "The phone_number filter must contain digits. Ask the user for the guest's phone number — names cannot be used to filter WhatsApp chats.",
+        });
+      }
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: this.authHeader } } },
@@ -42,14 +49,14 @@ export class WhatsAppQueryService {
         .order('created_at', { ascending: false }).limit(ROW_CAP);
       if (range.fromISO) q = q.gte('created_at', range.fromISO);
       if (range.toExclusiveISO) q = q.lt('created_at', range.toExclusiveISO);
-      if (args?.phone_number) q = q.ilike('Sender Number', `%${String(args.phone_number).replace(/\D/g, '')}%`);
+      if (phoneDigest) q = q.ilike('Sender Number', `%${phoneDigest}%`);
       const { data, error } = await q;
       if (error) { console.error('❌ query_whatsapp_chats failed:', error); return UNAVAILABLE; }
       if (!data?.length) {
         const kind = await classifyEmptyResult('Chat History', (probe: any) => {
           if (range.fromISO) probe = probe.gte('created_at', range.fromISO);
           if (range.toExclusiveISO) probe = probe.lt('created_at', range.toExclusiveISO);
-          if (args?.phone_number) probe = probe.ilike('Sender Number', `%${String(args.phone_number).replace(/\D/g, '')}%`);
+          if (phoneDigest) probe = probe.ilike('Sender Number', `%${phoneDigest}%`);
           return probe;
         });
         return emptyResultPayload(kind, { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null });
