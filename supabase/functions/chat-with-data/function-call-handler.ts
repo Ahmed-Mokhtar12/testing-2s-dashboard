@@ -3,8 +3,9 @@ import { OpenAIMessage } from './openai-client.ts';
 import { TrainingQueryService, TRAINING_TOOL_NAME } from './training-query-service.ts';
 import { WhatsAppQueryService, WHATSAPP_TOOL_NAME } from './whatsapp-query-service.ts';
 import { ReviewsQueryService, REVIEWS_TOOL_NAME } from './reviews-query-service.ts';
+import { EmailsQueryService, EMAILS_TOOL_NAME } from './emails-query-service.ts';
 
-export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME, REVIEWS_TOOL_NAME];
+export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME, REVIEWS_TOOL_NAME, EMAILS_TOOL_NAME];
 
 export interface ToolCall {
   id: string;
@@ -25,12 +26,14 @@ export class FunctionCallHandler {
   private trainingQueryService: TrainingQueryService;
   private whatsappQueryService: WhatsAppQueryService;
   private reviewsQueryService: ReviewsQueryService;
+  private emailsQueryService: EmailsQueryService;
 
   constructor(authHeader?: string) {
     this.searchService = new SearchService();
     this.trainingQueryService = new TrainingQueryService(authHeader);
     this.whatsappQueryService = new WhatsAppQueryService(authHeader);
     this.reviewsQueryService = new ReviewsQueryService(authHeader);
+    this.emailsQueryService = new EmailsQueryService(authHeader);
   }
 
   getAvailableTools(): any[] {
@@ -38,9 +41,10 @@ export class FunctionCallHandler {
     const trainingFunctions = this.trainingQueryService.getAvailableFunctions();
     const whatsappFunctions = this.whatsappQueryService.getAvailableFunctions();
     const reviewsFunctions = this.reviewsQueryService.getAvailableFunctions();
+    const emailsFunctions = this.emailsQueryService.getAvailableFunctions();
     const actionFunctions = this.getActionFunctions();
 
-    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...reviewsFunctions, ...actionFunctions];
+    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...reviewsFunctions, ...emailsFunctions, ...actionFunctions];
   }
   
   getActionFunctions(): any[] {
@@ -89,6 +93,13 @@ export class FunctionCallHandler {
         });
       } else if (functionName === REVIEWS_TOOL_NAME) {
         const content = await this.reviewsQueryService.executeFunction(functionName, functionArgs);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content
+        });
+      } else if (functionName === EMAILS_TOOL_NAME) {
+        const content = await this.emailsQueryService.executeFunction(functionName, functionArgs);
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

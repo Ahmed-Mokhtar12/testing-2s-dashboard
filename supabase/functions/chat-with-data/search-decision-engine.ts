@@ -5,6 +5,7 @@ export interface SearchDecisionResult {
   isTrainingQuery: boolean;
   isWhatsAppQuery: boolean;
   isReviewsQuery: boolean;
+  isEmailsQuery: boolean;
 }
 
 export class SearchDecisionEngine {
@@ -61,6 +62,15 @@ export class SearchDecisionEngine {
     const reviewsKeywords = ['review', 'reviews', 'rating', 'ratings', 'guest feedback', 'تقييم', 'تقييمات', 'مراجعات'];
     const isReviewsQuery = !isTrainingQuery && !isWhatsAppQuery && reviewsKeywords.some(k => message.toLowerCase().includes(k));
 
+    // Guest email questions must stay eligible for the query_sera_emails tool
+    // — never force search_web for them. Training, WhatsApp, and reviews take
+    // precedence when both match. "info email" is excluded: those questions
+    // are answered from snapshot context, not this tool.
+    const lower = message.toLowerCase();
+    const emailsKeywords = ['email', 'emails', 'inbox', 'بريد', 'ايميل', 'إيميل'];
+    const isEmailsQuery = !isTrainingQuery && !isWhatsAppQuery && !isReviewsQuery &&
+      !lower.includes('info email') && emailsKeywords.some(k => lower.includes(k));
+
     // Decision logic
     let requiresWebsiteSearch = false;
     let searchReason = '';
@@ -74,6 +84,9 @@ export class SearchDecisionEngine {
     } else if (isReviewsQuery) {
       requiresWebsiteSearch = false;
       searchReason = 'Reviews question — leave tool choice to the model';
+    } else if (isEmailsQuery) {
+      requiresWebsiteSearch = false;
+      searchReason = 'Guest email question — leave tool choice to the model';
     } else if (!hasRichDatabaseContext && hasRealTimeRequest) {
       requiresWebsiteSearch = true;
       searchReason = 'No database context available and user requests current information';
@@ -92,6 +105,7 @@ export class SearchDecisionEngine {
       isTrainingQuery,
       isWhatsAppQuery,
       isReviewsQuery,
+      isEmailsQuery,
       requiresWebsiteSearch,
       searchReason
     });
@@ -102,7 +116,8 @@ export class SearchDecisionEngine {
       searchReason,
       isTrainingQuery,
       isWhatsAppQuery,
-      isReviewsQuery
+      isReviewsQuery,
+      isEmailsQuery
     };
   }
 
@@ -126,6 +141,12 @@ export class SearchDecisionEngine {
       return {
         type: 'function',
         function: { name: 'query_reviews' }
+      };
+    }
+    if (searchDecision.isEmailsQuery) {
+      return {
+        type: 'function',
+        function: { name: 'query_sera_emails' }
       };
     }
     if (searchDecision.requiresWebsiteSearch) {
