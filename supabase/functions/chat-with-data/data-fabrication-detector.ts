@@ -1,19 +1,24 @@
 // Data Fabrication Detector - Detects AI-generated false operational data
+//
+// Scoped to metrics that are genuinely unavailable in the connected tables
+// (occupancy, ADR, RevPAR, revenue). Earlier versions matched any sentence
+// containing the word "booking" near a digit, which misfired on ordinary
+// business wording (e.g. "51 WhatsApp messages about bookings",
+// "Booking.com reviews: 12") — that broad pattern has been removed.
+const METRIC_PATTERNS: Array<[string, RegExp]> = [
+  ['occupancy', /\boccupancy\b[^.\n]{0,30}?\d+(\.\d+)?\s*%/i],
+  ['adr', /\badr\b[^.\n]{0,30}?(aed\s*)?\d/i],
+  ['revpar', /\brevpar\b[^.\n]{0,30}?(aed\s*)?\d/i],
+  ['revenue', /\brevenue\b[^.\n]{0,30}?(aed|\$|usd)\s*\d/i],
+];
+
+// Pure function, deliberately kept dependency-free (no Deno imports in this
+// module) so it can be imported directly by Node-based unit tests.
+export function detectFabricatedMetrics(text: string): string[] {
+  return METRIC_PATTERNS.filter(([, re]) => re.test(text)).map(([name]) => name);
+}
+
 export class DataFabricationDetector {
-  
-  // Patterns that indicate fabricated operational data
-  private static readonly FABRICATION_INDICATORS = [
-    /occupancy.{0,20}\d+%/i,
-    /adr.{0,20}\$?\d+/i,
-    /revenue.{0,20}\$?\d+/i,
-    /\d+%.*occupancy/i,
-    /average daily rate.{0,20}\d+/i,
-    /revpar.{0,20}\d+/i,
-    /booking.*\d+/i,
-    /\$\d+.*revenue/i,
-    /\d+.*rooms.*occupied/i,
-    /booking rate.{0,20}\d+/i
-  ];
 
   // Phrases that indicate honesty about data limitations
   private static readonly HONESTY_INDICATORS = [
@@ -28,23 +33,18 @@ export class DataFabricationDetector {
     'ليس لدي'
   ];
 
+  // Thin wrapper over `detectFabricatedMetrics` — kept so `DataUtilizationScorer`
+  // and `generateFabricationIssues` below keep compiling against the same
+  // return shape (containsFabrication / isHonestAboutLimitations /
+  // fabricationScore / detectedPatterns).
   static detectFabrication(content: string): {
     containsFabrication: boolean;
     isHonestAboutLimitations: boolean;
     fabricationScore: number;
     detectedPatterns: string[];
   } {
-    const detectedPatterns: string[] = [];
-    
-    // Check for fabrication patterns
-    const containsFabrication = this.FABRICATION_INDICATORS.some(pattern => {
-      const match = content.match(pattern);
-      if (match) {
-        detectedPatterns.push(match[0]);
-        return true;
-      }
-      return false;
-    });
+    const detectedPatterns = detectFabricatedMetrics(content);
+    const containsFabrication = detectedPatterns.length > 0;
 
     // Check for honesty indicators
     const isHonestAboutLimitations = this.HONESTY_INDICATORS.some(phrase => 

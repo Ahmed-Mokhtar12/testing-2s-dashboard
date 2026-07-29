@@ -67,26 +67,18 @@ export class ConversationContextValidator {
     };
   }
 
-  static checkLanguageConsistency(content: string): {
+  // Language choice belongs to the persona prompt ("match the user's
+  // language"), not to this validator — an English response is not itself
+  // an inconsistency, so this no longer flags one as a language error.
+  static checkLanguageConsistency(_content: string): {
     issues: string[];
     suggestions: string[];
     isConsistent: boolean;
   } {
-    const issues: string[] = [];
-    const suggestions: string[] = [];
-
-    // Check for English responses when Arabic expected
-    const hasEnglishErrors = content.includes('I apologize') || content.includes('I am unable');
-    
-    if (hasEnglishErrors) {
-      issues.push('Response in English instead of Arabic');
-      suggestions.push('Respond in Arabic for better user experience');
-    }
-
     return {
-      issues,
-      suggestions,
-      isConsistent: !hasEnglishErrors
+      issues: [],
+      suggestions: [],
+      isConsistent: true
     };
   }
 

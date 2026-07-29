@@ -1,4 +1,6 @@
 import { SmartResponseValidator } from './smart-response-validator.ts';
+import { detectFabricatedMetrics } from './data-fabrication-detector.ts';
+import { LanguageDetector } from './language-detector.ts';
 
 export class ResponseCompletenessEngine {
   static async enforceDataHonesty(
@@ -21,12 +23,16 @@ export class ResponseCompletenessEngine {
     );
     
     console.log(`📊 Data honesty score: ${validationResult.dataUtilizationScore}`);
-    
-    // Check for fabrication (major issue)
-    const hasFabrication = validationResult.issues.some(issue => 
-      issue.includes('fabricated') || issue.includes('CRITICAL')
-    );
-    
+
+    // Check for fabrication (major issue) — the wholesale-replacement fallback
+    // below is only allowed to fire when the answer actually states one of
+    // the genuinely-unavailable metrics (occupancy/ADR/RevPAR/revenue) with a
+    // number. A merely low utilization score is not itself grounds to nuke
+    // the whole answer with hardcoded fallback text.
+    const answerContent = response.message?.content || '';
+    const fabricatedMetrics = detectFabricatedMetrics(answerContent);
+    const hasFabrication = fabricatedMetrics.length > 0;
+
     // If fabrication detected or low honesty score
     if (hasFabrication || validationResult.dataUtilizationScore < 0.3) {
       console.log('🚨 CRITICAL: Data fabrication detected - regenerating with honesty enforcement...');
@@ -57,13 +63,17 @@ export class ResponseCompletenessEngine {
         if (revalidationResult.dataUtilizationScore > validationResult.dataUtilizationScore) {
           console.log('✅ Regenerated response is more honest - using improved version');
           return regeneratedResponse;
-        } else {
+        } else if (hasFabrication) {
           console.log('⚠️ Fallback: Creating honest response manually');
-          return this.createHonestFallbackResponse(response, availableData, userMessage);
+          return this.createHonestFallbackResponse(response, fabricatedMetrics, userMessage);
         }
+        return response;
       } catch (error) {
         console.error('❌ Error regenerating honest response:', error);
-        return this.createHonestFallbackResponse(response, availableData, userMessage);
+        if (hasFabrication) {
+          return this.createHonestFallbackResponse(response, fabricatedMetrics, userMessage);
+        }
+        return response;
       }
     }
     
@@ -112,52 +122,35 @@ HONEST RESPONSE REQUIREMENTS:
     return originalPrompt + honestyContext;
   }
   
+  // Arabic labels for the metric keys `detectFabricatedMetrics` returns
+  // ('occupancy' | 'adr' | 'revpar' | 'revenue'), used only to render the
+  // Arabic fallback copy below.
+  private static readonly ARABIC_METRIC_LABELS: Record<string, string> = {
+    occupancy: 'الإشغال',
+    adr: 'متوسط سعر الغرفة (ADR)',
+    revpar: 'العائد لكل غرفة متاحة (RevPAR)',
+    revenue: 'الإيرادات'
+  };
+
+  // Wholesale-replacement fallback: this bypasses the model entirely (unlike
+  // `buildHonestyEnforcementPrompt`, whose text the model renders in the
+  // conversation's language), so the language must be picked explicitly here
+  // from the user's message rather than hardcoded to Arabic. Only called
+  // when `detectFabricatedMetrics` actually flagged a real unavailable
+  // metric, so `fabricatedMetrics` is always non-empty here.
   private static createHonestFallbackResponse(
     response: any,
-    availableData: any,
+    fabricatedMetrics: string[],
     userMessage: string
   ): any {
     console.log('🔧 Creating honest fallback response...');
-    
-    const reviewCount = availableData?.reviews?.length || availableData?.analytics?.totalReviews || 0;
-    const avgScore = availableData?.analytics?.averageScore;
-    
-    let honestyContent = '';
-    
-    // Check if user asked for operational data
-    const askedForOperational = /occupancy|revenue|adr|booking|revpar|financial/i.test(userMessage);
-    
-    if (askedForOperational) {
-      honestyContent = `أعتذر، لكن لا أملك البيانات التشغيلية المطلوبة في قاعدة البيانات.\n\n`;
-      honestyContent += `📊 البيانات المتاحة:\n`;
-      if (reviewCount > 0) {
-        honestyContent += `• ${reviewCount} مراجعة ضيوف${avgScore ? ` (متوسط: ${avgScore.toFixed(1)}/5)` : ''}\n`;
-      }
-      honestyContent += `• المستندات المرفوعة\n`;
-      honestyContent += `• سجلات التدريب والمحادثات\n\n`;
-      
-      honestyContent += `لتقديم تحليل دقيق، أحتاج إلى:\n`;
-      honestyContent += `• بيانات الإشغال والإيرادات\n`;
-      honestyContent += `• معدلات الأسعار اليومية\n`;
-      honestyContent += `• إحصائيات الحجوزات\n\n`;
-      
-      honestyContent += `هل يمكنك تزويدي بهذه البيانات أو رفع المستندات التي تحتويها؟`;
-    } else if (reviewCount > 0) {
-      honestyContent = `بناءً على البيانات المتاحة في قاعدة البيانات، لدي ${reviewCount} مراجعة ضيوف${avgScore ? ` بمتوسط تقييم ${avgScore.toFixed(1)}/5` : ''}.\n\n`;
-      honestyContent += `يمكنني تحليل:\n`;
-      honestyContent += `• آراء الضيوف ومستوى رضاهم\n`;
-      honestyContent += `• نقاط القوة والمجالات التي تحتاج تحسين\n`;
-      honestyContent += `• الاتجاهات في التقييمات\n\n`;
-      honestyContent += `ما الجانب الذي تريد التركيز عليه؟`;
-    } else {
-      honestyContent = `لا توجد بيانات كافية في قاعدة البيانات للإجابة على استفسارك.\n\n`;
-      honestyContent += `لتقديم مساعدة فعّالة، يمكنك:\n`;
-      honestyContent += `• رفع المستندات ذات الصلة\n`;
-      honestyContent += `• تزويدي بالبيانات المحددة\n`;
-      honestyContent += `• إعادة صياغة السؤال ليتناسب مع المعلومات العامة\n\n`;
-      honestyContent += `كيف يمكنني مساعدتك؟`;
-    }
-    
+
+    const language = LanguageDetector.detectLanguage(userMessage);
+
+    const honestyContent = language === 'Arabic'
+      ? `لا أملك بيانات موثوقة عن ${fabricatedMetrics.map(m => this.ARABIC_METRIC_LABELS[m] || m).join('، ')} في الجداول المتصلة، لذلك لن أذكر أي أرقام لها. يمكنني الإجابة استنادًا إلى المراجعات، ومحادثات واتساب، ورسائل بريد الضيوف، وأسعار المنافسين، والتفاعل على وسائل التواصل الاجتماعي، ورسائل الترحيب، وسجلات التدريب.`
+      : `I don't have verified data for ${fabricatedMetrics.join(', ')} in my connected tables, so I won't quote numbers for it. I can answer from reviews, WhatsApp chats, guest emails, competitor rates, social engagement, welcome messages, and training records.`;
+
     return {
       ...response,
       message: {
