@@ -3,8 +3,9 @@ export class ConversationSessionManager {
     supabase: any,
     userMessage: string,
     aiResponse: string,
-    sessionId?: string,
-    context?: any
+    sessionId: string | undefined,
+    context: any,
+    userId: string
   ): Promise<void> {
     try {
       const conversationEntry = {
@@ -13,23 +14,23 @@ export class ConversationSessionManager {
         message: this.formatConversationEntry(userMessage, aiResponse, context),
         created_at: new Date().toISOString()
       };
-      
+
       const { error } = await supabase
         .from('LongTermMemory')
         .insert(conversationEntry);
-      
+
       if (error) {
         console.error('💾 Failed to save conversation:', error);
         return;
       }
-      
+
       console.log('💾 Conversation saved successfully with context');
-      
-      // Also save to website_chats for session management
+
+      // Also save to 2s-dashboard_AI_Chat for session management
       if (sessionId) {
-        await this.saveToWebsiteChats(supabase, userMessage, aiResponse, sessionId);
+        await this.saveToDashboardChat(supabase, userMessage, aiResponse, sessionId, userId);
       }
-      
+
     } catch (error) {
       console.error('💾 Error in conversation saving:', error);
       // Don't throw error to avoid breaking the response
@@ -50,29 +51,31 @@ export class ConversationSessionManager {
     return formatted;
   }
   
-  private static async saveToWebsiteChats(
+  private static async saveToDashboardChat(
     supabase: any,
     userMessage: string,
     aiResponse: string,
-    sessionId: string
+    sessionId: string,
+    userId: string
   ): Promise<void> {
     try {
       const { error } = await supabase
-        .from('website_chats')
+        .from('2s-dashboard_AI_Chat')
         .insert({
           session_id: sessionId,
           user_message: userMessage,
           ai_response: aiResponse,
+          user_id: userId,
           created_at: new Date().toISOString()
         });
-      
+
       if (error) {
-        console.warn('⚠️ Failed to save to website_chats:', error);
+        console.warn('⚠️ Failed to save to 2s-dashboard_AI_Chat:', error);
       } else {
-        console.log('💾 Saved to website_chats successfully');
+        console.log('💾 Saved to 2s-dashboard_AI_Chat successfully');
       }
     } catch (error) {
-      console.warn('⚠️ Error saving to website_chats:', error);
+      console.warn('⚠️ Error saving to 2s-dashboard_AI_Chat:', error);
     }
   }
   

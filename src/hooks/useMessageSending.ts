@@ -45,7 +45,7 @@ export const useMessageSending = ({
     }
 
     try {
-      const aiResponseData = await sendMessageToAI(userMessageContent, userMessage.id);
+      const aiResponseData = await sendMessageToAI(userMessageContent, userMessage.id, sessionId || undefined);
 
       let aiMessage;
       if (typeof aiResponseData === 'string') {

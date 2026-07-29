@@ -23,11 +23,12 @@ export const createErrorMessage = (customMessage?: string): Message => ({
   timestamp: new Date(),
 });
 
-export const sendMessageToAI = async (message: string, messageId: string) => {
+export const sendMessageToAI = async (message: string, messageId: string, sessionId?: string) => {
   const { data, error } = await supabase.functions.invoke('chat-with-data', {
     body: {
       message,
       messageId,
+      sessionId,
     },
   });
 

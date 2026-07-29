@@ -14,7 +14,7 @@ import { PerformanceMonitor } from './performance-monitor.ts';
 import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 import { DataAvailabilityChecker } from './data-availability-checker.ts';
-import { getCallerEmail } from '../_shared/auth.ts';
+import { getCallerUser } from '../_shared/auth.ts';
 import { QUERY_TOOL_NAMES } from './function-call-handler.ts';
 
 const corsHeaders = {
@@ -31,8 +31,8 @@ serve(async (req) => {
   // verify_jwt=true already rejects requests without a valid project JWT, but
   // the public anon key passes that check — this resolves the JWT to a real
   // auth user, exactly like the sp-* functions.
-  const callerEmail = await getCallerEmail(req);
-  if (!callerEmail) {
+  const caller = await getCallerUser(req);
+  if (!caller) {
     return new Response(JSON.stringify({ error: 'Not authenticated.' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -74,6 +74,7 @@ serve(async (req) => {
       .from('2s-dashboard_AI_Chat')
       .select('*')
       .eq('session_id', sessionId || 'guest')
+      .eq('user_id', caller.id)
       .eq('is_archived', false)
       .order('created_at', { ascending: false })
       .limit(30); // Last 15 exchanges (user + AI pairs)
@@ -279,7 +280,8 @@ serve(async (req) => {
         queryType: queryAnalysis.type,
         specificData: !!specificData,
         hasAction: response.hasAction
-      }
+      },
+      caller.id
     );
 
     // Performance monitoring and health check
