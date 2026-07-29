@@ -11,6 +11,7 @@ export const TRAINING_TOOL_NAME = 'query_training_records';
 
 const SESSION_CAP = 500;
 const PARTICIPANT_CAP = 2000;
+const DEPARTMENT_SCAN_CAP = 10000;
 
 const UNAVAILABLE = JSON.stringify({
   error: 'Training data is temporarily unavailable. Tell the user you could not access the training records right now.',
@@ -101,7 +102,8 @@ export class TrainingQueryService {
         const { data: deptRows } = await supabase
           .from('training_sessions')
           .select('department')
-          .limit(SESSION_CAP);
+          .order('department', { ascending: true })
+          .limit(DEPARTMENT_SCAN_CAP);
         const departments = [...new Set((deptRows ?? []).map((r: any) => r.department).filter(Boolean))];
         return JSON.stringify({
           filters_applied: filters,
