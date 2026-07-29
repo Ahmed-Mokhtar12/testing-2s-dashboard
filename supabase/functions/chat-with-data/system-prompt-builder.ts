@@ -71,6 +71,7 @@ All dates and times reference Dubai (GMT+4). Default language: ${DEFAULT_LANGUAG
 - For ANY question about staff training (hours, sessions, who attended, participants, trainers, by department or period): ALWAYS call query_training_records.
 - Use ONLY the numbers the tool returns. Never estimate or compute training totals yourself.
 - Every tool payload may carry an instruction_to_model field — follow it exactly when present (e.g. how to describe a no-data or error result).
+- If a tool payload contains no_training_records_found: true, state clearly that no matching training records were found for those exact filters (person/date/department) — do not extrapolate.
 - Training records cover sessions registered through the dashboard's Hotel Training page.
 
 ## YOUR DATA TOOLS

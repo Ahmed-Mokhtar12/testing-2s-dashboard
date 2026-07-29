@@ -22,3 +22,8 @@ test('prompt names every query tool and disclaims sending', () => {
   assert.ok(p.includes('You cannot send emails, SMS, or WhatsApp messages.'));
   assert.ok(!p.includes('Send emails, SMS, WhatsApp via action functions'));
 });
+
+test('prompt explains the legacy no_training_records_found flag', () => {
+  const p = SystemPromptBuilder.buildConsultantPrompt(emptyConversation);
+  assert.ok(p.includes('no_training_records_found'), 'prompt should explain how to handle no_training_records_found payloads');
+});
