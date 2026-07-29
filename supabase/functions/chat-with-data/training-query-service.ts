@@ -99,17 +99,22 @@ export class TrainingQueryService {
 
       // Department filter matched nothing → tell the model which departments exist.
       if (sessionRows.length === 0 && filters.department) {
-        const { data: deptRows } = await supabase
+        const result: Record<string, unknown> = {
+          filters_applied: filters,
+          no_training_records_found: true,
+        };
+        const { data: deptRows, error: deptError } = await supabase
           .from('training_sessions')
           .select('department')
           .order('department', { ascending: true })
           .limit(DEPARTMENT_SCAN_CAP);
-        const departments = [...new Set((deptRows ?? []).map((r: any) => r.department).filter(Boolean))];
-        return JSON.stringify({
-          filters_applied: filters,
-          no_training_records_found: true,
-          departments_available: departments,
-        });
+        if (deptError) {
+          console.error('❌ query_training_records department scan failed:', deptError);
+          result.departments_available_note = 'The list of existing departments could not be loaded right now.';
+        } else {
+          result.departments_available = [...new Set((deptRows ?? []).map((r: any) => r.department).filter(Boolean))];
+        }
+        return JSON.stringify(result);
       }
 
       let participantRows: TrainingParticipantRow[] = [];
