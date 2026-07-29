@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { buildDateRange } from './training-aggregator.ts';
 import { aggregateWhatsApp, phoneDigits } from './whatsapp-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
+import { fetchAllWithCap } from './paged-fetch.ts';
 
 export const WHATSAPP_TOOL_NAME = 'query_whatsapp_chats';
 const ROW_CAP = 4000;
@@ -44,13 +45,17 @@ export class WhatsAppQueryService {
         Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: this.authHeader } } },
       );
-      let q = supabase.from('Chat History')
-        .select('created_at,"Sender Number",Name,"Sender Message","Ai Reply",human_reply,is_human_controlled')
-        .order('created_at', { ascending: false }).limit(ROW_CAP);
-      if (range.fromISO) q = q.gte('created_at', range.fromISO);
-      if (range.toExclusiveISO) q = q.lt('created_at', range.toExclusiveISO);
-      if (phoneDigest) q = q.ilike('Sender Number', `%${phoneDigest}%`);
-      const { data, error } = await q;
+      const { rows: data, exactCount, error } = await fetchAllWithCap<any>((from, to, withCount) => {
+        let q = supabase.from('Chat History')
+          .select('created_at,"Sender Number",Name,"Sender Message","Ai Reply",human_reply,is_human_controlled', withCount ? { count: 'exact' } : {})
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to);
+        if (range.fromISO) q = q.gte('created_at', range.fromISO);
+        if (range.toExclusiveISO) q = q.lt('created_at', range.toExclusiveISO);
+        if (phoneDigest) q = q.ilike('Sender Number', `%${phoneDigest}%`);
+        return q;
+      }, ROW_CAP);
       if (error) { console.error('❌ query_whatsapp_chats failed:', error); return UNAVAILABLE; }
       if (!data?.length) {
         const kind = await classifyEmptyResult('Chat History', (probe: any) => {
@@ -64,8 +69,18 @@ export class WhatsAppQueryService {
       const summary = aggregateWhatsApp(data.map((r: any) => ({
         created_at: r.created_at, sender: r['Sender Number'] ?? 'unknown', name: r.Name ?? null, humanControlled: !!r.is_human_controlled,
       })));
-      const result: any = { status: 'ok', filters: { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null, phone_number: args?.phone_number ?? null }, ...summary };
-      if (data.length === ROW_CAP) result.truncation_note = `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent messages in range.`;
+      const result: any = {
+        status: 'ok',
+        filters: { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null, phone_number: args?.phone_number ?? null },
+        ...summary,
+        total_messages: exactCount ?? summary.total_messages,
+      };
+      const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
+      if (truncated) {
+        result.truncation_note = exactCount !== null
+          ? `total_messages is exact; unique_guests and per-day/handling breakdowns cover only the ${data.length} most recent of ${exactCount} messages in range. Ask the user to narrow the date range for exact breakdowns.`
+          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent messages in range.`;
+      }
       if (args?.detail === 'messages') {
         result.messages = data.slice(0, 30).map((r: any) => ({
           at: r.created_at, from: r['Sender Number'], name: r.Name,

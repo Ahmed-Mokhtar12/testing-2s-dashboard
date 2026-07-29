@@ -7,6 +7,7 @@ import {
   TrainingSessionRow,
 } from './training-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
+import { fetchAllWithCap } from './paged-fetch.ts';
 
 export const TRAINING_TOOL_NAME = 'query_training_records';
 
@@ -111,11 +112,14 @@ export class TrainingQueryService {
       // "no records exist" (RLS can silently hide rows behind an identical
       // empty result), probe existence with the service role and classify.
       if (sessionRows.length === 0) {
-        const { data: deptRows, error: deptError } = await supabase
-          .from('training_sessions')
-          .select('department')
-          .order('department', { ascending: true })
-          .limit(DEPARTMENT_SCAN_CAP);
+        const { rows: deptRows, error: deptError } = await fetchAllWithCap<any>((from, to, withCount) =>
+          supabase
+            .from('training_sessions')
+            .select('department', withCount ? { count: 'exact' } : {})
+            .order('department', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to),
+          DEPARTMENT_SCAN_CAP);
         if (deptError) {
           console.error('❌ query_training_records department scan failed:', deptError);
         }
@@ -123,7 +127,7 @@ export class TrainingQueryService {
         // key entirely rather than claim an empty list of departments.
         const departmentsAvailable = deptError
           ? []
-          : [...new Set((deptRows ?? []).map((r: any) => r.department).filter(Boolean))];
+          : [...new Set(deptRows.map((r: any) => r.department).filter(Boolean))];
 
         const kind = await classifyEmptyResult('training_sessions', (q) => {
           if (range.fromISO) q = q.gte('training_date', range.fromISO);
@@ -140,18 +144,21 @@ export class TrainingQueryService {
 
       // sessionRows is non-empty here — the empty case already returned above.
       const ids = sessionRows.map((s) => s.training_id);
-      const { data: participants, error: participantsError } = await supabase
-        .from('training_participants')
-        .select('training_id, employee_id, colleague_name, position, section, department')
-        .in('training_id', ids)
-        .limit(PARTICIPANT_CAP);
+      const { rows: participantRows, exactCount: participantsExact, error: participantsError } = await fetchAllWithCap<TrainingParticipantRow>((from, to, withCount) =>
+        supabase
+          .from('training_participants')
+          .select('training_id, employee_id, colleague_name, position, section, department', withCount ? { count: 'exact' } : {})
+          .in('training_id', ids)
+          .order('id', { ascending: true })
+          .range(from, to),
+        PARTICIPANT_CAP);
       if (participantsError) {
         console.error('❌ query_training_records participants query failed:', participantsError);
         return UNAVAILABLE;
       }
-      const participantRows = (participants ?? []) as TrainingParticipantRow[];
 
-      const truncated = sessionRows.length >= SESSION_CAP || participantRows.length >= PARTICIPANT_CAP;
+      const truncated = sessionRows.length >= SESSION_CAP ||
+        (participantsExact !== null ? participantsExact > participantRows.length : participantRows.length >= PARTICIPANT_CAP);
       const result = aggregateTrainingData(sessionRows, participantRows, filters, truncated);
       if (truncated) {
         result.truncation_note = 'Result capped. Ask the user to narrow the date range for exact totals.';

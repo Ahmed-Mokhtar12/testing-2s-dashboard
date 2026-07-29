@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { buildDateRange } from './training-aggregator.ts';
 import { aggregateRates } from './rates-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
+import { fetchAllWithCap } from './paged-fetch.ts';
 
 export const RATES_TOOL_NAME = 'query_competitor_rates';
 const TABLE = 'Two Seasons Competitor Hotel room Rates';
@@ -46,14 +47,18 @@ export class RatesQueryService {
         Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: this.authHeader } } },
       );
-      let q = supabase.from(TABLE)
-        .select('report_date,hotel_name,checkin_date,converted_price_aed,status,is_lowest_for_day')
-        .eq('dry_run', false).in('status', ['success', 'price_found'])
-        .order('report_date', { ascending: false }).limit(ROW_CAP);
-      if (dateFrom) q = q.gte('report_date', dateFrom);
-      if (dateTo) q = q.lte('report_date', dateTo);
-      if (args?.hotel_name) q = q.ilike('hotel_name', `%${args.hotel_name}%`);
-      const { data, error } = await q;
+      const { rows: data, exactCount, error } = await fetchAllWithCap<any>((from, to, withCount) => {
+        let q = supabase.from(TABLE)
+          .select('report_date,hotel_name,checkin_date,converted_price_aed,status,is_lowest_for_day', withCount ? { count: 'exact' } : {})
+          .eq('dry_run', false).in('status', ['success', 'price_found'])
+          .order('report_date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to);
+        if (dateFrom) q = q.gte('report_date', dateFrom);
+        if (dateTo) q = q.lte('report_date', dateTo);
+        if (args?.hotel_name) q = q.ilike('hotel_name', `%${args.hotel_name}%`);
+        return q;
+      }, ROW_CAP);
       if (error) { console.error('❌ query_competitor_rates failed:', error); return UNAVAILABLE; }
       if (!data?.length) {
         const kind = await classifyEmptyResult(TABLE, (probe: any) => {
@@ -74,7 +79,12 @@ export class RatesQueryService {
         filters: { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null, hotel_name: args?.hotel_name ?? null },
         ...summary,
       };
-      if (data.length === ROW_CAP) result.truncation_note = `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent rate records in range.`;
+      const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
+      if (truncated) {
+        result.truncation_note = exactCount !== null
+          ? `Rate statistics cover only the ${data.length} most recent of ${exactCount} rate records in range. Ask the user to narrow the date range for exact statistics.`
+          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent rate records in range.`;
+      }
       if (range.swapped) result.note = 'date_from and date_to were reversed and have been swapped.';
       if (args?.detail === 'quotes') {
         result.quotes = data.slice(0, 30).map((r: any) => ({

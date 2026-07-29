@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { buildDateRange } from './training-aggregator.ts';
 import { aggregateReviews } from './reviews-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
+import { fetchAllWithCap } from './paged-fetch.ts';
 
 export const REVIEWS_TOOL_NAME = 'query_reviews';
 const ROW_CAP = 5000;
@@ -46,15 +47,19 @@ export class ReviewsQueryService {
         Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: this.authHeader } } },
       );
-      let q = supabase.from('Two Seasons and Reviews')
-        .select('"Date",Source,Score,Author,Title,Text,"Hotel Name"')
-        .order('Date', { ascending: false }).limit(ROW_CAP);
-      if (dateFrom) q = q.gte('Date', dateFrom);
-      if (dateTo) q = q.lte('Date', dateTo);
-      if (args?.source) q = q.ilike('Source', `%${args.source}%`);
-      if (typeof args?.min_score === 'number') q = q.gte('Score', args.min_score);
-      if (typeof args?.max_score === 'number') q = q.lte('Score', args.max_score);
-      const { data, error } = await q;
+      const { rows: data, exactCount, error } = await fetchAllWithCap<any>((from, to, withCount) => {
+        let q = supabase.from('Two Seasons and Reviews')
+          .select('"Date",Source,Score,Author,Title,Text,"Hotel Name"', withCount ? { count: 'exact' } : {})
+          .order('Date', { ascending: false })
+          .order('id', { ascending: false }) // unique tiebreaker: stable page boundaries on tied dates
+          .range(from, to);
+        if (dateFrom) q = q.gte('Date', dateFrom);
+        if (dateTo) q = q.lte('Date', dateTo);
+        if (args?.source) q = q.ilike('Source', `%${args.source}%`);
+        if (typeof args?.min_score === 'number') q = q.gte('Score', args.min_score);
+        if (typeof args?.max_score === 'number') q = q.lte('Score', args.max_score);
+        return q;
+      }, ROW_CAP);
       if (error) { console.error('❌ query_reviews failed:', error); return UNAVAILABLE; }
       if (!data?.length) {
         const kind = await classifyEmptyResult('Two Seasons and Reviews', (probe: any) => {
@@ -77,8 +82,14 @@ export class ReviewsQueryService {
         status: 'ok',
         filters: { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null, source: args?.source ?? null, min_score: args?.min_score ?? null, max_score: args?.max_score ?? null },
         ...summary,
+        total_reviews: exactCount ?? summary.total_reviews,
       };
-      if (data.length === ROW_CAP) result.truncation_note = `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent reviews in range.`;
+      const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
+      if (truncated) {
+        result.truncation_note = exactCount !== null
+          ? `total_reviews is exact; average_score and per-source/per-month breakdowns cover only the ${data.length} most recent of ${exactCount} reviews in range. Ask the user to narrow the date range for exact breakdowns.`
+          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent reviews in range.`;
+      }
       if (range.swapped) result.note = 'date_from and date_to were reversed and have been swapped.';
       if (args?.detail === 'reviews') {
         result.reviews = data.slice(0, 20).map((r: any) => ({

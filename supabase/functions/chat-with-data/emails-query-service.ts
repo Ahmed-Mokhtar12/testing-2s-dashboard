@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { buildDateRange } from './training-aggregator.ts';
 import { aggregateEmails } from './emails-aggregator.ts';
 import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
+import { fetchAllWithCap } from './paged-fetch.ts';
 
 export const EMAILS_TOOL_NAME = 'query_sera_emails';
 const ROW_CAP = 4000;
@@ -38,14 +39,18 @@ export class EmailsQueryService {
         Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: this.authHeader } } },
       );
-      let q = supabase.from('2Seasons_Sera_Email_Log')
-        .select('sent_at,email_type,category,nature_of_request,guest_name,guest_email,email_subject')
-        .order('sent_at', { ascending: false }).limit(ROW_CAP);
-      if (range.fromISO) q = q.gte('sent_at', range.fromISO);
-      if (range.toExclusiveISO) q = q.lt('sent_at', range.toExclusiveISO);
-      if (args?.email_type) q = q.eq('email_type', args.email_type);
-      if (args?.category) q = q.ilike('category', `%${args.category}%`);
-      const { data, error } = await q;
+      const { rows: data, exactCount, error } = await fetchAllWithCap<any>((from, to, withCount) => {
+        let q = supabase.from('2Seasons_Sera_Email_Log')
+          .select('sent_at,email_type,category,nature_of_request,guest_name,guest_email,email_subject', withCount ? { count: 'exact' } : {})
+          .order('sent_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to);
+        if (range.fromISO) q = q.gte('sent_at', range.fromISO);
+        if (range.toExclusiveISO) q = q.lt('sent_at', range.toExclusiveISO);
+        if (args?.email_type) q = q.eq('email_type', args.email_type);
+        if (args?.category) q = q.ilike('category', `%${args.category}%`);
+        return q;
+      }, ROW_CAP);
       if (error) { console.error('❌ query_sera_emails failed:', error); return UNAVAILABLE; }
       if (!data?.length) {
         const kind = await classifyEmptyResult('2Seasons_Sera_Email_Log', (probe: any) => {
@@ -64,8 +69,14 @@ export class EmailsQueryService {
         status: 'ok',
         filters: { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null, email_type: args?.email_type ?? null, category: args?.category ?? null },
         ...summary,
+        total_emails: exactCount ?? summary.total_emails,
       };
-      if (data.length === ROW_CAP) result.truncation_note = `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent emails in range.`;
+      const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
+      if (truncated) {
+        result.truncation_note = exactCount !== null
+          ? `total_emails is exact; new/reply splits, unique_guests and breakdowns cover only the ${data.length} most recent of ${exactCount} emails in range. Ask the user to narrow the date range for exact breakdowns.`
+          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent emails in range.`;
+      }
       if (args?.detail === 'emails') {
         result.emails = data.slice(0, 20).map((r: any) => ({
           sent_at: r.sent_at, email_type: r.email_type, category: r.category, guest_name: r.guest_name,
