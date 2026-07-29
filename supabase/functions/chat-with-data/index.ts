@@ -3,10 +3,9 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
 import { analyzeQueryIntelligently } from './query-analyzer.ts';
-import { queryReviewsByDateRange, getAnalyticsData } from './data-service.ts';
+import { fetchDashboardSnapshot } from './context-data-fetcher.ts';
 import { EnhancedContextBuilder } from './enhanced-context-builder.ts';
 import { callOpenAI } from './openai-service.ts';
-import { CustomerBehaviorAnalytics } from './customer-behavior-analytics.ts';
 import { ConversationContextAnalyzer } from './conversation-context-analyzer.ts';
 import { SystemPromptBuilder } from './system-prompt-builder.ts';
 import { EnhancedErrorHandler } from './enhanced-error-handler.ts';
@@ -15,7 +14,6 @@ import { PerformanceMonitor } from './performance-monitor.ts';
 import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 import { DataAvailabilityChecker } from './data-availability-checker.ts';
-import { HonestResponseGenerator } from './honest-response-generator.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 
 const corsHeaders = {
@@ -72,7 +70,7 @@ serve(async (req) => {
     // Enhanced conversation context retrieval with session support
     console.log('📚 Retrieving conversation history for session:', sessionId);
     const { data: history, error: historyError } = await supabase
-      .from('website_chats')
+      .from('2s-dashboard_AI_Chat')
       .select('*')
       .eq('session_id', sessionId || 'guest')
       .eq('is_archived', false)
@@ -99,52 +97,36 @@ serve(async (req) => {
     // Enhanced data gathering with enhanced context builder
     console.log('📚 Building enhanced context with document integration...');
     
-    // Get all available data for context building
-    const [hotelReviews, chatHistory, infoSummary, longTermMemory, documentContext, recentDocuments] = await Promise.allSettled([
-      supabase.from('Hotel Reviews').select('*').order('created_at', { ascending: false }).limit(100),
-      supabase.from('Chat History').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('Info Summary').select('*').order('created_at', { ascending: false }).limit(10),
-      supabase.from('LongTermMemory').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.rpc('get_recent_document_context', { limit_count: 10 }),
-      supabase.from('uploaded_documents').select('*').eq('upload_status', 'processed').order('last_accessed', { ascending: false }).limit(5)
-    ]);
+    // Get all available data for context building: real dashboard tables,
+    // scoped to whatever date range the question implies.
+    const snapshot = await fetchDashboardSnapshot(supabase, queryAnalysis);
+    console.log('📊 Snapshot counts:', Object.fromEntries(Object.entries(snapshot).filter(([k]) => k !== 'errors').map(([k, v]: any) => [k, v.count])));
+    if (snapshot.errors.length) console.warn('⚠️ Snapshot errors:', snapshot.errors);
 
-    const allData = {
-      hotelReviews,
-      chatHistory,
-      infoSummary,
-      longTermMemory,
-      documentContext,
-      recentDocuments
-    };
-
-    // Get query-specific data based on analysis
-    let specificData = null;
+    // Recently uploaded document context (RPC exists live; the old
+    // `uploaded_documents` metadata table it was paired with does not).
+    let documentContext: any[] = [];
     try {
-      if (queryAnalysis.type === 'review_summary' || queryAnalysis.type === 'monthly_data') {
-        const reviewData = hotelReviews.status === 'fulfilled' ? hotelReviews.value.data || [] : [];
-        // Import scoring utilities for accurate analysis
-        const { ScoreNormalizationUtils } = await import('./score-normalization-utils.ts');
-        const scoringData = ScoreNormalizationUtils.calculateNormalizedAverage(reviewData);
-        
-        specificData = {
-          reviews: reviewData,
-          analytics: {
-            totalReviews: reviewData.length,
-            averageScore: reviewData.filter(r => r.Score).reduce((sum, r) => sum + r.Score, 0) / reviewData.filter(r => r.Score).length || 0,
-            normalizedData: scoringData
-          }
-        };
+      const { data, error } = await supabase.rpc('get_recent_document_context', { limit_count: 10 });
+      if (error) {
+        console.warn('⚠️ Document context error:', error);
+      } else {
+        documentContext = data ?? [];
       }
     } catch (error) {
-      console.warn('⚠️ Error processing specific data:', error);
-      specificData = { reviews: [], analytics: { totalReviews: 0, averageScore: 0 } };
+      console.warn('⚠️ Document context fetch failed:', error);
     }
+
+    // Query-specific analytics (e.g. review_summary/monthly_data) are not
+    // produced by analyzeQueryIntelligently — it never returns those types —
+    // so this stays null. Downstream honesty/validation/completeness calls
+    // already treat a null specificData as "no bespoke analytics available".
+    const specificData = null;
 
     // Build enhanced context using the enhanced context builder
     const enhancedContextBuilder = new EnhancedContextBuilder();
-    const context = enhancedContextBuilder.buildContextWithDocuments(allData, message);
-    
+    const context = enhancedContextBuilder.buildContextWithDocuments({ ...snapshot, documentContext }, message);
+
     console.log('✅ Enhanced context built with document integration');
 
     // Build enhanced system prompt with conversation continuity
@@ -152,7 +134,7 @@ serve(async (req) => {
     
     // 🎯 DATA AVAILABILITY ASSESSMENT
     console.log('🔍 Assessing data availability...');
-    const dataAvailability = DataAvailabilityChecker.assessDataAvailability(message, allData);
+    const dataAvailability = DataAvailabilityChecker.assessDataAvailability(message, { ...snapshot, documentContext });
     console.log('📊 Data availability assessment:', {
       canAnswer: dataAvailability.canAnswerCompletely,
       available: dataAvailability.availableDataSources,

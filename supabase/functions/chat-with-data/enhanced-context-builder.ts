@@ -1,16 +1,50 @@
-import { ReviewAnalysisUtils } from './review-analysis-utils.ts';
-import { ContextDataStatsBuilder } from './context-data-stats-builder.ts';
 import { ContextSectionBuilder } from './context-section-builder.ts';
-import { ScoreNormalizationUtils } from './score-normalization-utils.ts';
 import { getDubaiTimezoneContext, DEFAULT_LANGUAGE } from './timezone-utils.ts';
+import type { DashboardSnapshot, DashboardDomain } from './context-data-fetcher.ts';
+
+// The snapshot rendered by index.ts also carries the recently-uploaded
+// document context fetched via the `get_recent_document_context` RPC — that
+// RPC is not one of the DashboardSnapshot domain tables, so it rides along
+// as an extra, optional field rather than living in DashboardSnapshot.
+export interface ContextSnapshot extends DashboardSnapshot {
+  documentContext?: any[];
+}
+
+interface DomainRenderSpec {
+  key: keyof DashboardSnapshot & string;
+  label: string;
+  cap: number;
+  renderRow: (row: any) => string;
+}
+
+// One entry per DashboardSnapshot domain: display label, how many rendered
+// rows to cap the section at, and how to format a single row compactly.
+const DOMAIN_SECTIONS: DomainRenderSpec[] = [
+  { key: 'reviews', label: 'Reviews', cap: 25, renderRow: (r) =>
+    `${r['Date']} | ${r.Source} | score ${r.Score} | ${r.Author ?? ''} | ${(r.Text ?? r.Title ?? '').slice(0, 200)}` },
+  { key: 'whatsapp', label: 'WhatsApp', cap: 40, renderRow: (r) =>
+    `${r.created_at} | ${r['Sender Number']} ${r.Name ?? ''} | guest: ${(r['Sender Message'] ?? '').slice(0, 150)} | reply: ${((r.human_reply ?? r['Ai Reply']) ?? '').slice(0, 150)}` },
+  { key: 'seraEmails', label: 'Sera Emails', cap: 15, renderRow: (r) =>
+    `${r.sent_at} | ${r.email_type} | ${r.category ?? ''} | ${r.guest_name ?? ''} | ${(r.email_subject ?? '').slice(0, 120)}` },
+  { key: 'infoEmails', label: 'Info Emails', cap: 15, renderRow: (r) =>
+    `${r.created_at} | ${r.action} | ${r.department ?? ''} | conf ${r.confidence ?? ''} | ${(r.subject ?? '').slice(0, 120)}` },
+  { key: 'competitorRates', label: 'Competitor Rates', cap: 15, renderRow: (r) =>
+    `${r.report_date} | ${r.hotel_name} | checkin ${r.checkin_date} | AED ${r.converted_price_aed}${r.is_lowest_for_day ? ' (lowest)' : ''}` },
+  { key: 'social', label: 'Social', cap: 15, renderRow: (r) =>
+    `${r.created_at} | ${r.platform}/${r.channel} | ${r.event_type} | ${(r.guest_message_text ?? '').slice(0, 120)}${r.escalation_flag ? ' [ESCALATED]' : ''}` },
+  { key: 'welcome', label: 'Welcome Messages', cap: 15, renderRow: (r) =>
+    `${r.sent_date} | ${r.full_name ?? ''} | room ${r.room_number ?? ''} | ${r.status}` },
+  { key: 'memory', label: 'Memory', cap: 15, renderRow: (r) =>
+    `${r.created_at} | ${(r.message ?? '').slice(0, 200)}` },
+];
 
 export class EnhancedContextBuilder {
-  buildContextWithDocuments(data: any, userMessage: string): string {
+  buildContextWithDocuments(snapshot: ContextSnapshot, userMessage: string): string {
     const contextSections: string[] = [];
 
     // Add clear database access statement and role definition
     contextSections.push(ContextSectionBuilder.buildRoleAndAccessSection());
-    
+
     // Add Dubai timezone and language context
     contextSections.push('⏰ OPERATIONAL CONTEXT:');
     contextSections.push(getDubaiTimezoneContext());
@@ -18,131 +52,66 @@ export class EnhancedContextBuilder {
     contextSections.push('Hotel operates in Dubai timezone (GST, UTC+4) for all business operations.');
     contextSections.push('');
 
-    // Add data statistics to show AI what's available
-    const dataStats = ContextDataStatsBuilder.buildDataStatistics(data);
-    contextSections.push(dataStats);
+    // Recently uploaded documents (highest priority context, when present)
+    contextSections.push(this.buildDocumentContextSection(snapshot.documentContext ?? []));
 
-    // Add document context sections - PRIORITIZE recent uploaded documents
-    const documentSections = ContextSectionBuilder.buildDocumentContextSections(data);
-    if (documentSections.length > 0) {
-      contextSections.push('🔥 RECENTLY UPLOADED DOCUMENTS (PRIORITY CONTEXT):');
-      contextSections.push(...documentSections);
-      contextSections.push('');
+    // One section per real dashboard domain, each showing the true
+    // in-range count and the (possibly capped) rows actually fetched.
+    for (const spec of DOMAIN_SECTIONS) {
+      contextSections.push(this.renderDomainSection(spec.label, snapshot[spec.key] as DashboardDomain, spec.cap, spec.renderRow));
     }
 
-    // Priority 3: Hotel Reviews - COMPREHENSIVE ANALYSIS
-    if (data.hotelReviews?.status === 'fulfilled' && data.hotelReviews.value.data?.length > 0) {
-      contextSections.push(...this.buildHotelReviewsSection(data.hotelReviews.value.data));
+    // Sera must say data was unavailable rather than invent it, so any
+    // per-domain fetch failure is surfaced verbatim, not swallowed.
+    if (snapshot.errors.length > 0) {
+      contextSections.push(['### Data access errors', ...snapshot.errors.map((e) => `- ${e}`)].join('\n'));
     }
-
-    // Add other data sections
-    contextSections.push(...ContextSectionBuilder.buildOtherDataSections(data));
 
     // Add clear instructions for using the database data
     contextSections.push(ContextSectionBuilder.buildInstructionsSection(userMessage));
 
-    const context = contextSections.join('\n');
-    
-    console.log('🏗️ Built enhanced context with database access clarity, length:', context.length);
-    console.log('📊 Context includes data from:', ContextDataStatsBuilder.getDataSourcesList(data));
-    
+    const context = contextSections.filter(Boolean).join('\n\n');
+
+    console.log('🏗️ Built enhanced context from real dashboard data, length:', context.length);
+
     return context;
   }
 
-  private buildHotelReviewsSection(allReviews: any[]): string[] {
-    const contextSections: string[] = [];
-    
-    contextSections.push('⭐ COMPLETE HOTEL REVIEWS DATABASE:');
-    contextSections.push(`📊 TOTAL REVIEWS IN DATABASE: ${allReviews.length}`);
-    
-    // Analyze all reviews comprehensively
-    const reviewsWithContent = allReviews.filter((review: any) => 
-      review['Reviews Summary'] || review['Text'] || review['Title']
-    );
-    
-    const reviewsWithScores = allReviews.filter((review: any) => review.Score);
-    const reviewsBySource = ReviewAnalysisUtils.analyzeReviewsBySource(allReviews);
-    const reviewsByDate = ReviewAnalysisUtils.analyzeReviewsByDate(allReviews);
-    const monthlyBreakdown = ReviewAnalysisUtils.analyzeReviewsByMonth(allReviews);
-    
-    contextSections.push(`📊 REVIEWS WITH CONTENT: ${reviewsWithContent.length}`);
-    contextSections.push(`📊 REVIEWS WITH SCORES: ${reviewsWithScores.length}`);
-    
-    // Add source breakdown
-    if (Object.keys(reviewsBySource).length > 0) {
-      contextSections.push('📍 REVIEWS BY SOURCE:');
-      Object.entries(reviewsBySource).forEach(([source, count]) => {
-        contextSections.push(`   • ${source}: ${count} reviews`);
-      });
+  private renderDomainSection(
+    label: string,
+    domain: DashboardDomain,
+    cap: number,
+    renderRow: (row: any) => string,
+  ): string {
+    const lines = [`### ${label} (${domain.count ?? 'unknown'} rows in range; showing ${domain.rows.length})`];
+    if (domain.rows.length === 0) {
+      lines.push('No rows in the selected range.');
+    } else {
+      domain.rows.slice(0, cap).forEach((row) => lines.push(renderRow(row)));
     }
-    
-    // Add comprehensive monthly breakdown
-    if (Object.keys(monthlyBreakdown).length > 0) {
-      contextSections.push('📅 REVIEWS BY MONTH (EXACT BREAKDOWN):');
-      const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ];
-      
-      console.log('🗓️ Context Builder - Monthly breakdown being added to context:', monthlyBreakdown);
-      
-      Object.entries(monthlyBreakdown).forEach(([monthKey, count]) => {
-        const [year, month] = monthKey.split('-');
-        const monthIndex = parseInt(month) - 1; // Convert to 0-based index
-        const monthName = monthNames[monthIndex] || `Month-${month}`;
-        const reviewText = `   • ${monthName} ${year}: ${count} reviews`;
-        contextSections.push(reviewText);
-        console.log(`📊 Context Builder - Added month entry: ${reviewText}`);
-      });
-    }
-    
-    // Add date analysis
-    if (reviewsByDate.recentReviews > 0) {
-      contextSections.push('📅 REVIEW TIMELINE ANALYSIS:');
-      contextSections.push(`   • Reviews in last 30 days: ${reviewsByDate.recentReviews}`);
-      contextSections.push(`   • Reviews in last 90 days: ${reviewsByDate.last90Days}`);
-      contextSections.push(`   • Total historical reviews: ${allReviews.length}`);
-    }
-    
-    // Enhanced scoring analysis with normalization
-    if (reviewsWithScores.length > 0) {
-      const scoringContext = ScoreNormalizationUtils.generateScoringContext(allReviews);
-      contextSections.push(scoringContext);
-    }
-    
-    // Show sample reviews
-    if (reviewsWithContent.length > 0) {
-      contextSections.push('📋 SAMPLE RECENT REVIEWS:');
-      reviewsWithContent.slice(0, 8).forEach((review: any, index: number) => {
-        contextSections.push(`${index + 1}. Review from ${review.Source || 'Unknown Source'}:`);
-        
-        if (review.Score) {
-          contextSections.push(`   ⭐ Score: ${review.Score}/5`);
-        }
-        
-        if (review.Title) {
-          contextSections.push(`   📝 Title: ${review.Title}`);
-        }
-        
-        if (review['Reviews Summary']) {
-          contextSections.push(`   📄 Summary: ${review['Reviews Summary'].substring(0, 200)}${review['Reviews Summary'].length > 200 ? '...' : ''}`);
-        } else if (review['Text']) {
-          contextSections.push(`   📄 Review: ${review['Text'].substring(0, 200)}${review['Text'].length > 200 ? '...' : ''}`);
-        }
-        
-        if (review.Author) {
-          contextSections.push(`   👤 Author: ${review.Author}`);
-        }
-        
-        if (review.Date) {
-          contextSections.push(`   📅 Date: ${review.Date}`);
-        }
-        
-        contextSections.push('');
-      });
-    }
-    contextSections.push('');
+    return lines.join('\n');
+  }
 
-    return contextSections;
+  private buildDocumentContextSection(documents: any[]): string {
+    const withContent = documents.filter((doc: any) => doc?.content);
+    if (withContent.length === 0) return '';
+
+    const lines = ['🔥 RECENTLY UPLOADED DOCUMENTS (PRIORITY CONTEXT):', ''];
+    withContent.forEach((doc: any, index: number) => {
+      lines.push(`=== DOCUMENT ${index + 1}: ${doc.document_filename || 'Document'} ===`);
+      lines.push(`Category: ${(doc.document_category ?? 'general').toString().toUpperCase()}`);
+      if (typeof doc.relevance_score === 'number') {
+        lines.push(`Relevance Score: ${(doc.relevance_score * 100).toFixed(0)}%`);
+      }
+      lines.push(`Chunk ${doc.chunk_index ?? 0}`);
+      lines.push('');
+      lines.push('FULL CONTENT:');
+      lines.push(doc.content);
+      lines.push('');
+      lines.push('='.repeat(50));
+      lines.push('');
+    });
+    lines.push('⚠️ CRITICAL: Base your responses primarily on the document content shown above. This is the most relevant and recent information available.');
+    return lines.join('\n');
   }
 }
