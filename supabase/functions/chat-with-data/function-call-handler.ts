@@ -2,8 +2,9 @@ import { SearchService } from './search-service.ts';
 import { OpenAIMessage } from './openai-client.ts';
 import { TrainingQueryService, TRAINING_TOOL_NAME } from './training-query-service.ts';
 import { WhatsAppQueryService, WHATSAPP_TOOL_NAME } from './whatsapp-query-service.ts';
+import { ReviewsQueryService, REVIEWS_TOOL_NAME } from './reviews-query-service.ts';
 
-export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME];
+export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME, REVIEWS_TOOL_NAME];
 
 export interface ToolCall {
   id: string;
@@ -23,20 +24,23 @@ export class FunctionCallHandler {
   private searchService: SearchService;
   private trainingQueryService: TrainingQueryService;
   private whatsappQueryService: WhatsAppQueryService;
+  private reviewsQueryService: ReviewsQueryService;
 
   constructor(authHeader?: string) {
     this.searchService = new SearchService();
     this.trainingQueryService = new TrainingQueryService(authHeader);
     this.whatsappQueryService = new WhatsAppQueryService(authHeader);
+    this.reviewsQueryService = new ReviewsQueryService(authHeader);
   }
 
   getAvailableTools(): any[] {
     const searchFunctions = this.searchService.getAvailableFunctions();
     const trainingFunctions = this.trainingQueryService.getAvailableFunctions();
     const whatsappFunctions = this.whatsappQueryService.getAvailableFunctions();
+    const reviewsFunctions = this.reviewsQueryService.getAvailableFunctions();
     const actionFunctions = this.getActionFunctions();
 
-    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...actionFunctions];
+    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...reviewsFunctions, ...actionFunctions];
   }
   
   getActionFunctions(): any[] {
@@ -78,6 +82,13 @@ export class FunctionCallHandler {
         });
       } else if (functionName === WHATSAPP_TOOL_NAME) {
         const content = await this.whatsappQueryService.executeFunction(functionName, functionArgs);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content
+        });
+      } else if (functionName === REVIEWS_TOOL_NAME) {
+        const content = await this.reviewsQueryService.executeFunction(functionName, functionArgs);
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

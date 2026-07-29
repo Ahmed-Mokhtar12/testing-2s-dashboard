@@ -4,6 +4,7 @@ export interface SearchDecisionResult {
   searchReason: string;
   isTrainingQuery: boolean;
   isWhatsAppQuery: boolean;
+  isReviewsQuery: boolean;
 }
 
 export class SearchDecisionEngine {
@@ -54,16 +55,25 @@ export class SearchDecisionEngine {
     const whatsappKeywords = ['whatsapp', 'chat history', 'guest chat', 'guest message', 'conversations', 'واتساب', 'محادثات'];
     const isWhatsAppQuery = !isTrainingQuery && whatsappKeywords.some(k => message.toLowerCase().includes(k));
 
+    // Review questions must stay eligible for the query_reviews tool — never
+    // force search_web for them. Training and WhatsApp take precedence when
+    // both match.
+    const reviewsKeywords = ['review', 'reviews', 'rating', 'ratings', 'guest feedback', 'تقييم', 'تقييمات', 'مراجعات'];
+    const isReviewsQuery = !isTrainingQuery && !isWhatsAppQuery && reviewsKeywords.some(k => message.toLowerCase().includes(k));
+
     // Decision logic
     let requiresWebsiteSearch = false;
     let searchReason = '';
-    
+
     if (isTrainingQuery) {
       requiresWebsiteSearch = false;
       searchReason = 'Training question — leave tool choice to the model';
     } else if (isWhatsAppQuery) {
       requiresWebsiteSearch = false;
       searchReason = 'WhatsApp/chat question — leave tool choice to the model';
+    } else if (isReviewsQuery) {
+      requiresWebsiteSearch = false;
+      searchReason = 'Reviews question — leave tool choice to the model';
     } else if (!hasRichDatabaseContext && hasRealTimeRequest) {
       requiresWebsiteSearch = true;
       searchReason = 'No database context available and user requests current information';
@@ -81,6 +91,7 @@ export class SearchDecisionEngine {
       hasServiceInquiry,
       isTrainingQuery,
       isWhatsAppQuery,
+      isReviewsQuery,
       requiresWebsiteSearch,
       searchReason
     });
@@ -90,7 +101,8 @@ export class SearchDecisionEngine {
       hasRichDatabaseContext,
       searchReason,
       isTrainingQuery,
-      isWhatsAppQuery
+      isWhatsAppQuery,
+      isReviewsQuery
     };
   }
 
@@ -108,6 +120,12 @@ export class SearchDecisionEngine {
       return {
         type: 'function',
         function: { name: 'query_whatsapp_chats' }
+      };
+    }
+    if (searchDecision.isReviewsQuery) {
+      return {
+        type: 'function',
+        function: { name: 'query_reviews' }
       };
     }
     if (searchDecision.requiresWebsiteSearch) {
