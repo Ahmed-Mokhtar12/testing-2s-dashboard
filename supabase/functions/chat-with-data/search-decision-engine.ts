@@ -13,11 +13,13 @@ export class SearchDecisionEngine {
   static analyzeSearchRequirement(context: string, message: string): SearchDecisionResult {
     console.log('🔍 Analyzing search requirement...');
     
-    // Check if we have rich database context available
-    const hasRichDatabaseContext = context.includes('HOTEL REVIEWS') || 
-                                  context.includes('COMPREHENSIVE HOTEL ANALYTICS') ||
-                                  context.includes('RECENTLY UPLOADED DOCUMENTS') ||
-                                  context.includes('TOTAL REVIEWS IN DATABASE');
+    // Check if we have rich database context available. The context is built
+    // by enhanced-context-builder.ts, which renders one "### <Domain> (<count>
+    // rows in range; showing <n>)" section header per domain (see
+    // renderDomainSection there) — empty domains render "showing 0)" plus
+    // "No rows in the selected range." Rich context means at least one domain
+    // section is actually showing rows, not just that a header exists.
+    const hasRichDatabaseContext = context.includes('### ') && /showing [1-9]\d*\)/.test(context);
     
     // Keywords that suggest need for current/real-time information
     const realTimeKeywords = [
