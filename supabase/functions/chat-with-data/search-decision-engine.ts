@@ -6,6 +6,7 @@ export interface SearchDecisionResult {
   isWhatsAppQuery: boolean;
   isReviewsQuery: boolean;
   isEmailsQuery: boolean;
+  isRatesQuery: boolean;
 }
 
 export class SearchDecisionEngine {
@@ -71,6 +72,16 @@ export class SearchDecisionEngine {
     const isEmailsQuery = !isTrainingQuery && !isWhatsAppQuery && !isReviewsQuery &&
       !lower.includes('info email') && emailsKeywords.some(k => lower.includes(k));
 
+    // Competitor room-rate questions must stay eligible for the
+    // query_competitor_rates tool — never force search_web for them.
+    // Training, WhatsApp, reviews, and emails take precedence when both
+    // match (reviews questions in particular must win ties, since "rating"
+    // is a common way to ask about reviews). The bare 'rates' keyword uses a
+    // word-boundary regex so "ratings" can never trigger this branch.
+    const ratesKeywords = ['competitor', 'competitors', 'room rate', 'room rates', 'price comparison', 'pricing', 'rates', 'منافس', 'أسعار الغرف'];
+    const isRatesQuery = !isTrainingQuery && !isWhatsAppQuery && !isReviewsQuery && !isEmailsQuery &&
+      ratesKeywords.some(k => k === 'rates' ? /\brates?\b/.test(lower) : lower.includes(k));
+
     // Decision logic
     let requiresWebsiteSearch = false;
     let searchReason = '';
@@ -87,6 +98,9 @@ export class SearchDecisionEngine {
     } else if (isEmailsQuery) {
       requiresWebsiteSearch = false;
       searchReason = 'Guest email question — leave tool choice to the model';
+    } else if (isRatesQuery) {
+      requiresWebsiteSearch = false;
+      searchReason = 'Competitor rate question — leave tool choice to the model';
     } else if (!hasRichDatabaseContext && hasRealTimeRequest) {
       requiresWebsiteSearch = true;
       searchReason = 'No database context available and user requests current information';
@@ -106,6 +120,7 @@ export class SearchDecisionEngine {
       isWhatsAppQuery,
       isReviewsQuery,
       isEmailsQuery,
+      isRatesQuery,
       requiresWebsiteSearch,
       searchReason
     });
@@ -117,7 +132,8 @@ export class SearchDecisionEngine {
       isTrainingQuery,
       isWhatsAppQuery,
       isReviewsQuery,
-      isEmailsQuery
+      isEmailsQuery,
+      isRatesQuery
     };
   }
 
@@ -147,6 +163,12 @@ export class SearchDecisionEngine {
       return {
         type: 'function',
         function: { name: 'query_sera_emails' }
+      };
+    }
+    if (searchDecision.isRatesQuery) {
+      return {
+        type: 'function',
+        function: { name: 'query_competitor_rates' }
       };
     }
     if (searchDecision.requiresWebsiteSearch) {

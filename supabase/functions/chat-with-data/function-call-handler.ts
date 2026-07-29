@@ -4,8 +4,9 @@ import { TrainingQueryService, TRAINING_TOOL_NAME } from './training-query-servi
 import { WhatsAppQueryService, WHATSAPP_TOOL_NAME } from './whatsapp-query-service.ts';
 import { ReviewsQueryService, REVIEWS_TOOL_NAME } from './reviews-query-service.ts';
 import { EmailsQueryService, EMAILS_TOOL_NAME } from './emails-query-service.ts';
+import { RatesQueryService, RATES_TOOL_NAME } from './rates-query-service.ts';
 
-export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME, REVIEWS_TOOL_NAME, EMAILS_TOOL_NAME];
+export const QUERY_TOOL_NAMES = [TRAINING_TOOL_NAME, WHATSAPP_TOOL_NAME, REVIEWS_TOOL_NAME, EMAILS_TOOL_NAME, RATES_TOOL_NAME];
 
 export interface ToolCall {
   id: string;
@@ -27,6 +28,7 @@ export class FunctionCallHandler {
   private whatsappQueryService: WhatsAppQueryService;
   private reviewsQueryService: ReviewsQueryService;
   private emailsQueryService: EmailsQueryService;
+  private ratesQueryService: RatesQueryService;
 
   constructor(authHeader?: string) {
     this.searchService = new SearchService();
@@ -34,6 +36,7 @@ export class FunctionCallHandler {
     this.whatsappQueryService = new WhatsAppQueryService(authHeader);
     this.reviewsQueryService = new ReviewsQueryService(authHeader);
     this.emailsQueryService = new EmailsQueryService(authHeader);
+    this.ratesQueryService = new RatesQueryService(authHeader);
   }
 
   getAvailableTools(): any[] {
@@ -42,9 +45,10 @@ export class FunctionCallHandler {
     const whatsappFunctions = this.whatsappQueryService.getAvailableFunctions();
     const reviewsFunctions = this.reviewsQueryService.getAvailableFunctions();
     const emailsFunctions = this.emailsQueryService.getAvailableFunctions();
+    const ratesFunctions = this.ratesQueryService.getAvailableFunctions();
     const actionFunctions = this.getActionFunctions();
 
-    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...reviewsFunctions, ...emailsFunctions, ...actionFunctions];
+    return [...searchFunctions, ...trainingFunctions, ...whatsappFunctions, ...reviewsFunctions, ...emailsFunctions, ...ratesFunctions, ...actionFunctions];
   }
   
   getActionFunctions(): any[] {
@@ -100,6 +104,13 @@ export class FunctionCallHandler {
         });
       } else if (functionName === EMAILS_TOOL_NAME) {
         const content = await this.emailsQueryService.executeFunction(functionName, functionArgs);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content
+        });
+      } else if (functionName === RATES_TOOL_NAME) {
+        const content = await this.ratesQueryService.executeFunction(functionName, functionArgs);
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
