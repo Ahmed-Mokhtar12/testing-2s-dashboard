@@ -44,6 +44,30 @@ test('reminder email: days-left headline; target columns appear only when a targ
   assert.match(withTargets.html, /50%/);
 });
 
+test('pct pill tiers: green >=100%, amber 50-99%, red <50%, gray no-target — each with its tier hex', () => {
+  const { html } = renderReportEmail({
+    reportType: 'reminder', periodLabel: 'July 2026',
+    data: data({
+      anyTargetSet: true,
+      rows: [
+        row({ department: 'On Target', target: 40, pctOfTarget: 100 }),   // green
+        row({ department: 'Amber Zone', target: 40, pctOfTarget: 50 }),   // amber
+        row({ department: 'Behind', target: 40, pctOfTarget: 20 }),       // red
+        row({ department: 'No Target Dept', target: null, pctOfTarget: null }), // gray
+      ],
+    }),
+    delayed: false, dueDate: '2026-07-24', daysLeftInMonth: 7,
+  });
+  // green >= 100%
+  assert.match(html, /background:#08251f;border:1px solid #245747;color:#bbf7d0;">100%/);
+  // amber 50-99%
+  assert.match(html, /background:#251f0e;border:1px solid #5c4920;color:#fde68a;">50%/);
+  // red < 50%
+  assert.match(html, /background:#2b151d;border:1px solid #5f2934;color:#fecdd3;">20%/);
+  // gray: no target set for this row
+  assert.match(html, /background:#16243a;color:#7f93ad;">—/);
+});
+
 test('delayed banner and data-quality footnote render when present, absent otherwise', () => {
   const late = renderReportEmail({
     reportType: 'monthly_summary', periodLabel: 'July 2026',
