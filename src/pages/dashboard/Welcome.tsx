@@ -21,19 +21,19 @@ const WelcomePage: React.FC = () => {
   const axisFontSize = isMobile ? 9 : 11;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 short:gap-3">
       <SectionHeader title="Welcome Messages" subtitle="Arrivals & welcome message delivery" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <KpiCard label="Total arrivals" value={k?.arrivals ?? 0} icon={Plane} tone="primary" loading={isLoading} />
         <KpiCard label="Welcome sent" value={k?.sent ?? 0} icon={Send} tone="accent" loading={isLoading} />
         <KpiCard label="Successful" value={k?.successful ?? 0} hint={`${k?.successRate ?? 0}% rate`} icon={CheckCircle2} tone="success" loading={isLoading} />
         <KpiCard label="Unique guests" value={k?.uniqueGuests ?? 0} icon={Users} tone="magenta" loading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Sent per day" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
+        <ChartCard title="Sent per day" className="lg:col-span-2" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <LineChart data={data?.trend || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
@@ -44,8 +44,8 @@ const WelcomePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Status">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <ChartCard title="Status" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.statusSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.statusSplit || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
