@@ -71,3 +71,6 @@ verify_jwt = true
 
 [functions.sp-read-trainers]
 verify_jwt = true
+
+[functions.training-report]
+verify_jwt = true
