@@ -19,19 +19,19 @@ const InfoEmailPage: React.FC = () => {
   const axisFontSize = isMobile ? 9 : 11;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 short:gap-3">
       <SectionHeader title="Info Email Audit" subtitle="Auto-routing log for info@ inbox" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <KpiCard label="Total received" value={data?.kpis.total ?? 0} icon={Inbox} tone="primary" loading={isLoading} />
         <KpiCard label="Forwarded" value={data?.kpis.forwarded ?? 0} icon={Forward} tone="accent" loading={isLoading} />
         <KpiCard label="Deleted" value={data?.kpis.deleted ?? 0} icon={Trash2} tone="destructive" loading={isLoading} />
         <KpiCard label="Manual override" value={data?.kpis.overridden ?? 0} icon={ShieldAlert} tone="warning" loading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Action breakdown">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
+        <ChartCard title="Action breakdown" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.actions || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.actions || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -42,8 +42,8 @@ const InfoEmailPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Forwarded by department" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <ChartCard title="Forwarded by department" className="lg:col-span-2" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <BarChart data={data?.departments || []} layout="vertical" margin={{ left: 80 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
@@ -55,8 +55,8 @@ const InfoEmailPage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Confidence distribution">
-        <ResponsiveContainer width="100%" height={isMobile ? 180 : 240}>
+      <ChartCard title="Confidence distribution" className="lg:flex-1 lg:min-h-0" fill>
+        <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
           <BarChart data={data?.confidence || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
             <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
