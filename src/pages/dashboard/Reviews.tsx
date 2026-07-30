@@ -20,19 +20,19 @@ const ReviewsPage: React.FC = () => {
   const axisFontSize = isMobile ? 9 : 11;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 short:gap-3">
       <SectionHeader title="Reviews" subtitle="Guest feedback across all channels" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <KpiCard label="Total reviews" value={data?.kpis.total ?? 0} icon={Star} tone="primary" loading={isLoading} />
         <KpiCard label="Average score" value={(data?.kpis.avg ?? 0).toFixed(2)} hint="out of 5" icon={BarChart3} tone="accent" loading={isLoading} />
         <KpiCard label="Positive (≥4)" value={data?.kpis.positive ?? 0} icon={ThumbsUp} tone="success" loading={isLoading} />
         <KpiCard label="Negative (≤2.5)" value={data?.kpis.negative ?? 0} icon={ThumbsDown} tone="destructive" loading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Daily volume" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
+        <ChartCard title="Daily volume" className="lg:col-span-2" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <AreaChart data={data?.trend || []}>
               <defs>
                 <linearGradient id="rv" x1="0" y1="0" x2="0" y2="1">
@@ -49,8 +49,8 @@ const ReviewsPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Source breakdown">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <ChartCard title="Source breakdown" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.sources || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.sources || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -62,8 +62,8 @@ const ReviewsPage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Score distribution">
-        <ResponsiveContainer width="100%" height={isMobile ? 180 : 240}>
+      <ChartCard title="Score distribution" className="lg:flex-1 lg:min-h-0" fill>
+        <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
           <BarChart data={data?.distribution || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
             <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
