@@ -58,13 +58,13 @@ const Overview: React.FC = () => {
   const whatsAppTrend = useMemo(() => wa.data?.trend || [], [wa.data]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="flex h-full min-h-0 flex-col gap-4 short:gap-3 animate-fade-in">
       <SectionHeader
         title="Operations Overview"
         subtitle={`Live insights for ${label} · Two Seasons Hotel`}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 short:gap-2 shrink-0">
         {tiles.map((currentTile) => (
           <Link key={currentTile.to} to={currentTile.to} className="group">
             <KpiCard label={currentTile.label} value={currentTile.value} hint={currentTile.hint} tone={currentTile.tone} />
@@ -72,9 +72,9 @@ const Overview: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Reviews · daily" description="Volume per day in selected range">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-0">
+        <ChartCard title="Reviews · daily" description="Volume per day in selected range" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <AreaChart data={reviewsTrend}>
               <defs>
                 <linearGradient id="ovReviews" x1="0" y1="0" x2="0" y2="1">
@@ -91,8 +91,8 @@ const Overview: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="WhatsApp · daily" description="Guest conversations per day">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <ChartCard title="WhatsApp · daily" description="Guest conversations per day" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <AreaChart data={whatsAppTrend}>
               <defs>
                 <linearGradient id="ovWA" x1="0" y1="0" x2="0" y2="1">
@@ -110,11 +110,11 @@ const Overview: React.FC = () => {
         </ChartCard>
       </div>
 
-      <Card className="bg-card-gradient border-border/60 p-5">
-        <h3 className="font-display font-semibold mb-3">Quick links</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <Card className="bg-card-gradient border-border/60 p-5 short:p-3 shrink-0">
+        <h3 className="font-display font-semibold mb-3 short:mb-2">Quick links</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
           {tiles.map((currentTile) => (
-            <Link key={`${currentTile.to}-l`} to={currentTile.to} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors text-sm">
+            <Link key={`${currentTile.to}-l`} to={currentTile.to} className="flex items-center justify-between gap-2 px-3 py-2.5 short:py-1.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors text-sm">
               <span className="flex items-center gap-2">{currentTile.icon}<span>{currentTile.label}</span></span>
               <ArrowRight className="h-3.5 w-3.5 opacity-60" />
             </Link>
