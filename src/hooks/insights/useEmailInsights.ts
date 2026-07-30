@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
-import { dailySeries, countBy } from './utils';
+import { dailySeries, countBy, fetchAllRows } from './utils';
 
 const QUERY_STALE_TIME = 5 * 60 * 1000;
 const QUERY_GC_TIME = 10 * 60 * 1000;
@@ -14,16 +14,16 @@ export function useEmailInsights() {
     staleTime: QUERY_STALE_TIME,
     gcTime: QUERY_GC_TIME,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('2Seasons_Sera_Email_Log')
-        .select('id, sent_at, email_type, category, nature_of_request, guest_name, guest_email, email_subject')
-        .gte('sent_at', fromISO)
-        .lte('sent_at', toISO)
-        .order('sent_at', { ascending: false })
-        .limit(10000);
-
-      if (error) throw error;
-      const rows = data || [];
+      const rows = await fetchAllRows((from, to) =>
+        supabase
+          .from('2Seasons_Sera_Email_Log')
+          .select('id, sent_at, email_type, category, nature_of_request, guest_name, guest_email, email_subject')
+          .gte('sent_at', fromISO)
+          .lte('sent_at', toISO)
+          .order('sent_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      );
 
       const newEmails = rows.filter((r) => r.email_type === 'new').length;
       const replyEmails = rows.filter((r) => r.email_type === 'reply').length;

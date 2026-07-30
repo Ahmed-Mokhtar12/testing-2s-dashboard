@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
-import { countBy } from './utils';
+import { countBy, fetchAllRows } from './utils';
 
 const QUERY_STALE_TIME = 5 * 60 * 1000;
 const QUERY_GC_TIME = 10 * 60 * 1000;
@@ -25,16 +25,17 @@ export function useSocialInsights() {
     staleTime: QUERY_STALE_TIME,
     gcTime: QUERY_GC_TIME,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('social_engagement_logs')
-        .select('id, platform, channel, event_type, status, notes, guest_message_text, created_at, escalation_flag')
-        .gte('created_at', fromISO)
-        .lte('created_at', toISO)
-        .order('created_at', { ascending: false })
-        .limit(10000);
-      if (error) throw error;
+      const rows = await fetchAllRows((from, to) =>
+        supabase
+          .from('social_engagement_logs')
+          .select('id, platform, channel, event_type, status, notes, guest_message_text, created_at, escalation_flag')
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      );
 
-      const rows = data || [];
       const stats = rows.reduce(
         (acc, row) => {
           const platform = `${row.platform || ''} ${row.channel || ''}`.toLowerCase();
