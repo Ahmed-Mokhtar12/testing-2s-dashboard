@@ -29,6 +29,16 @@ async function openPage(page: Page, route: string) {
   await mockColumnsFunction(page);
   await mockTrainersFunction(page);
   await page.goto(route);
+  // Routes are lazy-loaded behind a <Suspense> boundary (see App.tsx) whose
+  // fallback (RouteFallback) renders a spinner div with NO <main> element.
+  // `networkidle` alone can resolve while that fallback is still showing, so
+  // measuring overflow at that point either throws ("no <main> found") or
+  // measures the wrong (unrendered) DOM. Wait for the real route content —
+  // <main> attached, then its page heading visible (every dashboard page
+  // renders one via SectionHeader, see SectionHeader.tsx) — before settling
+  // on networkidle for any remaining async chart/data rendering.
+  await page.locator('main').waitFor({ state: 'attached' });
+  await page.locator('main h1, main h2, main h3').first().waitFor({ state: 'visible' });
   await page.waitForLoadState('networkidle');
 }
 
