@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { RightChatPanel } from '@/components/dashboard/RightChatPanel';
@@ -8,17 +8,25 @@ import { DateRangeProvider } from '@/contexts/DateRangeContext';
 import { RealtimeBridge } from '@/components/dashboard/RealtimeBridge';
 import { UserMenu } from '@/components/UserMenu';
 
+// These two routes keep the original document-flow layout (page scrolls at
+// the document level, sticky header). Everything else is locked to the
+// viewport: the document can never scroll; below lg, <main> scrolls instead.
+const LEGACY_SCROLL_ROUTES = ['/dashboard/whatsapp', '/dashboard/email'];
+
 export const DashboardShell: React.FC = () => {
+  const { pathname } = useLocation();
+  const legacy = LEGACY_SCROLL_ROUTES.includes(pathname);
+
   return (
     <DateRangeProvider>
       <RealtimeBridge />
-      <SidebarProvider defaultOpen={true}>
-        <div className="min-h-screen flex w-full bg-background">
+      <SidebarProvider defaultOpen={true} className={legacy ? undefined : 'h-svh overflow-hidden'}>
+        <div className={legacy ? 'min-h-screen flex w-full bg-background' : 'h-full flex w-full bg-background'}>
           <AppSidebar />
 
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className={legacy ? 'flex-1 flex flex-col min-w-0' : 'flex-1 flex flex-col min-w-0 min-h-0'}>
             {/* Top bar */}
-            <header className="h-14 border-b border-border bg-card/40 backdrop-blur flex items-center justify-between px-4 sticky top-0 z-30">
+            <header className="h-14 border-b border-border bg-card/40 backdrop-blur flex items-center justify-between px-4 sticky top-0 z-30 shrink-0">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="hover:bg-muted/50" />
                 <div className="hidden sm:flex items-center gap-2">
@@ -43,7 +51,7 @@ export const DashboardShell: React.FC = () => {
             </header>
 
             <div className="flex-1 flex min-h-0">
-              <main className="flex-1 overflow-y-auto p-3 sm:p-6">
+              <main className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto lg:overflow-hidden p-3 sm:p-6 short:p-3'}>
                 <Outlet />
               </main>
               <RightChatPanel />
