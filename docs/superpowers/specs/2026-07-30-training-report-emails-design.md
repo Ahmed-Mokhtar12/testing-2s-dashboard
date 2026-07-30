@@ -86,8 +86,8 @@ applies), `verify_jwt = true`, deployed with a self-verifying script modeled on
   Renders with real data and sends **only to the caller** with subject prefix `[TEST]`.
   Writes nothing to `report_runs`. This is the manual pre-go-live validation path
   (documented curl in the plan).
-- `POST { mode: 'cron' }` — caller must present the service-role JWT (role claim checked).
-  Runs the due-report logic below.
+- `POST { mode: 'cron' }` — any valid JWT at the gateway (anon key suffices; see the
+  amended Go-Live section for why that is safe). Runs the due-report logic below.
 
 **Due-report logic (all in Asia/Dubai, pure TS module `report-schedule.ts`, unit-tested):**
 
@@ -155,10 +155,14 @@ user-approved test-send**.
 3. user performs Azure grant → 4. user triggers test-sends for both reports, real data →
 5. **only after user approval**, the cron migration (`cron.schedule('training-report-hourly',
 '0 * * * *', net.http_post …)`, precedent: `20260515151557_schedule_whatsapp_auto_release.sql`)
-goes live. The Authorization bearer for the cron call is the **service-role key read from
-Supabase Vault** (`vault.decrypted_secrets`) — never hardcoded in the migration; the
-precedent's `app.settings.service_role_key` GUC is not configured on this project (the live
-whatsapp job fell back to a hardcoded anon key — a pattern this design explicitly avoids).
+goes live. **Amended at planning:** the cron call authenticates with the public anon key
+(the exact pattern of the live `whatsapp-auto-release` job) instead of a Vault-stored
+service-role key. This is safe by design, not by secrecy: `mode:'cron'` is idempotent
+(`report_runs` unique key), sends only to the fixed recipients, only within due windows,
+and returns counts only — an attacker holding the anon key (a public value) can at most
+trigger a due report a few minutes early. The function's own DB writes use the
+auto-injected `SUPABASE_SERVICE_ROLE_KEY`. This also removes the one manual key-handling
+step the Vault approach would have required.
 
 Rollback: `cron.unschedule` (rollback file), drop tables (rollback files), delete the
 function; revoking Mail.Send in Azure kills sending instantly. Sent emails are unaffected.
