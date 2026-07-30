@@ -19,19 +19,19 @@ const SocialPage: React.FC = () => {
   const axisFontSize = isMobile ? 9 : 11;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 short:gap-3">
       <SectionHeader title="Social Engagement" subtitle="Instagram & Facebook DMs and comments" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <KpiCard label="IG comments" value={data?.kpis.igComments ?? 0} icon={Hash} tone="magenta" loading={isLoading} />
         <KpiCard label="Total DMs" value={data?.kpis.totalDMs ?? 0} icon={MessageSquare} tone="primary" loading={isLoading} />
         <KpiCard label="Instagram DMs" value={data?.kpis.igDMs ?? 0} icon={Instagram} tone="accent" loading={isLoading} />
         <KpiCard label="Facebook DMs" value={data?.kpis.fbDMs ?? 0} icon={Facebook} tone="success" loading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Platform split">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-0">
+        <ChartCard title="Platform split" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.platformSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.platformSplit || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -42,8 +42,8 @@ const SocialPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Event type">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <ChartCard title="Event type" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.eventSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
                 {(data?.eventSplit || []).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -55,8 +55,8 @@ const SocialPage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Conversation nature" description="Inferred from notes / status / message text">
-        <ResponsiveContainer width="100%" height={chartHeight}>
+      <ChartCard title="Conversation nature" description="Inferred from notes / status / message text" className="lg:flex-1 lg:min-h-0" fill>
+        <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
           <BarChart data={data?.natureSplit || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
             <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
