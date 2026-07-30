@@ -5,8 +5,6 @@
 const HOUR_MS = 3600_000;
 const DUBAI_OFFSET_MS = 4 * HOUR_MS;
 const SEND_HOUR_DUBAI = 8;
-const SUMMARY_GRACE_DAYS = 7;
-const REMINDER_GRACE_DAYS = 3;
 
 export interface DueReport {
   reportType: 'monthly_summary' | 'reminder';
@@ -36,13 +34,34 @@ const ymd = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
 const dubaiMidnightISO = (y: number, m: number, d: number) =>
   `${ymd(y, m, d)}T00:00:00+04:00`;
 
+// Dubai midnight ISO string for the calendar day AFTER (y, m, d), computed
+// via real date arithmetic (Date.UTC normalizes an out-of-range day, e.g.
+// month=7 day=32 -> Aug 1) instead of string-concatenating `d + 1` into an
+// ISO literal — the latter produces an invalid date like
+// "2026-07-32T00:00:00+04:00" on the last day of a month, which Postgres
+// rejects outright. The UTC fields here are used purely as a calendar-date
+// calculator (Dubai has no DST, fixed +04:00), not as the actual instant.
+export function nextDayDubaiMidnightISO(y: number, m: number, d: number): string {
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return dubaiMidnightISO(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
+}
+
 export function dueReports(nowUtcMs: number): DueReport[] {
   const { ymd: today, hour } = dubaiToday(nowUtcMs);
   const [y, m, d] = today.split('-').map(Number);
   const due: DueReport[] = [];
 
-  // Monthly summary for the PREVIOUS month: due day 1, grace window 7 days.
-  if (d <= SUMMARY_GRACE_DAYS && (d > 1 || hour >= SEND_HOUR_DUBAI)) {
+  // Monthly summary for the PREVIOUS month: due from day 1 at 08:00 Dubai
+  // and remains due for the rest of the CURRENT month (no grace-window
+  // cutoff). report_runs makes a duplicate send impossible and a late
+  // report strictly dominates a missing one, so once the on-time gate has
+  // opened there is no reason to ever stop retrying within the same month.
+  // Residual limitation (documented, not fixed here): once the calendar
+  // rolls into the NEXT month, this period is superseded by the new
+  // "previous month" and is never revisited — if every hourly attempt
+  // failed for the whole window, the only surviving trace is a permanent
+  // 'failed' row in report_runs, which nothing alerts on.
+  if (d > 1 || hour >= SEND_HOUR_DUBAI) {
     const py = m === 1 ? y - 1 : y;
     const pm = m === 1 ? 12 : m - 1;
     due.push({
@@ -55,11 +74,13 @@ export function dueReports(nowUtcMs: number): DueReport[] {
     });
   }
 
-  // Reminder for the CURRENT month: due lastDay-7, grace window 3 days.
+  // Reminder for the CURRENT month: due from day (lastDay-7) at 08:00 Dubai
+  // through the END of the same month — never later, since a reminder is
+  // meaningless once its own month has closed (same "retry until sent, but
+  // bounded by relevance" reasoning as the summary above).
   const rd = reminderDay(y, m);
-  const pastDue = d - rd;
-  if (pastDue >= 0 && pastDue < REMINDER_GRACE_DAYS && (d > rd || hour >= SEND_HOUR_DUBAI)) {
-    const last = lastDayOfMonth(y, m);
+  const last = lastDayOfMonth(y, m);
+  if (d >= rd && (d > rd || hour >= SEND_HOUR_DUBAI)) {
     due.push({
       reportType: 'reminder',
       period: `${y}-${pad(m)}`,
@@ -67,9 +88,11 @@ export function dueReports(nowUtcMs: number): DueReport[] {
       delayed: d > rd,
       rangeFromISO: dubaiMidnightISO(y, m, 1),
       // Month-to-date includes today, so the exclusive end is tomorrow. The
-      // 3-day grace window caps d at lastDay-5, so d+1 is always in-month —
-      // no month/year rollover is reachable here.
-      rangeToExclusiveISO: dubaiMidnightISO(y, m, d + 1),
+      // window now runs through the LAST day of the month, so d+1 CAN
+      // overflow into next month (unlike the old 3-day grace window, which
+      // capped d at lastDay-5) — nextDayDubaiMidnightISO handles that via
+      // real date arithmetic.
+      rangeToExclusiveISO: nextDayDubaiMidnightISO(y, m, d),
       daysLeftInMonth: last - d,
     });
   }
