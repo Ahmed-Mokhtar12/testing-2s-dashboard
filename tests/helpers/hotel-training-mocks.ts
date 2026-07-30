@@ -11,6 +11,37 @@ export const MOCK_COLLEAGUES_FLAT = [
   { id: 'col-4', employeeId: '1004', colleagueName: 'Dave Black', position: 'Staff', section: 'Security', department: 'Security', isActive: false },
 ];
 
+// A larger, all-active colleague roster used ONLY by full-viewport.spec.ts's
+// 15-participant Hotel Training test (see I5 in the fix-wave-b review): the
+// wizard blocks duplicate participants, so filling all 15 rows needs 15
+// distinct active colleagues, and MOCK_COLLEAGUES_FLAT only has 3. This is
+// deliberately a SEPARATE list rather than an extension of
+// MOCK_COLLEAGUES_FLAT — appending to the shared fixture was tried first and
+// made tests/hotel-training.spec.ts flaky (the participant Popover's close
+// animation can leave its previous content mounted for a moment, and a
+// longer option list widened that race enough to occasionally produce two
+// DOM matches for the same name — reproduced locally). Keeping the two
+// fixtures independent means this test's data has zero effect on the
+// existing 15-test wizard suite.
+export const MOCK_COLLEAGUES_MANY = [
+  ...MOCK_COLLEAGUES_FLAT,
+  { id: 'col-5', employeeId: '2001', colleagueName: 'Eve Turner', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
+  { id: 'col-6', employeeId: '2002', colleagueName: 'Frank Ng', position: 'Staff', section: 'Engineering', department: 'Engineering', isActive: true },
+  { id: 'col-7', employeeId: '2003', colleagueName: 'Grace Kim', position: 'Staff', section: 'Finance', department: 'Finance', isActive: true },
+  { id: 'col-8', employeeId: '2004', colleagueName: 'Hassan Ali', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
+  { id: 'col-9', employeeId: '2005', colleagueName: 'Isla Brown', position: 'Staff', section: 'Human Resources', department: 'Human Resources', isActive: true },
+  { id: 'col-10', employeeId: '2006', colleagueName: 'Jack Lee', position: 'Staff', section: 'Engineering', department: 'Engineering', isActive: true },
+  { id: 'col-11', employeeId: '2007', colleagueName: 'Karim Saleh', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
+  { id: 'col-12', employeeId: '2008', colleagueName: 'Layla Farouk', position: 'Staff', section: 'Finance', department: 'Finance', isActive: true },
+  { id: 'col-13', employeeId: '2009', colleagueName: 'Mona Iqbal', position: 'Staff', section: 'Human Resources', department: 'Human Resources', isActive: true },
+  { id: 'col-14', employeeId: '2010', colleagueName: 'Noah Becker', position: 'Staff', section: 'Engineering', department: 'Engineering', isActive: true },
+  { id: 'col-15', employeeId: '2011', colleagueName: 'Omar Rahim', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
+  { id: 'col-16', employeeId: '2012', colleagueName: 'Priya Nair', position: 'Staff', section: 'Finance', department: 'Finance', isActive: true },
+  { id: 'col-17', employeeId: '2013', colleagueName: 'Quinn Ortiz', position: 'Staff', section: 'Human Resources', department: 'Human Resources', isActive: true },
+  { id: 'col-18', employeeId: '2014', colleagueName: 'Rania Saeed', position: 'Staff', section: 'Engineering', department: 'Engineering', isActive: true },
+  { id: 'col-19', employeeId: '2015', colleagueName: 'Samuel Osei', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
+];
+
 // The sp-read-columns Edge Function returns the flattened ListColumnsResult
 // shape (not the raw Graph { value: [...] } shape).
 export const MOCK_COLUMNS_FLAT = {
@@ -102,7 +133,7 @@ const AUTH_KEY = `sb-${PROJECT_REF}-auth-token`;
 // credentials, server-side) rather than a direct browser Graph call. Mock it.
 export async function mockColleaguesFunction(
   page: Page,
-  opts: { failure?: boolean } = {},
+  opts: { failure?: boolean; list?: typeof MOCK_COLLEAGUES_FLAT } = {},
 ) {
   await page.route(
     `https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-colleagues`,
@@ -116,7 +147,7 @@ export async function mockColleaguesFunction(
           json: { error: 'Missing Azure credentials: set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET as Supabase secrets.' },
         });
       }
-      return route.fulfill({ json: MOCK_COLLEAGUES_FLAT });
+      return route.fulfill({ json: opts.list ?? MOCK_COLLEAGUES_FLAT });
     },
   );
 }
