@@ -60,17 +60,16 @@ export function dueReports(nowUtcMs: number): DueReport[] {
   const pastDue = d - rd;
   if (pastDue >= 0 && pastDue < REMINDER_GRACE_DAYS && (d > rd || hour >= SEND_HOUR_DUBAI)) {
     const last = lastDayOfMonth(y, m);
-    // Exclusive end = start of tomorrow (month-to-date includes today).
-    const tm = d === last ? (m === 12 ? 1 : m + 1) : m;
-    const ty = d === last && m === 12 ? y + 1 : y;
-    const td = d === last ? 1 : d + 1;
     due.push({
       reportType: 'reminder',
       period: `${y}-${pad(m)}`,
       dueDate: ymd(y, m, rd),
       delayed: d > rd,
       rangeFromISO: dubaiMidnightISO(y, m, 1),
-      rangeToExclusiveISO: dubaiMidnightISO(ty, tm, td),
+      // Month-to-date includes today, so the exclusive end is tomorrow. The
+      // 3-day grace window caps d at lastDay-5, so d+1 is always in-month —
+      // no month/year rollover is reachable here.
+      rangeToExclusiveISO: dubaiMidnightISO(y, m, d + 1),
       daysLeftInMonth: last - d,
     });
   }

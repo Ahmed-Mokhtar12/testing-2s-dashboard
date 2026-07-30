@@ -61,6 +61,7 @@ test('reminder window closes after 3 days; daysLeft shrinks when delayed', () =>
   assert.equal(d26.length, 1);
   assert.equal(d26[0].delayed, true);
   assert.equal(d26[0].daysLeftInMonth, 5);
+  assert.equal(dueReports(utc('2026-07-27T10:00:00Z')).length, 0);
   assert.equal(dueReports(utc('2026-07-28T10:00:00Z')).length, 0);
 });
 
