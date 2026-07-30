@@ -112,9 +112,15 @@ async function fetchReportData(db: ReturnType<typeof serviceClient>, fromISO: st
 const pad = (n: number) => String(n).padStart(2, '0');
 const dubaiMidnightISO = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}T00:00:00+04:00`;
 
-// Matches 'YYYY-MM' with a real 01-12 month; used to reject a malformed
-// `period` override before it reaches Number() and turns into NaN-NaN.
-const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+// Matches 'YYYY-MM' with a real 01-12 month and a year in 2000-2099; used to
+// reject a malformed `period` override before it reaches Number() and turns
+// into NaN-NaN. The year is deliberately narrowed from a bare \d{4} (which
+// accepted e.g. "0000-01") to 20\d\d: a year like 0000 survives Number()
+// fine but produces a nonsensical ISO instant ("0-01-01T00:00:00+04:00")
+// downstream, which Postgres then rejects with a 500 instead of the
+// intended 400. 20\d\d comfortably covers EARLIEST_PERIOD ('2026-08') and
+// every real period for the life of this feature.
+const PERIOD_RE = /^20\d{2}-(0[1-9]|1[0-2])$/;
 export function isValidPeriod(period: string): boolean {
   return PERIOD_RE.test(period);
 }
