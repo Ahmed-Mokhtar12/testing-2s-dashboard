@@ -81,3 +81,41 @@ test('totals: sessions count, distinct trainers/colleagues across all, manHours 
   assert.equal(data.totals.colleagues, 1);
   assert.equal(data.totals.manHours, 2.8);   // 2.0 + 50/60x1 = 2.83 → per-dept rounding then sum: 2 + 0.8
 });
+
+test('null department groups under literal "Unknown", carrying that session\'s own metrics', () => {
+  const data = aggregateReport(
+    [s({ department: null })],
+    [p('TRN-1', '1001'), p('TRN-1', '1002')],
+    [],
+  );
+  assert.equal(data.rows.length, 1);
+  const unknown = data.rows.find(r => r.department === 'Unknown')!;
+  assert.ok(unknown, 'expected a row grouped under literal "Unknown"');
+  assert.equal(unknown.manHours, 4);      // 2h x 2 attendees
+  assert.equal(unknown.colleagues, 2);
+  assert.equal(unknown.trainers, 1);
+});
+
+test('totals rounding order: round each dept then sum, not sum-raw-then-round (forced divergence case)', () => {
+  // Two departments each with raw man-hours of exactly 1.25 (25min x 3 rows = 75min = 1.25h).
+  // SPEC (round-per-dept-then-sum): round1(1.25)=1.3 each -> round1(1.3+1.3) = round1(2.6) = 2.6
+  // WRONG (sum-raw-then-round):     round1(1.25+1.25) = round1(2.5) = 2.5
+  // These genuinely diverge (verified: Math.round(12.5)/10 = 1.3, Math.round(25)/10 = 2.5),
+  // so this test fails loudly under the wrong summation order.
+  const data = aggregateReport(
+    [
+      s({ training_id: 'TRN-A', department: 'Front Office', duration_minutes: 25, trainer_names: ['Ahmed M'] }),
+      s({ training_id: 'TRN-B', department: 'Kitchen', duration_minutes: 25, trainer_names: ['Sara K'] }),
+    ],
+    [
+      p('TRN-A', '2001'), p('TRN-A', '2002'), p('TRN-A', '2003'),
+      p('TRN-B', '3001'), p('TRN-B', '3002'), p('TRN-B', '3003'),
+    ],
+    [],
+  );
+  const fo = data.rows.find(r => r.department === 'Front Office')!;
+  const kitchen = data.rows.find(r => r.department === 'Kitchen')!;
+  assert.equal(fo.manHours, 1.3);
+  assert.equal(kitchen.manHours, 1.3);
+  assert.equal(data.totals.manHours, 2.6);
+});
