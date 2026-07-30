@@ -33,7 +33,7 @@ until sent, so a report can be late but never silently absent.
 | Attribution | **Session's department** (`training_sessions.department`) gets full credit for the session's trainers, attendees, and man-hours — one consistent grouping. (User-approved.) |
 | Delivery | **Graph `sendMail` from the edge app**: user grants application **Mail.Send** + `ApplicationAccessPolicy` restricted to the `sera@` mailbox, same IT-request flow as the July Sites.Selected grant. (User-approved over n8n-webhook relay and all-n8n.) |
 | Scheduler | **pg_cron hourly heartbeat** + idempotent send with grace-window retries (see Scheduling). n8n rejected for the silent-death failure mode; single-shot cron rejected because one bad hour = skipped month. |
-| Targets | New `training_targets` table, seeded with the 14 `DEPARTMENT_SECTIONS` departments, `monthly_target_hours` NULL until the user supplies numbers. No-target departments show "—" + muted "No target" pill. |
+| Targets | **Amended 2026-07-30 (user):** no target numbers exist — leave them empty. `training_targets` is still created and seeded with the 14 `DEPARTMENT_SECTIONS` departments (it doubles as the department universe for zero rows), all `monthly_target_hours` NULL. While **no** department has a target, the reminder email omits the Target/Gap/Status columns entirely and shows only the actually conducted trainings; the moment any target value is set, those columns appear with "—" + muted "No target" pill for unset departments. No code change needed to activate. |
 | "One week before month-end" | **last day − 7**, computed in Dubai time: 31-day → 24th, 30-day → 23rd, Feb → 21st (leap → 22nd). Exactly 7 full days remain after send day. |
 | Zero-training departments | **Shown as zero rows** (visible by design). Row universe = targets table ∪ departments active in the period; sorted by man-hours descending, zeros bottom. |
 | Send time | 08:00 Asia/Dubai earliest, matching existing report emails. Dubai has no DST; the fixed `+04:00` convention from `training-aggregator.ts` is reused. |
@@ -126,18 +126,26 @@ Arial, and the same footer line.
 
 - **Summary email:** KPI tiles (total man-hours / colleagues trained / active trainers) +
   the department table: Department | Trainers | Colleagues | Man-hours.
-- **Reminder email:** same table + Target | Gap | Status pill per row, headed by
-  "X days left in {month}". Pills: green ≥100% of target, amber ≥50%, red <50%, gray
-  "No target" (thresholds are constants, trivially adjustable). Zero rows show 0s.
+- **Reminder email:** same table headed by "X days left in {month}". While no department
+  has a target set (current state per the 2026-07-30 amendment), the table shows only the
+  conducted-trainings columns. Once any target exists: adds Target | Gap | Status pill per
+  row — green ≥100% of target, amber ≥50%, red <50%, gray "No target" (thresholds are
+  constants, trivially adjustable). Zero rows show 0s in both variants.
 
 ---
 
-## Azure Prerequisite (user action)
+## Azure Prerequisite (verify empirically)
 
-Draft `docs/it-requests/2026-07-30-mail-send-grant.md` (same format as the Sites.Selected
+**Amended 2026-07-30 (user):** the user believes the Azure email setup may already exist.
+The repo only proves the edge app is *used* for SharePoint (`Sites.Selected`); its actual
+granted permissions are not visible from code. Verification is therefore empirical: the
+deployed function's first test-send attempt is the probe — Graph `202` means Mail.Send is
+granted and working; `403 ErrorAccessDenied` means it is not, in which case deliver
+`docs/it-requests/2026-07-30-mail-send-grant.md` (same format as the Sites.Selected
 request): application **Mail.Send** on the existing edge app (`AZURE_CLIENT_ID`), admin
 consent, plus `New-ApplicationAccessPolicy` restricting the app to `sera@2seasonshotels.com`.
-Implementation is not blocked on the grant; **test-sends and go-live are**.
+Implementation is not blocked either way; **go-live is blocked only on a successful
+user-approved test-send**.
 
 ---
 
