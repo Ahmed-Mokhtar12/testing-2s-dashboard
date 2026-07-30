@@ -13,9 +13,22 @@ import { UserMenu } from '@/components/UserMenu';
 // viewport: the document can never scroll; below lg, <main> scrolls instead.
 const LEGACY_SCROLL_ROUTES = ['/dashboard/whatsapp', '/dashboard/email'];
 
+// React Router's matching is case-insensitive and normalizes a trailing
+// slash (e.g. `/dashboard/whatsapp/` and `/dashboard/WhatsApp` both render
+// WhatsApp.tsx — verified against react-router-dom's matchPath), but a plain
+// `.includes(pathname)` string check is not. Without normalizing first, those
+// variants would silently fall through to locked mode and get clipped/
+// reflowed, breaking the hard "WhatsApp.tsx/Email.tsx stay byte-identical"
+// constraint. Lowercase and strip one trailing slash (but never touch a bare
+// "/") before comparing.
+function normalizeRoute(pathname: string): string {
+  const lower = pathname.toLowerCase();
+  return lower.length > 1 && lower.endsWith('/') ? lower.slice(0, -1) : lower;
+}
+
 export const DashboardShell: React.FC = () => {
   const { pathname } = useLocation();
-  const legacy = LEGACY_SCROLL_ROUTES.includes(pathname);
+  const legacy = LEGACY_SCROLL_ROUTES.includes(normalizeRoute(pathname));
 
   return (
     <DateRangeProvider>
@@ -51,7 +64,21 @@ export const DashboardShell: React.FC = () => {
             </header>
 
             <div className="flex-1 flex min-h-0">
-              <main className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto lg:overflow-hidden p-3 sm:p-6 short:p-3'}>
+              {/* lg:overflow-y-auto (not lg:overflow-hidden): the seven in-scope
+                  pages are refit to fit the tested viewports (1920x1080,
+                  1366x768 — see full-viewport.spec.ts), so at those sizes no
+                  scrollbar appears here and the user-visible "no page
+                  scrollbar" outcome is unchanged. But the Playwright viewport
+                  is the browser's INNER viewport; a real 1366x768 laptop has
+                  only ~600-660px of inner height after browser chrome and the
+                  OS taskbar. Below the tested height, ResponsiveContainer
+                  minHeight floors can exceed the available card body. With
+                  overflow-hidden that content would be silently unreachable —
+                  clipped with no way to scroll to it. overflow-y-auto instead
+                  degrades gracefully to a scrollable <main> on a shorter real
+                  viewport. Overflow the user can reach beats overflow that
+                  vanishes. */}
+              <main className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto lg:overflow-y-auto p-3 sm:p-6 short:p-3'}>
                 <Outlet />
               </main>
               <RightChatPanel />
