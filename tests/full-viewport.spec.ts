@@ -61,12 +61,31 @@ test.describe('full-viewport layout (desktop)', () => {
   }
 
   // Excluded pages: document-level scroll must KEEP working exactly as
-  // before. At 1366x768 both pages are taller than the viewport even with
-  // empty mocked data (KPI row + 3 chart cards ≈ 950px+).
+  // before. At 1366x768 /dashboard/email is taller than the viewport even
+  // with empty mocked data (KPI row + 4 chart/table cards ≈ 950px+), so its
+  // document overflow is asserted directly. /dashboard/whatsapp has fewer
+  // chart cards and legitimately fits 768px with empty mocked data — since
+  // its chart heights are fixed (not data-driven), no amount of mock data
+  // can force an overflow, so legacy mode is regression-locked structurally
+  // instead (see below).
   for (const route of EXCLUDED) {
-    test(`${route} still scrolls at document level (unchanged)`, async ({ page }) => {
+    const title =
+      route === '/dashboard/whatsapp'
+        ? `${route} keeps legacy scroll layout (unchanged)`
+        : `${route} still scrolls at document level (unchanged)`;
+    test(title, async ({ page }) => {
       await page.setViewportSize({ width: 1366, height: 768 });
       await openPage(page, route);
+      if (route === '/dashboard/whatsapp') {
+        // With empty mocked data this page fits 768px, so document overflow cannot
+        // be asserted. Regression-lock legacy mode structurally instead: legacy
+        // <main> keeps unconditional overflow-y-auto and never gets the locked
+        // lg:overflow-hidden.
+        const mainClass = await page.locator('main').getAttribute('class');
+        expect(mainClass).toContain('overflow-y-auto');
+        expect(mainClass).not.toContain('lg:overflow-hidden');
+        return;
+      }
       expect(await documentOverflow(page)).toBeGreaterThan(0);
     });
   }
