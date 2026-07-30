@@ -82,8 +82,8 @@ export class RatesQueryService {
       const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
       if (truncated) {
         result.truncation_note = exactCount !== null
-          ? `Rate statistics cover only the ${data.length} most recent of ${exactCount} rate records in range. Ask the user to narrow the date range for exact statistics.`
-          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent rate records in range.`;
+          ? `The rate statistics are computed from only the ${data.length} most recent of ${exactCount} rate records in range. You MUST tell the user the statistics cover a subset (${data.length} of ${exactCount} records), and suggest narrowing the date range for exact statistics.`
+          : `Row cap of ${ROW_CAP} reached. You MUST tell the user that all figures cover only the ${ROW_CAP} most recent rate records in range, and suggest narrowing the date range.`;
       }
       if (range.swapped) result.note = 'date_from and date_to were reversed and have been swapped.';
       if (args?.detail === 'quotes') {

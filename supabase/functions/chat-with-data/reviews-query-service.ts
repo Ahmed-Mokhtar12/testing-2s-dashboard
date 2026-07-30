@@ -5,7 +5,7 @@ import { classifyEmptyResult, emptyResultPayload } from './access-probe.ts';
 import { fetchAllWithCap } from './paged-fetch.ts';
 
 export const REVIEWS_TOOL_NAME = 'query_reviews';
-const ROW_CAP = 5000;
+const ROW_CAP = 10000;
 const UNAVAILABLE = JSON.stringify({ error: 'Reviews data is temporarily unavailable. Tell the user you could not access the review records right now.' });
 
 export class ReviewsQueryService {
@@ -87,8 +87,8 @@ export class ReviewsQueryService {
       const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
       if (truncated) {
         result.truncation_note = exactCount !== null
-          ? `total_reviews is exact; average_score and per-source/per-month breakdowns cover only the ${data.length} most recent of ${exactCount} reviews in range. Ask the user to narrow the date range for exact breakdowns.`
-          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent reviews in range.`;
+          ? `total_reviews (${exactCount}) is exact, but average_score and the per-source/per-month breakdowns are computed from only the ${data.length} most recent reviews. You MUST tell the user the average covers only the ${data.length} most recent of ${exactCount} reviews — never present it as the overall average — and suggest narrowing the date range for an exact average.`
+          : `Row cap of ${ROW_CAP} reached. You MUST tell the user that all figures cover only the ${ROW_CAP} most recent reviews in range, and suggest narrowing the date range.`;
       }
       if (range.swapped) result.note = 'date_from and date_to were reversed and have been swapped.';
       if (args?.detail === 'reviews') {

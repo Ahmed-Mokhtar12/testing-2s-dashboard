@@ -161,7 +161,7 @@ export class TrainingQueryService {
         (participantsExact !== null ? participantsExact > participantRows.length : participantRows.length >= PARTICIPANT_CAP);
       const result = aggregateTrainingData(sessionRows, participantRows, filters, truncated);
       if (truncated) {
-        result.truncation_note = 'Result capped. Ask the user to narrow the date range for exact totals.';
+        result.truncation_note = 'Result capped. You MUST tell the user the totals cover only the most recent records in range, and suggest narrowing the date range for exact totals.';
       }
       if (range.swapped) {
         result.note = 'date_from and date_to were reversed and have been swapped.';

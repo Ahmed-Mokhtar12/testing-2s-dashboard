@@ -78,8 +78,8 @@ export class WhatsAppQueryService {
       const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
       if (truncated) {
         result.truncation_note = exactCount !== null
-          ? `total_messages is exact; unique_guests and per-day/handling breakdowns cover only the ${data.length} most recent of ${exactCount} messages in range. Ask the user to narrow the date range for exact breakdowns.`
-          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent messages in range.`;
+          ? `total_messages (${exactCount}) is exact, but unique_guests and the per-day/handling breakdowns are computed from only the ${data.length} most recent messages. You MUST tell the user those breakdown figures cover only the ${data.length} most recent of ${exactCount} messages, and suggest narrowing the date range.`
+          : `Row cap of ${ROW_CAP} reached. You MUST tell the user that all figures cover only the ${ROW_CAP} most recent messages in range, and suggest narrowing the date range.`;
       }
       if (args?.detail === 'messages') {
         result.messages = data.slice(0, 30).map((r: any) => ({

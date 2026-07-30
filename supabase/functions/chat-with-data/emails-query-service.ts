@@ -74,8 +74,8 @@ export class EmailsQueryService {
       const truncated = exactCount !== null ? exactCount > data.length : data.length >= ROW_CAP;
       if (truncated) {
         result.truncation_note = exactCount !== null
-          ? `total_emails is exact; new/reply splits, unique_guests and breakdowns cover only the ${data.length} most recent of ${exactCount} emails in range. Ask the user to narrow the date range for exact breakdowns.`
-          : `Row cap of ${ROW_CAP} reached; totals cover only the ${ROW_CAP} most recent emails in range.`;
+          ? `total_emails (${exactCount}) is exact, but the new/reply splits, unique_guests and breakdowns are computed from only the ${data.length} most recent emails. You MUST tell the user those figures cover only the ${data.length} most recent of ${exactCount} emails, and suggest narrowing the date range.`
+          : `Row cap of ${ROW_CAP} reached. You MUST tell the user that all figures cover only the ${ROW_CAP} most recent emails in range, and suggest narrowing the date range.`;
       }
       if (args?.detail === 'emails') {
         result.emails = data.slice(0, 20).map((r: any) => ({
