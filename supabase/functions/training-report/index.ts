@@ -144,15 +144,6 @@ interface RequestBody {
   period?: string;
 }
 
-// TEMPORARY: removed in Task 7. Confirms which Graph app-role claims the
-// service principal actually carries (i.e. whether Mail.Send is granted)
-// without sending any mail.
-async function handleDiag(req: Request): Promise<Response> {
-  const token = await getAppToken();
-  const claims = JSON.parse(atob(token.split('.')[1]));
-  return json(req, { roles: claims.roles ?? [] });
-}
-
 async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   const caller = await getCallerUser(req);
   if (!caller) return json(req, { error: 'Not authenticated.' }, 401);
@@ -283,12 +274,11 @@ Deno.serve(async (req) => {
   }
 
   const mode = body?.mode;
-  if (mode !== 'test' && mode !== 'cron' && mode !== 'diag') {
+  if (mode !== 'test' && mode !== 'cron') {
     return json(req, { error: 'Unknown mode.' }, 400);
   }
 
   try {
-    if (mode === 'diag') return await handleDiag(req);
     if (mode === 'test') return await handleTest(req, body);
     const result = await handleCron();
     return json(req, { ok: true, ...result });
