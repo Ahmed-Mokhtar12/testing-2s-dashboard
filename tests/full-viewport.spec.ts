@@ -180,7 +180,7 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
 
     // 15 distinct colleagues are required — the wizard blocks duplicates —
     // so just always take the first still-available option per row (see the
-    // extended MOCK_COLLEAGUES_FLAT in hotel-training-mocks.ts).
+    // extended MOCK_COLLEAGUES_MANY in hotel-training-mocks.ts).
     for (let row = 1; row <= 15; row++) {
       await page.getByTestId(`participant-select-${row}`).click();
       const firstOption = page.getByRole('option').first();
@@ -189,13 +189,18 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
     }
     await page.waitForLoadState('networkidle');
 
-    // The claim under test: the document never scrolls (locked shell holds),
-    // and even post-I4 (main is lg:overflow-y-auto, not lg:overflow-hidden)
-    // the overflow genuinely lives inside the wizard's own scroll region —
-    // `.max-w-2xl` is the wizard column's wrapper class in HotelTraining.tsx
-    // (`registerTrainingContent`); it's the only element with that class
-    // rendered for a non-admin user mid-wizard (the other two `.max-w-2xl`
-    // divs — the success screen and AdminPanel — aren't mounted here).
+    // The claim under test: with 15 participants the DOCUMENT never scrolls
+    // (locked shell holds), and the resulting overflow is absorbed by a
+    // scroll container inside the shell rather than growing the page. That
+    // container is `<main>` (overflow-y-auto), not the wizard column itself —
+    // `div.max-w-2xl` (the wizard column's wrapper class in
+    // HotelTraining.tsx's `registerTrainingContent`) has no overflow style
+    // of its own at this breakpoint, which is why this test does not assert
+    // `mainOverflow <= 1` here. `.max-w-2xl` is still asserted below purely
+    // as a proxy for "the wizard content is taller than its box", since it's
+    // the only element with that class rendered for a non-admin user
+    // mid-wizard (the other two `.max-w-2xl` divs — the success screen and
+    // AdminPanel — aren't mounted here).
     expect(await documentOverflow(page)).toBeLessThanOrEqual(1);
     const wizardOverflow = await page.evaluate(() => {
       const el = document.querySelector('main div.max-w-2xl');

@@ -95,9 +95,11 @@ applies), `verify_jwt = true`, deployed with a self-verifying script modeled on
 
 - Monthly summary for month M−1: due from the 1st of M at 08:00, and remains due for the
   rest of month M (i.e. until month M itself ends) — not a short 7-day grace window.
-  `report_runs` makes a duplicate send impossible and a late report strictly dominates a
-  missing one, so there is no reason to stop retrying before the period that defines "M−1"
-  itself changes.
+  `report_runs` plus the atomic claim (see Idempotency below) prevent duplicate rows and
+  stop two concurrent invocations from both sending — but this is at-least-once, not
+  exactly-once, so a genuine duplicate email is still possible (see Idempotency). A late
+  report still strictly dominates a missing one, so there is no reason to stop retrying
+  before the period that defines "M−1" itself changes.
 - Reminder for month M: due from `lastDay(M) − 7` at 08:00, and remains due through the
   last day of month M (never later — a reminder is meaningless once its month has closed).
 - **Epoch floor:** no report is EVER due for a period before `EARLIEST_PERIOD = '2026-08'`

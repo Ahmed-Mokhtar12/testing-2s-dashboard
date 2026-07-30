@@ -61,9 +61,13 @@ export function dueReports(nowUtcMs: number): DueReport[] {
 
   // Monthly summary for the PREVIOUS month: due from day 1 at 08:00 Dubai
   // and remains due for the rest of the CURRENT month (no grace-window
-  // cutoff). report_runs makes a duplicate send impossible and a late
-  // report strictly dominates a missing one, so once the on-time gate has
-  // opened there is no reason to ever stop retrying within the same month.
+  // cutoff). report_runs plus the atomic claim (in index.ts) prevent
+  // duplicate rows and stop two concurrent invocations from both sending —
+  // but this is at-least-once, not exactly-once: a Graph sendMail that
+  // succeeds while its response is lost is still retried and can produce a
+  // genuine duplicate email. A late report still strictly dominates a
+  // missing one, so once the on-time gate has opened there is no reason to
+  // ever stop retrying within the same month.
   // Residual limitation (documented, not fixed here): once the calendar
   // rolls into the NEXT month, this period is superseded by the new
   // "previous month" and is never revisited — if every hourly attempt

@@ -64,21 +64,22 @@ export const DashboardShell: React.FC = () => {
             </header>
 
             <div className="flex-1 flex min-h-0">
-              {/* lg:overflow-y-auto (not lg:overflow-hidden): the seven in-scope
-                  pages are refit to fit the tested viewports (1920x1080,
-                  1366x768 — see full-viewport.spec.ts), so at those sizes no
-                  scrollbar appears here and the user-visible "no page
-                  scrollbar" outcome is unchanged. But the Playwright viewport
-                  is the browser's INNER viewport; a real 1366x768 laptop has
-                  only ~600-660px of inner height after browser chrome and the
-                  OS taskbar. Below the tested height, ResponsiveContainer
+              {/* main is always a scroll container (overflow-y-auto, not
+                  overflow-hidden): the seven in-scope pages are refit to fit
+                  the tested viewports (1920x1080, 1366x768 — see
+                  full-viewport.spec.ts), so at those sizes no scrollbar
+                  appears here and the user-visible "no page scrollbar"
+                  outcome is unchanged. But the Playwright viewport is the
+                  browser's INNER viewport; a real 1366x768 laptop has only
+                  ~600-660px of inner height after browser chrome and the OS
+                  taskbar. Below the tested height, ResponsiveContainer
                   minHeight floors can exceed the available card body. With
                   overflow-hidden that content would be silently unreachable —
                   clipped with no way to scroll to it. overflow-y-auto instead
                   degrades gracefully to a scrollable <main> on a shorter real
                   viewport. Overflow the user can reach beats overflow that
                   vanishes. */}
-              <main className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto lg:overflow-y-auto p-3 sm:p-6 short:p-3'}>
+              <main className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 short:p-3'}>
                 <Outlet />
               </main>
               <RightChatPanel />
