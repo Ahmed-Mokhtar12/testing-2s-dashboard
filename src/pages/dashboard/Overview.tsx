@@ -114,9 +114,12 @@ const Overview: React.FC = () => {
         <h3 className="font-display font-semibold mb-3 short:mb-2">Quick links</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
           {tiles.map((currentTile) => (
-            <Link key={`${currentTile.to}-l`} to={currentTile.to} className="flex items-center justify-between gap-2 px-3 py-2.5 short:py-1.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors text-sm">
-              <span className="flex items-center gap-2">{currentTile.icon}<span>{currentTile.label}</span></span>
-              <ArrowRight className="h-3.5 w-3.5 opacity-60" />
+            <Link key={`${currentTile.to}-l`} to={currentTile.to} className="flex items-center justify-between gap-2 px-3 py-2.5 short:py-1.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors text-sm min-w-0">
+              <span className="flex items-center gap-2 min-w-0 overflow-hidden">
+                <span className="shrink-0">{currentTile.icon}</span>
+                <span className="truncate">{currentTile.label}</span>
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 opacity-60 shrink-0 short:hidden" />
             </Link>
           ))}
         </div>
