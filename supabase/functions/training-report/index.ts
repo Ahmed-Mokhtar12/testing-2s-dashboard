@@ -4,7 +4,7 @@ import { getCallerUser } from '../_shared/auth.ts';
 import { haveAzureCreds, getAppToken, graphFetch, GRAPH_BASE, GraphError } from '../_shared/graph.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { fetchAllWithCap } from '../chat-with-data/paged-fetch.ts';
-import { dueReports, dubaiToday, lastDayOfMonth, reminderDay } from './report-schedule.ts';
+import { dueReports, dubaiToday, lastDayOfMonth, reminderDay, nextDayDubaiMidnightISO } from './report-schedule.ts';
 import type { DueReport } from './report-schedule.ts';
 import { aggregateReport } from './report-aggregator.ts';
 import { renderReportEmail } from './report-html.ts';
@@ -17,6 +17,10 @@ const RECIPIENTS = [
 ];
 const SESSION_CAP = 2000;
 const PARTICIPANT_CAP = 10000;
+// PostgREST builds `.in('training_id', ids)` as a URL query string; with
+// thousands of ids that URL can exceed server/proxy length limits. Chunking
+// keeps each request's id list small regardless of how many sessions match.
+const TRAINING_ID_CHUNK = 200;
 
 function serviceClient() {
   return createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -47,6 +51,12 @@ async function sendMail(token: string, to: string[], subject: string, html: stri
   });
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 async function fetchReportData(db: ReturnType<typeof serviceClient>, fromISO: string, toExclusiveISO: string) {
   const sessions = await fetchAllWithCap((from, to, withCount) => {
     const q = db.from('training_sessions')
@@ -58,21 +68,39 @@ async function fetchReportData(db: ReturnType<typeof serviceClient>, fromISO: st
     return q;
   }, SESSION_CAP);
   if (sessions.error) throw new Error(`sessions fetch failed: ${JSON.stringify(sessions.error)}`);
+  // fetchAllWithCap silently clamps `rows` to the cap; exactCount is the ONLY
+  // signal that more rows existed. Ignoring it would send an undercounted
+  // report with no indication anything was wrong — this repo has shipped
+  // that exact silent-truncation bug twice already (see
+  // tests/unit/no-overclamp-limit.test.ts). Fail loudly instead: the caller
+  // (runDueReport / handleTest) records this as a 'failed' ledger attempt.
+  if (sessions.exactCount !== null && sessions.exactCount > SESSION_CAP) {
+    throw new Error(
+      `sessions for [${fromISO}, ${toExclusiveISO}) total ${sessions.exactCount}, exceeding SESSION_CAP=${SESSION_CAP} — refusing to send an undercounted report.`,
+    );
+  }
   const ids = sessions.rows.map((s) => s.training_id);
-  let participants = { rows: [] as { training_id: string; employee_id: string | null }[] };
-  if (ids.length > 0) {
+  const participantRows: { training_id: string; employee_id: string | null }[] = [];
+  let participantExactCount = 0;
+  for (const idChunk of chunk(ids, TRAINING_ID_CHUNK)) {
     const p = await fetchAllWithCap((from, to, withCount) =>
       db.from('training_participants')
         .select('training_id, employee_id', withCount ? { count: 'exact' } : {})
-        .in('training_id', ids)
+        .in('training_id', idChunk)
         .order('id', { ascending: true })
         .range(from, to), PARTICIPANT_CAP);
     if (p.error) throw new Error(`participants fetch failed: ${JSON.stringify(p.error)}`);
-    participants = p;
+    participantRows.push(...p.rows);
+    participantExactCount += p.exactCount ?? p.rows.length;
+  }
+  if (participantExactCount > PARTICIPANT_CAP) {
+    throw new Error(
+      `participants for [${fromISO}, ${toExclusiveISO}) total ${participantExactCount}, exceeding PARTICIPANT_CAP=${PARTICIPANT_CAP} — refusing to send an undercounted report.`,
+    );
   }
   const t = await db.from('training_targets').select('department, monthly_target_hours');
   if (t.error) throw new Error(`targets fetch failed: ${JSON.stringify(t.error)}`);
-  return { sessions: sessions.rows, participants: participants.rows, targets: t.data ?? [] };
+  return { sessions: sessions.rows, participants: participantRows, targets: t.data ?? [] };
 }
 
 // --- Period/range resolution for 'test' mode -------------------------------
@@ -83,6 +111,13 @@ async function fetchReportData(db: ReturnType<typeof serviceClient>, fromISO: st
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const dubaiMidnightISO = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}T00:00:00+04:00`;
+
+// Matches 'YYYY-MM' with a real 01-12 month; used to reject a malformed
+// `period` override before it reaches Number() and turns into NaN-NaN.
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+export function isValidPeriod(period: string): boolean {
+  return PERIOD_RE.test(period);
+}
 
 function monthLabel(year: number, month1: number): string {
   return new Date(Date.UTC(year, month1 - 1, 1))
@@ -119,20 +154,26 @@ function resolveTestReport(
       periodLabel: monthLabel(y, m),
       rangeFromISO: dubaiMidnightISO(y, m, 1),
       rangeToExclusiveISO: dubaiMidnightISO(nextY, nextM, 1),
-      dueDate: `${y}-${pad(m)}-01`,
+      // The month-M-1 report is due on the 1st of month M (next month), not
+      // the 1st of its own period month — this only ever renders in the
+      // delayed banner, which test mode never sets, so it was latent.
+      dueDate: `${nextY}-${pad(nextM)}-01`,
     };
   }
 
   // Reminder is inherently "month to date" — the exclusive end is always
   // tomorrow relative to the real current Dubai date, regardless of which
-  // period's month-start the admin asked to preview.
+  // period's month-start the admin asked to preview. nextDayDubaiMidnightISO
+  // rolls over month/year via real date arithmetic instead of concatenating
+  // `td + 1` into an ISO literal, which produced an invalid out-of-range
+  // date (e.g. "...-07-32...") on the last Dubai day of a month.
   const [y, m] = periodParam ? periodParam.split('-').map(Number) : [ty, tm];
   return {
     reportType: 'reminder',
     period: `${y}-${pad(m)}`,
     periodLabel: monthLabel(y, m),
     rangeFromISO: dubaiMidnightISO(y, m, 1),
-    rangeToExclusiveISO: dubaiMidnightISO(ty, tm, td + 1),
+    rangeToExclusiveISO: nextDayDubaiMidnightISO(ty, tm, td),
     dueDate: `${y}-${pad(m)}-${pad(reminderDay(y, m))}`,
     daysLeftInMonth: lastDayOfMonth(y, m) - td,
   };
@@ -154,6 +195,9 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   if (body.report !== 'monthly' && body.report !== 'reminder') {
     return json(req, { error: 'report must be "monthly" or "reminder".' }, 400);
   }
+  if (body.period !== undefined && !isValidPeriod(body.period)) {
+    return json(req, { error: 'period must match YYYY-MM with a month between 01 and 12 (e.g. "2026-07").' }, 400);
+  }
 
   const resolved = resolveTestReport(body.report, body.period, Date.now());
   const db = serviceClient();
@@ -174,20 +218,95 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   return json(req, { ok: true, sentTo: caller.email, subject, period: resolved.period });
 }
 
-// Upserts the (report_type, period) ledger row — the single write path both
-// the 'sent' and 'failed' branches of runDueReport share, so report_runs
-// (report_type, period) primary key and the updated_at stamp are set once.
+// Writes the (report_type, period) ledger row's outcome. The row is always
+// pre-created by ensureRunRow + claimRun before this is called, so this is a
+// plain UPDATE, not an upsert.
+//
+// The write's own error was previously discarded: if it failed AFTER a
+// successful Graph send, no 'sent' row would exist and the next hourly tick
+// would send again — for the whole due window now that I3 widened it. This
+// retries once, and if it *still* fails that is a loud condition: the caller
+// surfaces it via the response's `ledgerErrors` count instead of it being
+// silently swallowed.
 async function recordRun(
   db: ReturnType<typeof serviceClient>,
   report: DueReport,
   patch: Record<string, unknown>,
-): Promise<void> {
-  await db.from('report_runs').upsert({
-    report_type: report.reportType,
-    period: report.period,
-    updated_at: new Date().toISOString(),
-    ...patch,
-  });
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { error } = await db.from('report_runs')
+      .update({ updated_at: new Date().toISOString(), ...patch })
+      .eq('report_type', report.reportType)
+      .eq('period', report.period);
+    if (!error) return true;
+    console.error(`report_runs write failed (attempt ${attempt}/2) for ${report.reportType}/${report.period}:`, JSON.stringify(error));
+  }
+  return false;
+}
+
+const CLAIM_SENTINEL = 'send in progress';
+const CLAIM_STALE_MS = 15 * 60_000; // 15 minutes
+
+// Ensures a (report_type, period) row exists so claimRun always has
+// something to read/update. ignoreDuplicates makes this a no-op once the
+// row is already there, regardless of its current status.
+async function ensureRunRow(db: ReturnType<typeof serviceClient>, report: DueReport): Promise<void> {
+  await db.from('report_runs').upsert(
+    { report_type: report.reportType, period: report.period, status: 'failed', attempts: 0 },
+    { onConflict: 'report_type,period', ignoreDuplicates: true },
+  );
+}
+
+// Atomically claims (report_type, period) for a send attempt, so two
+// overlapping handleCron invocations (mode:'cron' accepts the public anon
+// key, so this is deliberately reachable, not just a pg_cron-overlap edge
+// case) cannot both send. Returns the pre-claim attempts count on success,
+// or null if another invocation currently holds the claim or the report is
+// already sent — the caller counts that as `skipped`.
+//
+// The spec sketch for the staleness guard (so a crashed run can't wedge a
+// row forever) was a single PostgREST `.or('last_error.neq.<sentinel>,
+// updated_at.lt.<cutoff>')` filter. That does NOT work: `last_error` is NULL
+// on every brand-new row (the common case — nothing has failed yet), and in
+// SQL `NULL <> 'x'` evaluates to NULL, not true, so `.neq()` would silently
+// fail to match and the FIRST attempt of every new report period would look
+// "unclaimable" and be skipped forever. Instead, the staleness decision is
+// made here in TS from a row we just read, and the claim UPDATE uses that
+// row's own (status, updated_at) as an optimistic-concurrency token: Postgres
+// serializes concurrent UPDATEs to the same row, so if another invocation
+// claimed it between our read and our write, updated_at will have moved and
+// our `.eq('updated_at', ...)` filter matches zero rows — the claim itself
+// stays atomic even though the eligibility check is client-side.
+async function claimRun(
+  db: ReturnType<typeof serviceClient>,
+  report: DueReport,
+): Promise<{ attempts: number } | null> {
+  const { data: row } = await db
+    .from('report_runs')
+    .select('status, attempts, last_error, updated_at')
+    .eq('report_type', report.reportType)
+    .eq('period', report.period)
+    .maybeSingle();
+  const existing = row as { status: string; attempts: number; last_error: string | null; updated_at: string } | null;
+
+  if (!existing || existing.status === 'sent') return null;
+
+  const stale = existing.last_error !== CLAIM_SENTINEL
+    || (Date.now() - new Date(existing.updated_at).getTime()) > CLAIM_STALE_MS;
+  if (!stale) return null;
+
+  const attempts = existing.attempts + 1;
+  const { data: claimed } = await db
+    .from('report_runs')
+    .update({ status: 'failed', attempts, last_error: CLAIM_SENTINEL, updated_at: new Date().toISOString() })
+    .eq('report_type', report.reportType)
+    .eq('period', report.period)
+    .eq('status', existing.status) // optimistic-concurrency token (only 2 possible values; can't be 'sent' here)
+    .eq('updated_at', existing.updated_at) // ditto — moves the instant anyone else writes the row
+    .select('report_type');
+
+  if (!claimed || claimed.length === 0) return null;
+  return { attempts };
 }
 
 // One due report's full attempt: fetch → aggregate → render → send → record.
@@ -198,7 +317,7 @@ async function runDueReport(
   report: DueReport,
   attempts: number,
   tokenFor: () => Promise<string>,
-): Promise<'sent' | 'failed'> {
+): Promise<{ outcome: 'sent' | 'failed'; ledgerOk: boolean }> {
   try {
     const { sessions, participants, targets } = await fetchReportData(db, report.rangeFromISO, report.rangeToExclusiveISO);
     const data = aggregateReport(sessions, participants, targets);
@@ -213,19 +332,26 @@ async function runDueReport(
     });
 
     const token = await tokenFor();
+    // At-least-once, not exactly-once: if the Graph POST succeeds but the
+    // response is lost (network blip, function timeout) before we reach the
+    // recordRun call below, the send already happened but the ledger will
+    // still read 'failed' (or mid-claim) and the next tick will retry,
+    // sending a second, genuine duplicate email. report_runs' unique key
+    // only prevents duplicate ROWS, not duplicate SENDS — there is no
+    // idempotency key on the Graph sendMail call itself.
     await sendMail(token, RECIPIENTS, subject, html);
-    await recordRun(db, report, {
+    const ledgerOk = await recordRun(db, report, {
       status: 'sent', attempts, sent_at: new Date().toISOString(), recipients: RECIPIENTS, last_error: null,
     });
-    return 'sent';
+    return { outcome: 'sent', ledgerOk };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await recordRun(db, report, { status: 'failed', attempts, last_error: message.slice(0, 2000) });
-    return 'failed';
+    const ledgerOk = await recordRun(db, report, { status: 'failed', attempts, last_error: message.slice(0, 2000) });
+    return { outcome: 'failed', ledgerOk };
   }
 }
 
-async function handleCron(): Promise<{ due: number; sent: number; failed: number }> {
+async function handleCron(): Promise<{ due: number; sent: number; failed: number; skipped: number; ledgerErrors: number }> {
   const due = dueReports(Date.now());
   const db = serviceClient();
 
@@ -239,20 +365,20 @@ async function handleCron(): Promise<{ due: number; sent: number; failed: number
 
   let sent = 0;
   let failed = 0;
-  for (const report of due) {
-    const { data: existing } = await db
-      .from('report_runs')
-      .select('status, attempts')
-      .eq('report_type', report.reportType)
-      .eq('period', report.period)
-      .maybeSingle();
-    if (existing?.status === 'sent') continue;
+  let skipped = 0;
+  let ledgerErrors = 0;
 
-    const outcome = await runDueReport(db, report, (existing?.attempts ?? 0) + 1, tokenFor);
+  for (const report of due) {
+    await ensureRunRow(db, report);
+    const claim = await claimRun(db, report);
+    if (!claim) { skipped++; continue; }
+
+    const { outcome, ledgerOk } = await runDueReport(db, report, claim.attempts, tokenFor);
     if (outcome === 'sent') sent++; else failed++;
+    if (!ledgerOk) ledgerErrors++;
   }
 
-  return { due: due.length, sent, failed };
+  return { due: due.length, sent, failed, skipped, ledgerErrors };
 }
 
 Deno.serve(async (req) => {
