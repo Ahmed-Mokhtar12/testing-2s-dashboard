@@ -21,10 +21,10 @@ const CompetitorsPage: React.FC = () => {
   const axisFontSize = isMobile ? 9 : 11;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 short:gap-3">
       <SectionHeader title="Competitor Rates" subtitle="Live rate comparison across the comp set (AED, post-tax)" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <KpiCard label="Our avg rate" value={fmt(k?.ourAvg ?? 0)} icon={Building2} tone="primary" loading={isLoading} />
         <KpiCard label="Comp set avg" value={fmt(k?.compAvg ?? 0)} icon={TrendingUp} tone="accent" loading={isLoading} />
         <KpiCard
@@ -38,14 +38,14 @@ const CompetitorsPage: React.FC = () => {
         <KpiCard label="Our rank" value={k?.ourRank ? `#${k.ourRank}` : '—'} hint={`of ${k?.totalHotels ?? 0} hotels`} icon={Trophy} tone="magenta" loading={isLoading} />
       </div>
 
-      <ChartCard title="Rate trend per hotel" description="Daily AED price across the period">
-        <ResponsiveContainer width="100%" height={isMobile ? 220 : 320}>
+      <ChartCard title="Rate trend per hotel" description="Daily AED price across the period" className="lg:flex-[3] lg:min-h-0" fill>
+        <ResponsiveContainer width="100%" height={isMobile ? 220 : '100%'} minHeight={isMobile ? undefined : 160}>
           <LineChart data={data?.trend || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
             <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
             <YAxis stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={lineCursor} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
             {(data?.hotels || []).map((h, i) => (
               <Line key={h} type="monotone" dataKey={h} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2} dot={false} />
             ))}
@@ -53,9 +53,9 @@ const CompetitorsPage: React.FC = () => {
         </ResponsiveContainer>
       </ChartCard>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Average price per hotel">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-[2] lg:min-h-0">
+        <ChartCard title="Average price per hotel" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 90}>
             <BarChart data={data?.hotelAvgs || []} layout="vertical" margin={{ left: 90 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
@@ -66,8 +66,8 @@ const CompetitorsPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Days as lowest price">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <ChartCard title="Days as lowest price" fill>
+          <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 90}>
             <BarChart data={data?.lowestDaysArr || []} layout="vertical" margin={{ left: 90 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
               <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={axisFontSize} />
