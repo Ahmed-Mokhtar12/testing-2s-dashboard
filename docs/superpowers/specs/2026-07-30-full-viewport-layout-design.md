@@ -42,6 +42,12 @@ An explicit route list drives the mode:
 const LEGACY_SCROLL_ROUTES = ['/dashboard/whatsapp', '/dashboard/email'];
 ```
 
+The pathname is normalized (lowercased, trailing slash stripped, bare `/` left alone) before
+the `.includes()` check. **(Fix-wave-b / M1)** React Router's own matching is case-insensitive
+and trailing-slash-tolerant — `/dashboard/whatsapp/` and `/dashboard/WhatsApp` both render
+`WhatsApp.tsx` — so a plain string comparison against `pathname` would miss those variants and
+silently render the excluded pages in locked mode, breaking the byte-identical constraint.
+
 **Legacy mode (excluded routes):** exactly today's classes — root `min-h-screen flex w-full`,
 sticky `h-14` header, `main` `flex-1 overflow-y-auto p-3 sm:p-6`, document-level scroll.
 
@@ -50,8 +56,16 @@ sticky `h-14` header, `main` `flex-1 overflow-y-auto p-3 sm:p-6`, document-level
 - SidebarProvider wrapper / shell root: `h-svh overflow-hidden` (replacing `min-h-*`).
 - Content column: add `min-h-0` to the existing `flex-1 flex flex-col min-w-0`.
 - Content row below header: keeps `flex-1 flex min-h-0`.
-- `main`: `flex-1 min-h-0 p-3 sm:p-6` + `overflow-y-auto lg:overflow-hidden` — below `lg`
-  it is the internal scroll container; at `lg+` pages must fit and nothing scrolls.
+- `main`: `flex-1 min-h-0 p-3 sm:p-6` + `overflow-y-auto lg:overflow-y-auto` — below `lg`
+  it is the internal scroll container; at `lg+` the seven in-scope pages are refit to fit the
+  tested viewports, so no scrollbar appears there in practice, but `main` stays a genuine
+  scroll container (not `overflow-hidden`) rather than a clip boundary. **(Fix-wave-b / I4)**
+  The Playwright viewport is the browser's *inner* viewport; a real 1366×768 laptop has only
+  ~600–660px of inner height after browser chrome and the OS taskbar. Below the tested height,
+  a page's `ResponsiveContainer minHeight` floor can exceed the available card body — with
+  `lg:overflow-hidden` that content would be silently unreachable, whereas
+  `lg:overflow-y-auto` degrades to a scrollable `main` instead. Overflow the user can reach
+  beats overflow that vanishes.
 - Header (`h-14`, sticky) unchanged — sticky is inert in a non-scrolling ancestor.
 
 **RightChatPanel:** currently `h-[calc(100%-1.5rem)] self-start` sized against a
@@ -91,19 +105,50 @@ The `short` variant is added to `tailwind.config.ts` `screens` as
 ## Verification (Playwright)
 
 New `tests/full-viewport.spec.ts` using the existing mock helpers
-(`setMockAuthSession`, per-function mocks, REST catch-all) with **seeded generous data**
-(long tables, many chart points, 15-participant training draft) so real heights are
-exercised — empty-state fits prove nothing.
+(`setMockAuthSession`, per-function mocks, REST catch-all).
+
+**(Fix-wave-b / I5 — corrected from an earlier draft of this spec.)** This spec previously
+claimed the suite runs against "seeded generous data (long tables, many chart points,
+15-participant training draft) so real heights are exercised — empty-state fits prove
+nothing." That was aspirational, not actual: `mockSupabaseRest` in
+`tests/helpers/hotel-training-mocks.ts` fulfils every `/rest/v1/**` read with `[]`, so the six
+chart-driven analytics routes (Overview, Reviews, Competitors, InfoEmail, Social, Welcome) are
+all measured with empty data. What the suite actually verifies for those six:
+
+- Their heights are dominated by fixed chrome (header, KPI grid, card padding) plus
+  flex-height charts — Recharts' `ResponsiveContainer` grows to fill its flex container, it
+  does not grow *beyond* it, so a chart with 0 data points and a chart with 500 data points
+  render at the identical container height. Their viewport fit is therefore data-independent,
+  and empty-mock fits are a legitimate (if weaker-looking) proof for them specifically.
+- Fabricating realistic per-hook fixture rows for seven different `useXInsights` hooks was
+  judged high-effort and brittle for the payoff, and was deliberately not done.
+
+Hotel Training's participant list is different: it is the one genuinely unbounded,
+data-independent-in-the-wrong-direction piece of content in scope (more participants literally
+means a taller list, unlike the fixed-height charts). It **is** exercised with real, maximum
+data: a dedicated test drives the wizard to 15 participants (the form's own cap) at 1366×768 and
+asserts the document still does not scroll while the wizard's own column does — proving
+overflow lands inside the panel rather than at the document level, or (post-I4) getting
+silently clipped by `main`.
 
 Assertions:
 
 - Each in-scope route × {1920×1080, 1366×768}:
   `document.documentElement.scrollHeight <= window.innerHeight + 1` **and**
-  `main.scrollHeight <= main.clientHeight` (nothing scrolls at desktop).
+  `main.scrollHeight <= main.clientHeight` (nothing scrolls at desktop) — measured against
+  empty mocked data per the note above.
+- Hotel Training wizard filled to 15 participants (its maximum) at 1366×768:
+  `document.documentElement.scrollHeight <= window.innerHeight + 1` **and** the wizard
+  column's `scrollHeight > clientHeight`.
 - Each in-scope route × Pixel-7 project: document must not scroll; `main` may.
-- Excluded routes (`/dashboard/whatsapp`, `/dashboard/email`) with tall mocked data:
-  `document.documentElement.scrollHeight > window.innerHeight` — regression-locking their
-  current document-scroll behavior.
+- Excluded routes (`/dashboard/whatsapp`, `/dashboard/email`) at 1366×768: `/dashboard/email`
+  overflows the document even with empty mocked data (asserted directly); `/dashboard/whatsapp`
+  legitimately fits 768px with empty data (its chart heights are fixed, not data-driven, so no
+  amount of mock data would force an overflow there), so legacy mode is instead
+  regression-locked structurally — asserting `<main>` lacks the locked-mode's `min-h-0` class
+  (see I4 above for why `lg:overflow-hidden` stopped being a valid discriminator once locked
+  mode switched to `lg:overflow-y-auto`). The same structural check is repeated for the
+  `/dashboard/whatsapp/` trailing-slash variant (see M1).
 - Existing `tests/manual-checklist.spec.ts` horizontal-overflow assertions stay green.
 
 Release checks per house convention: `npm run lint`, `npm run build`,
