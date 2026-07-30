@@ -17,6 +17,9 @@ export default {
 			screens: { '2xl': '1400px' }
 		},
 		extend: {
+			screens: {
+				short: { raw: '(max-height: 800px)' },
+			},
 			fontFamily: {
 				sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
 				display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
