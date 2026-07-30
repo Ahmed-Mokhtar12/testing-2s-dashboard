@@ -6,6 +6,14 @@ const HOUR_MS = 3600_000;
 const DUBAI_OFFSET_MS = 4 * HOUR_MS;
 const SEND_HOUR_DUBAI = 8;
 
+// No report is ever due for a period before the feature's first scheduled
+// month. Without this floor, widening the retry windows would make every
+// pre-launch month retroactively due the moment the scheduler starts —
+// emailing historical (and, for months with no training, all-zero) reports
+// nobody asked for. Reports for 2026-07 and earlier are deliberately out of
+// scope: the user reviews those via mode:'test' instead.
+export const EARLIEST_PERIOD = '2026-08';
+
 export interface DueReport {
   reportType: 'monthly_summary' | 'reminder';
   period: string;          // YYYY-MM the report covers
@@ -64,14 +72,17 @@ export function dueReports(nowUtcMs: number): DueReport[] {
   if (d > 1 || hour >= SEND_HOUR_DUBAI) {
     const py = m === 1 ? y - 1 : y;
     const pm = m === 1 ? 12 : m - 1;
-    due.push({
-      reportType: 'monthly_summary',
-      period: `${py}-${pad(pm)}`,
-      dueDate: ymd(y, m, 1),
-      delayed: d > 1,
-      rangeFromISO: dubaiMidnightISO(py, pm, 1),
-      rangeToExclusiveISO: dubaiMidnightISO(y, m, 1),
-    });
+    const period = `${py}-${pad(pm)}`;
+    if (period >= EARLIEST_PERIOD) {
+      due.push({
+        reportType: 'monthly_summary',
+        period,
+        dueDate: ymd(y, m, 1),
+        delayed: d > 1,
+        rangeFromISO: dubaiMidnightISO(py, pm, 1),
+        rangeToExclusiveISO: dubaiMidnightISO(y, m, 1),
+      });
+    }
   }
 
   // Reminder for the CURRENT month: due from day (lastDay-7) at 08:00 Dubai
@@ -81,20 +92,23 @@ export function dueReports(nowUtcMs: number): DueReport[] {
   const rd = reminderDay(y, m);
   const last = lastDayOfMonth(y, m);
   if (d >= rd && (d > rd || hour >= SEND_HOUR_DUBAI)) {
-    due.push({
-      reportType: 'reminder',
-      period: `${y}-${pad(m)}`,
-      dueDate: ymd(y, m, rd),
-      delayed: d > rd,
-      rangeFromISO: dubaiMidnightISO(y, m, 1),
-      // Month-to-date includes today, so the exclusive end is tomorrow. The
-      // window now runs through the LAST day of the month, so d+1 CAN
-      // overflow into next month (unlike the old 3-day grace window, which
-      // capped d at lastDay-5) — nextDayDubaiMidnightISO handles that via
-      // real date arithmetic.
-      rangeToExclusiveISO: nextDayDubaiMidnightISO(y, m, d),
-      daysLeftInMonth: last - d,
-    });
+    const period = `${y}-${pad(m)}`;
+    if (period >= EARLIEST_PERIOD) {
+      due.push({
+        reportType: 'reminder',
+        period,
+        dueDate: ymd(y, m, rd),
+        delayed: d > rd,
+        rangeFromISO: dubaiMidnightISO(y, m, 1),
+        // Month-to-date includes today, so the exclusive end is tomorrow. The
+        // window now runs through the LAST day of the month, so d+1 CAN
+        // overflow into next month (unlike the old 3-day grace window, which
+        // capped d at lastDay-5) — nextDayDubaiMidnightISO handles that via
+        // real date arithmetic.
+        rangeToExclusiveISO: nextDayDubaiMidnightISO(y, m, d),
+        daysLeftInMonth: last - d,
+      });
+    }
   }
 
   return due;

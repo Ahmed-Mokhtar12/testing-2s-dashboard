@@ -100,6 +100,20 @@ applies), `verify_jwt = true`, deployed with a self-verifying script modeled on
   itself changes.
 - Reminder for month M: due from `lastDay(M) − 7` at 08:00, and remains due through the
   last day of month M (never later — a reminder is meaningless once its month has closed).
+- **Epoch floor:** no report is EVER due for a period before `EARLIEST_PERIOD = '2026-08'`
+  (a plain lexicographic `period < EARLIEST_PERIOD` check on the computed `YYYY-MM`,
+  applied to both branches above). This exists because widening the windows to "due for the
+  whole remaining month" (above) would otherwise make every pre-launch month retroactively
+  due the instant the scheduler starts running — the epoch floor is what stops that from
+  becoming a real backfill. Concretely, without it, `report_runs` being empty (true today)
+  plus a widened window would make the June 2026 summary — an all-zero table, since the
+  only training sessions on record are 28–29 July — and the July 2026 reminder both fire as
+  real, unapproved emails on the very first live `mode:'cron'` invocation. **The epoch floor
+  does not apply to `mode:'test'`**, whose entire purpose is previewing arbitrary historical
+  periods (including July 2026 and earlier) on demand; it only constrains `dueReports()`,
+  the function `mode:'cron'` calls. Practical consequence: the first-ever automated emails
+  will be the **August reminder (24 Aug 2026)** and the **1 Sept 2026 summary of August**;
+  July 2026 and earlier are reviewable only via `mode:'test'`, never sent automatically.
 - For each due report: atomically claim the `report_runs` row (see Idempotency below),
   compute → render → send via Graph `POST /users/sera@2seasonshotels.com/sendMail`, then
   update the row (attempts++, status, `last_error` on failure). Sent later than the

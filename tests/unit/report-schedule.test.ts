@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  dubaiToday, lastDayOfMonth, reminderDay, dueReports, nextDayDubaiMidnightISO,
+  dubaiToday, lastDayOfMonth, reminderDay, dueReports, nextDayDubaiMidnightISO, EARLIEST_PERIOD,
 } from '../../supabase/functions/training-report/report-schedule.ts';
 
 // 2026-08-01 04:00 UTC == 08:00 Dubai
@@ -50,15 +50,18 @@ test('nextDayDubaiMidnightISO: 31-Dec rolls to next year', () => {
   assert.equal(nextDayDubaiMidnightISO(2026, 12, 31), '2027-01-01T00:00:00+04:00');
 });
 
+// NOTE: this uses September 1st (-> period 2026-08), not August 1st
+// (-> period 2026-07), because 2026-07 is before EARLIEST_PERIOD and is
+// excluded — see the dedicated epoch-floor test below for that boundary.
 test('monthly summary due on the 1st at 08:00 Dubai, not 07:59', () => {
-  assert.equal(dueReports(utc('2026-08-01T03:59:00Z')).length, 0);
-  const due = dueReports(utc('2026-08-01T04:00:00Z'));
+  assert.equal(dueReports(utc('2026-09-01T03:59:00Z')).length, 0);
+  const due = dueReports(utc('2026-09-01T04:00:00Z'));
   assert.equal(due.length, 1);
   assert.equal(due[0].reportType, 'monthly_summary');
-  assert.equal(due[0].period, '2026-07');
+  assert.equal(due[0].period, '2026-08');
   assert.equal(due[0].delayed, false);
-  assert.equal(due[0].rangeFromISO, '2026-07-01T00:00:00+04:00');
-  assert.equal(due[0].rangeToExclusiveISO, '2026-08-01T00:00:00+04:00');
+  assert.equal(due[0].rangeFromISO, '2026-08-01T00:00:00+04:00');
+  assert.equal(due[0].rangeToExclusiveISO, '2026-09-01T00:00:00+04:00');
 });
 
 // CHANGED expectation: the old 7-day grace window made the summary vanish on
@@ -67,83 +70,94 @@ test('monthly summary due on the 1st at 08:00 Dubai, not 07:59', () => {
 // the summary now stays due for the rest of the month it's computed in, and
 // only disappears once the calendar rolls past it (superseded by a NEW
 // previous-month period, not "no longer due").
+//
+// CHANGED again for the A2 epoch floor: this now uses September/October
+// (-> period 2026-08, then 2026-09) instead of August/September (-> period
+// 2026-07, then 2026-08), because 2026-07 is before EARLIEST_PERIOD and
+// would never appear in dueReports() at all.
 test('monthly summary stays due (delayed) for the rest of the month; superseded once next month starts', () => {
-  // Before August's own reminder window opens (rd=24): summary only.
-  const d8 = dueReports(utc('2026-08-08T10:00:00Z'));
+  // Before September's own reminder window opens (rd=23): summary only.
+  const d8 = dueReports(utc('2026-09-08T10:00:00Z'));
   assert.equal(d8.length, 1);
   assert.equal(d8[0].reportType, 'monthly_summary');
   assert.equal(d8[0].delayed, true);
-  assert.equal(d8[0].period, '2026-07');
+  assert.equal(d8[0].period, '2026-08');
 
-  // Last day of August: the summary is still due. August's own reminder
-  // window has ALSO opened by now (rd=24), so both types are due together —
-  // see the dedicated overlap test below; this assertion only checks the
-  // summary side via find(), not the total count.
-  const d31 = dueReports(utc('2026-08-31T10:00:00Z'));
-  const summaryD31 = d31.find((r) => r.reportType === 'monthly_summary');
-  assert.ok(summaryD31);
-  assert.equal(summaryD31!.delayed, true);
-  assert.equal(summaryD31!.period, '2026-07');
+  // Last day of September (30 days): the summary is still due. September's
+  // own reminder window has ALSO opened by now (rd=23), so both types are
+  // due together — see the dedicated overlap test below; this assertion
+  // only checks the summary side via find(), not the total count.
+  const d30 = dueReports(utc('2026-09-30T10:00:00Z'));
+  const summaryD30 = d30.find((r) => r.reportType === 'monthly_summary');
+  assert.ok(summaryD30);
+  assert.equal(summaryD30!.delayed, true);
+  assert.equal(summaryD30!.period, '2026-08');
 
-  const sep1Early = dueReports(utc('2026-09-01T03:59:00Z')); // 07:59 Dubai: day-1 gate not open yet
-  assert.equal(sep1Early.length, 0);
+  const oct1Early = dueReports(utc('2026-10-01T03:59:00Z')); // 07:59 Dubai: day-1 gate not open yet
+  assert.equal(oct1Early.length, 0);
 
-  const sep1 = dueReports(utc('2026-09-01T04:00:00Z')); // 08:00 Dubai
-  assert.equal(sep1.length, 1);
-  assert.equal(sep1[0].period, '2026-08'); // superseded: now computing AUGUST's summary, not July's
-  assert.equal(sep1[0].delayed, false);
+  const oct1 = dueReports(utc('2026-10-01T04:00:00Z')); // 08:00 Dubai
+  assert.equal(oct1.length, 1);
+  assert.equal(oct1[0].period, '2026-09'); // superseded: now computing SEPTEMBER's summary, not August's
+  assert.equal(oct1[0].delayed, false);
 });
 
-test('reminder due July 24 08:00 Dubai with month-to-date range and days left', () => {
-  const due = dueReports(utc('2026-07-24T04:00:00Z'));
-  // July 24 also falls within June's summary due window (any day > 1), so
-  // both report types are due together here — see the overlap test below.
-  // This test only asserts the reminder side, via find().
-  const reminder = due.find((r) => r.reportType === 'reminder');
-  assert.ok(reminder);
-  assert.equal(reminder!.period, '2026-07');
-  assert.equal(reminder!.dueDate, '2026-07-24');
-  assert.equal(reminder!.daysLeftInMonth, 7);
-  assert.equal(reminder!.rangeFromISO, '2026-07-01T00:00:00+04:00');
+// CHANGED for the A2 epoch floor: uses August 24 (-> period 2026-08) instead
+// of July 24 (-> period 2026-07, excluded entirely). This also satisfies the
+// A2 gate-check (c): August's reminder is due on 2026-08-24 08:00 Dubai.
+test('reminder due August 24 08:00 Dubai with month-to-date range and days left', () => {
+  const due = dueReports(utc('2026-08-24T04:00:00Z'));
+  // Unlike a post-epoch month, August 24 does NOT also trigger a summary:
+  // August's previous month is July, which is before EARLIEST_PERIOD and is
+  // excluded by the epoch floor — so this is the reminder alone.
+  assert.equal(due.length, 1);
+  assert.equal(due[0].reportType, 'reminder');
+  assert.equal(due[0].period, '2026-08');
+  assert.equal(due[0].dueDate, '2026-08-24');
+  assert.equal(due[0].daysLeftInMonth, 7);
+  assert.equal(due[0].rangeFromISO, '2026-08-01T00:00:00+04:00');
   // month-to-date: exclusive end = start of TOMORROW (Dubai)
-  assert.equal(reminder!.rangeToExclusiveISO, '2026-07-25T00:00:00+04:00');
+  assert.equal(due[0].rangeToExclusiveISO, '2026-08-25T00:00:00+04:00');
 });
 
 // CHANGED expectation: the old 3-day grace window made the reminder vanish
 // after day 27 (2026-07-28 at pastDue=4 was already gone). I3 widens this to
 // the end of the reminder's own month (never later — a reminder is useless
 // once its month has closed), so it now stays due all the way through the
-// last day of July, including the case that overflows rangeToExclusiveISO
-// into August (exercising nextDayDubaiMidnightISO's rollover, per I1).
+// last day of the month, including the case that overflows
+// rangeToExclusiveISO into the next month (exercising
+// nextDayDubaiMidnightISO's rollover, per I1).
+//
+// CHANGED again for the A2 epoch floor: uses August (-> period 2026-08)
+// instead of July (-> period 2026-07, excluded entirely). Because August's
+// own previous month (July) is also excluded by the epoch floor, none of
+// these dates overlap with a summary — no find()/filter() needed for the
+// reminder side, unlike the July version of this test.
 test('reminder stays due through month-end (widened window); gone once next month starts', () => {
-  // All three dates below also fall within July's own summary-for-June due
-  // window (day > 1), so each returns 2 entries — assertions below use
-  // find() to isolate the reminder side; the overlap itself is covered by
-  // the dedicated overlap test.
-  const d26 = dueReports(utc('2026-07-26T10:00:00Z'));
-  const reminderD26 = d26.find((r) => r.reportType === 'reminder');
-  assert.ok(reminderD26);
-  assert.equal(reminderD26!.delayed, true);
-  assert.equal(reminderD26!.daysLeftInMonth, 5);
+  const d26 = dueReports(utc('2026-08-26T10:00:00Z'));
+  assert.equal(d26.length, 1);
+  assert.equal(d26[0].reportType, 'reminder');
+  assert.equal(d26[0].delayed, true);
+  assert.equal(d26[0].daysLeftInMonth, 5);
 
-  const d28 = dueReports(utc('2026-07-28T10:00:00Z')); // previously gone under the old grace window
-  const reminderD28 = d28.find((r) => r.reportType === 'reminder');
-  assert.ok(reminderD28);
-  assert.equal(reminderD28!.delayed, true);
-  assert.equal(reminderD28!.daysLeftInMonth, 3);
+  const d28 = dueReports(utc('2026-08-28T10:00:00Z')); // previously gone under the old grace window
+  assert.equal(d28.length, 1);
+  assert.equal(d28[0].delayed, true);
+  assert.equal(d28[0].daysLeftInMonth, 3);
 
-  const d31 = dueReports(utc('2026-07-31T10:00:00Z')); // last day of July: still due
-  const reminderD31 = d31.find((r) => r.reportType === 'reminder');
-  assert.ok(reminderD31);
-  assert.equal(reminderD31!.delayed, true);
-  assert.equal(reminderD31!.daysLeftInMonth, 0);
-  assert.equal(reminderD31!.rangeToExclusiveISO, '2026-08-01T00:00:00+04:00'); // rollover via nextDayDubaiMidnightISO
+  const d31 = dueReports(utc('2026-08-31T10:00:00Z')); // last day of August: still due
+  assert.equal(d31.length, 1);
+  assert.equal(d31[0].delayed, true);
+  assert.equal(d31[0].daysLeftInMonth, 0);
+  assert.equal(d31[0].rangeToExclusiveISO, '2026-09-01T00:00:00+04:00'); // rollover via nextDayDubaiMidnightISO
 
-  // Once August starts, dueReports() is evaluating AUGUST's own reminder
-  // window (not due until day 24) — July's reminder is superseded, not
-  // merely finished.
-  const aug1 = dueReports(utc('2026-08-01T10:00:00Z'));
-  assert.equal(aug1.filter((r) => r.reportType === 'reminder').length, 0);
+  // Once September starts, dueReports() is evaluating SEPTEMBER's own
+  // reminder window (not due until day 23) — August's reminder is
+  // superseded, not merely finished. (September's own summary, for the
+  // in-scope period 2026-08, IS due at this instant — that's fine, this
+  // assertion only checks the reminder side.)
+  const sep1 = dueReports(utc('2026-09-01T10:00:00Z'));
+  assert.equal(sep1.filter((r) => r.reportType === 'reminder').length, 0);
 });
 
 test('January rolls the monthly summary over to the previous December', () => {
@@ -160,24 +174,65 @@ test('January rolls the monthly summary over to the previous December', () => {
 // month-end, both windows overlap (the old narrow windows never let this
 // happen: 7-day summary grace vs. day rd..rd+2 reminder grace never
 // intersected within the same month for any real calendar).
-test('summary and reminder can both be due at once once the reminder window opens (widened windows overlap)', () => {
-  const due = dueReports(utc('2026-07-30T10:00:00Z'));
+//
+// CHANGED for the A2 epoch floor: the earliest month where BOTH the
+// reminder's own period AND its previous month clear EARLIEST_PERIOD is
+// September (reminder period 2026-09, summary period 2026-08) — August
+// can't show this because August's previous month, July, is excluded (see
+// the August-only reminder test above). The original version of this test
+// used 2026-07-30, which the epoch floor now excludes entirely (both
+// periods involved, 2026-06 and 2026-07, are before EARLIEST_PERIOD) — see
+// the dedicated epoch-floor test below, which asserts exactly that date
+// returns [].
+test('summary and reminder can both be due at once once both periods clear the epoch floor (widened windows overlap)', () => {
+  const due = dueReports(utc('2026-09-25T10:00:00Z'));
   assert.equal(due.length, 2);
   assert.deepEqual(due.map((r) => r.reportType).sort(), ['monthly_summary', 'reminder']);
   const summary = due.find((r) => r.reportType === 'monthly_summary')!;
-  assert.equal(summary.period, '2026-06');
+  assert.equal(summary.period, '2026-08');
   const reminder = due.find((r) => r.reportType === 'reminder')!;
-  assert.equal(reminder.period, '2026-07');
+  assert.equal(reminder.period, '2026-09');
 });
 
 // RENAMED from "both can be due at once (Feb 1 = summary day; never overlaps
 // reminder) — and quiet days return []": that title asserted nothing about
 // two-at-once (misleading) and its "quiet days" examples (July 30, July 15)
-// are no longer quiet under the widened I3 windows — both are now due (see
-// the overlap test above). The only quiet time left under the new rules is
-// day 1 before the 08:00 Dubai gate opens, since a reminder can never be due
-// on day 1 (reminderDay is always >= 21) and the summary's on-time gate has
-// not opened yet.
-test('day 1 before 08:00 Dubai is the only quiet time left', () => {
-  assert.equal(dueReports(utc('2026-08-01T00:00:00Z')).length, 0); // 04:00 Dubai
+// are no longer quiet under the widened I3 windows on their own — both would
+// be due (see the overlap test above) if not for the EARLIEST_PERIOD floor
+// added in A2, which excludes both of those dates' periods outright (see the
+// dedicated epoch-floor test below). Within an in-scope month, day 1 before
+// the 08:00 Dubai gate opens is still always quiet, since a reminder can
+// never be due on day 1 (reminderDay is always >= 21) and the summary's
+// on-time gate hasn't opened yet — but it is no longer the ONLY quiet time,
+// so this test's title no longer claims that.
+test('day 1 before 08:00 Dubai is quiet, within an in-scope month', () => {
+  assert.equal(dueReports(utc('2026-09-01T00:00:00Z')).length, 0); // 04:00 Dubai
+});
+
+// A2: no report is EVER due for a period before EARLIEST_PERIOD, no matter
+// how far into its own retry window a candidate date falls. This is the
+// fix for the live rollout risk flagged in fix-wave-A: with report_runs
+// empty, 2026-07-30 previously made BOTH the June summary (all-zero — June
+// has no training data) and the July reminder structurally due, which would
+// have sent two unapproved, unreviewed production emails on the next real
+// mode:'cron' invocation.
+test('EARLIEST_PERIOD floor: nothing is ever due for 2026-07 or earlier', () => {
+  assert.equal(EARLIEST_PERIOD, '2026-08');
+
+  // (a) the exact situation flagged pre-fix: both the June summary and the
+  // July reminder were structurally due here before this fix.
+  assert.deepEqual(dueReports(utc('2026-07-30T10:00:00Z')), []);
+
+  // (b) 2026-08-01 08:00 Dubai is the on-time gate for JULY's summary (the
+  // previous month relative to August) — but July < EARLIEST_PERIOD, so the
+  // epoch floor excludes it. August's own reminder isn't due until day 24
+  // (see the August reminder test above), so this is genuinely quiet, not
+  // merely "not due yet". Confirmed actual behaviour: dueReports returns [].
+  assert.deepEqual(dueReports(utc('2026-08-01T04:00:00Z')), []);
+
+  // (c) the August reminder IS due on 2026-08-24 08:00 Dubai — covered above
+  // by 'reminder due August 24 08:00 Dubai with month-to-date range and
+  // days left'.
+  // (d) the September 1st summary for period 2026-08 IS due — covered above
+  // by 'monthly summary due on the 1st at 08:00 Dubai, not 07:59'.
 });
