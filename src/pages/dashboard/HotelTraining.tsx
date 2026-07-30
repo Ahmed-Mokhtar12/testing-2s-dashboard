@@ -308,7 +308,7 @@ export default function HotelTraining() {
   const isLoading = colleaguesLoading || columnsLoading || trainersLoading;
 
   const registerTrainingContent = (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
       {draftDate && (
         <Alert>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
@@ -432,19 +432,19 @@ export default function HotelTraining() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6 short:gap-4">
       <SectionHeader title="Hotel Training" subtitle="Register monthly training sessions and manage participants." />
 
       {isAdmin ? (
-        <Tabs defaultValue="register">
+        <Tabs defaultValue="register" className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col">
           <TabsList>
             <TabsTrigger value="register">Register Training</TabsTrigger>
             <TabsTrigger value="admin">Manage Members</TabsTrigger>
           </TabsList>
-          <TabsContent value="register" className="pt-4">
+          <TabsContent value="register" className="pt-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {registerTrainingContent}
           </TabsContent>
-          <TabsContent value="admin" className="pt-4">
+          <TabsContent value="admin" className="pt-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <AdminPanel />
           </TabsContent>
         </Tabs>
