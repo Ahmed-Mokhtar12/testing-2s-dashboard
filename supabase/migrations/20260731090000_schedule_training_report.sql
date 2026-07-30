@@ -5,10 +5,28 @@
 -- but it is intentionally left unapplied until then.
 --
 -- Hourly heartbeat for training report emails. The function itself decides
--- what (if anything) is due — Dubai date logic, idempotent via report_runs,
--- retries across the grace window. Anon bearer is sufficient by design: the
--- endpoint is idempotent, fixed-recipient, and returns no data (same trust
--- model as whatsapp-auto-release).
+-- what (if anything) is due — Dubai date logic, claim-guarded via
+-- report_runs (report_runs' unique key stops duplicate ROWS; the atomic
+-- claim in index.ts stops duplicate concurrent SENDS — see I2/claimRun),
+-- retries across the due window. This is at-least-once, not exactly-once: a
+-- Graph send whose response is lost before the ledger write commits will
+-- retry and genuinely double-send.
+--
+-- Anon bearer, precisely: we follow the LIVE, working whatsapp-auto-release
+-- pattern, not its committed migration. The deployed cron.job row for that
+-- feature (jobname 'whatsapp-auto-release-every-minute') embeds a hardcoded
+-- anon-key literal exactly like this migration does — that is the precedent
+-- being followed. Its committed migration file
+-- (20260515151557_schedule_whatsapp_auto_release.sql), by contrast, reads
+-- `current_setting('app.settings.service_role_key', true)` — a service-role
+-- GUC — which is a DIFFERENT, stronger-auth approach that was apparently
+-- superseded live and never re-committed; that GUC is also not configured
+-- on this project (verified: `current_setting(..., true)` returns null), so
+-- copying the committed file literally would not even work. Anon bearer is
+-- still safe here on its own merits, not just by precedent: the endpoint's
+-- cron path sends only to the three fixed recipients, only within due
+-- windows, and returns counts only — an attacker holding the anon key (a
+-- public value) can at most trigger a due send a few minutes early.
 select cron.schedule(
   'training-report-hourly',
   '0 * * * *',

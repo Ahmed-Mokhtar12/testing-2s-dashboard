@@ -21,7 +21,9 @@ Architecture in one sentence: an **hourly pg_cron job** calls a new edge functio
 **`training-report`**, which owns all date logic (Asia/Dubai), computes the table from the
 Supabase mirror tables, renders HTML in the daily-reviews visual family, sends via Graph
 from `sera@2seasonshotels.com`, and records every attempt in **`report_runs`** — retrying
-until sent, so a report can be late but never silently absent.
+until sent, so a report can be late but is very unlikely to go silently absent (see the
+residual-limitation honesty note under Due-report logic below: absence is still possible
+if every attempt fails for the report's entire due window).
 
 ---
 
@@ -32,7 +34,7 @@ until sent, so a report can be late but never silently absent.
 | Hours metric | **Man-hours**: Σ(session duration × attendee count). A 2h session with 10 attendees = 20 hours. Targets are man-hour targets. (User-approved.) |
 | Attribution | **Session's department** (`training_sessions.department`) gets full credit for the session's trainers, attendees, and man-hours — one consistent grouping. (User-approved.) |
 | Delivery | **Graph `sendMail` from the edge app**: user grants application **Mail.Send** + `ApplicationAccessPolicy` restricted to the `sera@` mailbox, same IT-request flow as the July Sites.Selected grant. (User-approved over n8n-webhook relay and all-n8n.) |
-| Scheduler | **pg_cron hourly heartbeat** + idempotent send with grace-window retries (see Scheduling). n8n rejected for the silent-death failure mode; single-shot cron rejected because one bad hour = skipped month. |
+| Scheduler | **pg_cron hourly heartbeat** + claim-guarded send (atomic `report_runs` claim, at-least-once) retried through the due window (see Due-report logic). n8n rejected for the silent-death failure mode; single-shot cron rejected because one bad hour = skipped month. |
 | Targets | **Amended 2026-07-30 (user):** no target numbers exist — leave them empty. `training_targets` is still created and seeded with the 14 `DEPARTMENT_SECTIONS` departments (it doubles as the department universe for zero rows), all `monthly_target_hours` NULL. While **no** department has a target, the reminder email omits the Target/Gap/Status columns entirely and shows only the actually conducted trainings; the moment any target value is set, those columns appear with "—" + muted "No target" pill for unset departments. No code change needed to activate. |
 | "One week before month-end" | **last day − 7**, computed in Dubai time: 31-day → 24th, 30-day → 23rd, Feb → 21st (leap → 22nd). Exactly 7 full days remain after send day. |
 | Zero-training departments | **Shown as zero rows** (visible by design). Row universe = targets table ∪ departments active in the period; sorted by man-hours descending, zeros bottom. |
@@ -91,20 +93,40 @@ applies), `verify_jwt = true`, deployed with a self-verifying script modeled on
 
 **Due-report logic (all in Asia/Dubai, pure TS module `report-schedule.ts`, unit-tested):**
 
-- Monthly summary for month M−1: due on the 1st of M at 08:00; grace window 7 days.
-- Reminder for month M: due on `lastDay(M) − 7` at 08:00; grace window 3 days.
-- For each due report with no `sent` row in `report_runs`: compute → render → send via
-  Graph `POST /users/sera@2seasonshotels.com/sendMail`; upsert the `report_runs` row
-  (attempts++, status, `last_error` on failure). Sent later than the nominal day → the
-  email carries a visible **"Delayed — originally due {date}"** banner.
-- Outside a window or already sent → fast no-op.
+- Monthly summary for month M−1: due from the 1st of M at 08:00, and remains due for the
+  rest of month M (i.e. until month M itself ends) — not a short 7-day grace window.
+  `report_runs` makes a duplicate send impossible and a late report strictly dominates a
+  missing one, so there is no reason to stop retrying before the period that defines "M−1"
+  itself changes.
+- Reminder for month M: due from `lastDay(M) − 7` at 08:00, and remains due through the
+  last day of month M (never later — a reminder is meaningless once its month has closed).
+- For each due report: atomically claim the `report_runs` row (see Idempotency below),
+  compute → render → send via Graph `POST /users/sera@2seasonshotels.com/sendMail`, then
+  update the row (attempts++, status, `last_error` on failure). Sent later than the
+  nominal day → the email carries a visible **"Delayed — originally due {date}"** banner.
+- Outside a window, already sent, or already claimed by a concurrent invocation → fast
+  no-op (the last case counts separately as `skipped` in the cron response).
 
-**Failure modes, stated honestly:** a failed send retries every hour for the whole grace
-window (≈ dozens of attempts), each logged. Residual silent risk: pg_cron itself dying
-(the `whatsapp-auto-release` job has fired every minute since May — the best in-project
-evidence) or Graph being down for an entire window; both end as a permanent `failed` row
-in `report_runs` with `last_error`, never as an empty void. A skipped month is impossible
-without a queryable trace.
+**Idempotency, stated precisely:** `mode:'cron'` claim-guards each `(report_type, period)`
+before sending — an atomic conditional UPDATE on `report_runs` (status/updated_at as an
+optimistic-concurrency token) so two overlapping invocations (`mode:'cron'` accepts the
+public anon key, so overlap is deliberately reachable, not just a pg_cron-timing edge case)
+cannot both send the same report. This is **at-least-once, not exactly-once**: if the Graph
+`sendMail` call succeeds but its response is lost (network blip, function timeout) before
+the ledger write commits, the send already happened, the ledger will still read as
+unsent/failed, and the next hourly tick will retry — sending a second, genuine duplicate
+email. `report_runs`' unique key prevents duplicate **rows**, not duplicate **sends**.
+
+**Failure modes, stated honestly:** a failed send retries every hour for the rest of its due
+window (the whole remaining month, per the widened windows above — potentially hundreds of
+attempts), each logged. Residual silent risk, precisely stated: if **every** attempt fails
+for a report's **entire** due window — the whole of month M for that month's summary, or
+from `lastDay(M)-7` through month-end for that month's reminder — the window closes when the
+calendar rolls past it (the next `dueReports()` call is computing a *different* period) and
+the report is never attempted again. The only surviving trace is a permanent `failed` row in
+`report_runs` with `last_error` — nothing currently alerts on it, so an all-window outage is
+still a real (if now much narrower) way for a month to end up silently unsent in practice,
+even though it is never silently unsent in principle (a queryable trace always exists).
 
 **Aggregation (pure TS module `report-aggregator.ts`, unit-tested):** sessions where
 `training_date ∈ [monthStart+04:00, nextMonthStart+04:00)` via `fetchAllWithCap`;
@@ -154,15 +176,21 @@ user-approved test-send**.
 1. Migrations (targets + report_runs) with rollback twins → 2. function deployed →
 3. user performs Azure grant → 4. user triggers test-sends for both reports, real data →
 5. **only after user approval**, the cron migration (`cron.schedule('training-report-hourly',
-'0 * * * *', net.http_post …)`, precedent: `20260515151557_schedule_whatsapp_auto_release.sql`)
-goes live. **Amended at planning:** the cron call authenticates with the public anon key
-(the exact pattern of the live `whatsapp-auto-release` job) instead of a Vault-stored
-service-role key. This is safe by design, not by secrecy: `mode:'cron'` is idempotent
-(`report_runs` unique key), sends only to the fixed recipients, only within due windows,
-and returns counts only — an attacker holding the anon key (a public value) can at most
-trigger a due report a few minutes early. The function's own DB writes use the
-auto-injected `SUPABASE_SERVICE_ROLE_KEY`. This also removes the one manual key-handling
-step the Vault approach would have required.
+'0 * * * *', net.http_post …)`, precedent: the LIVE `whatsapp-auto-release-every-minute`
+cron.job row) goes live. **Amended at planning:** the cron call authenticates with the
+public anon key (the exact pattern of the live `whatsapp-auto-release` job — note this is
+the live job's own hardcoded-anon-key literal, not the pattern in its *committed migration
+file*, which instead reads a `service_role_key` GUC that is not configured on this
+project) instead of a Vault-stored service-role key. This is safe by design, not by
+secrecy: `mode:'cron'` is **claim-guarded** — an atomic conditional update on `report_runs`
+stops two overlapping invocations from both sending — sends only to the fixed recipients,
+only within due windows, and returns counts only — an attacker holding the anon key (a
+public value) can at most trigger a due report a few minutes early. Precisely: the claim
+guard prevents duplicate **sends** from overlapping invocations; it is **at-least-once**,
+not exactly-once, because a Graph response lost after a successful send still causes a
+genuine retry-driven duplicate (see Idempotency above). The function's own DB writes use
+the auto-injected `SUPABASE_SERVICE_ROLE_KEY`. This also removes the one manual
+key-handling step the Vault approach would have required.
 
 Rollback: `cron.unschedule` (rollback file), drop tables (rollback files), delete the
 function; revoking Mail.Send in Azure kills sending instantly. Sent emails are unaffected.
