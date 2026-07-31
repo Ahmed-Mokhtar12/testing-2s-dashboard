@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
 import { dailySeries, countBy, fetchAllRows } from './utils';
+import { emailUniqueGuests } from './definitions';
 
 const QUERY_STALE_TIME = 5 * 60 * 1000;
 const QUERY_GC_TIME = 10 * 60 * 1000;
@@ -27,7 +28,9 @@ export function useEmailInsights() {
 
       const newEmails = rows.filter((r) => r.email_type === 'new').length;
       const replyEmails = rows.filter((r) => r.email_type === 'reply').length;
-      const uniqueGuests = new Set(rows.map((r) => r.guest_email).filter(Boolean)).size;
+      // Shared, case-insensitive definition — pinned against Sera's
+      // emails-aggregator by tests/unit/definition-divergence.test.ts.
+      const uniqueGuests = emailUniqueGuests(rows);
 
       const newRows = rows.filter((r) => r.email_type === 'new');
       const replyRows = rows.filter((r) => r.email_type === 'reply');

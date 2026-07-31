@@ -17,7 +17,11 @@ export function aggregateEmails(rows: EmailRow[]): EmailsSummary {
   const byDay = new Map<string, number>();
   let newE = 0, reply = 0;
   for (const r of rows) {
-    if (r.guest_email) guests.add(r.guest_email.toLowerCase());
+    // Trim as well as lowercase, matching src/hooks/insights/definitions.ts —
+    // a whitespace-only guest_email is truthy and would otherwise be counted
+    // here as a distinct guest but skipped on the dashboard. Pinned by
+    // tests/unit/definition-divergence.test.ts.
+    if (r.guest_email && r.guest_email.trim() !== '') guests.add(r.guest_email.trim().toLowerCase());
     if (r.email_type === 'new') newE++;
     else if (r.email_type === 'reply') reply++;
     const cat = r.category?.trim() || 'uncategorized';
