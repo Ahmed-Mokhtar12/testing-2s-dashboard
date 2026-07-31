@@ -8,6 +8,13 @@
 
 import type { ReportData, DeptReportRow } from './report-aggregator.ts';
 
+export interface OutstandingFailure {
+  reportType: string;
+  period: string;
+  attempts: number;
+  lastError: string | null;
+}
+
 export interface RenderReportEmailOptions {
   reportType: 'monthly_summary' | 'reminder';
   periodLabel: string;        // e.g. "July 2026"
@@ -16,6 +23,11 @@ export interface RenderReportEmailOptions {
   dueDate: string;            // YYYY-MM-DD
   daysLeftInMonth?: number;
   testMode?: boolean;
+  // Other (report_type, period) rows currently sitting 'failed' in
+  // report_runs, excluding the one this email itself covers. Rendered as a
+  // prominent warning block near the top of the email when non-empty — see
+  // index.ts's fetchOutstandingFailures for how this is populated.
+  outstandingFailures?: OutstandingFailure[];
 }
 
 export interface RenderedReportEmail {
@@ -100,6 +112,45 @@ function dataRow(row: DeptReportRow, anyTargetSet: boolean): string {
   return `<tr>${cells}\n      </tr>`;
 }
 
+const REPORT_TYPE_LABEL: Record<string, string> = {
+  monthly_summary: 'Monthly summary',
+  reminder: 'Reminder',
+};
+
+const LAST_ERROR_MAX_CHARS = 160;
+
+function truncateError(err: string | null): string {
+  if (!err) return '(no error recorded)';
+  return err.length > LAST_ERROR_MAX_CHARS ? `${err.slice(0, LAST_ERROR_MAX_CHARS)}…` : err;
+}
+
+// "Unsent reports need attention" — the remedy for the residual silent-failure
+// gap: a report whose entire due window fails leaves a permanent 'failed' row
+// in report_runs that nothing alerts on. The next email that DOES go out
+// mentions it, using the same red/amber alert palette already established by
+// pctTone's red tier and the delayed banner below (#2b151d / #5f2934 /
+// #fecdd3). Renders nothing when the array is empty or omitted.
+function outstandingFailuresBanner(failures?: OutstandingFailure[]): string {
+  if (!failures || failures.length === 0) return '';
+  const items = failures.map((f) => {
+    const label = REPORT_TYPE_LABEL[f.reportType] ?? f.reportType;
+    return `
+              <li style="margin:0 0 6px 0;">
+                <strong>${esc(label)}</strong> for <strong>${esc(f.period)}</strong> — ${esc(f.attempts)} failed attempt(s). Last error: ${esc(truncateError(f.lastError))}
+              </li>`;
+  }).join('');
+  return `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
+        <tr>
+          <td style="background:#2b151d;border:1px solid #5f2934;color:#fecdd3;border-radius:16px;padding:12px 16px;font-size:13px;">
+            <div style="font-weight:700;margin-bottom:6px;">Unsent reports need attention</div>
+            <ul style="margin:0;padding-left:18px;">${items}
+            </ul>
+          </td>
+        </tr>
+      </table>`;
+}
+
 function subjectFor(opts: RenderReportEmailOptions): string {
   const base = opts.reportType === 'monthly_summary'
     ? `2S Monthly Training Summary — ${opts.periodLabel}`
@@ -114,6 +165,8 @@ export function renderReportEmail(opts: RenderReportEmailOptions): RenderedRepor
   const headline = opts.reportType === 'monthly_summary'
     ? `${esc(opts.periodLabel)} training summary`
     : `${esc(opts.daysLeftInMonth ?? 0)} days left in ${esc(opts.periodLabel)}`;
+
+  const outstandingBanner = outstandingFailuresBanner(opts.outstandingFailures);
 
   const delayedBanner = opts.delayed
     ? `
@@ -154,6 +207,7 @@ export function renderReportEmail(opts: RenderReportEmailOptions): RenderedRepor
             <td style="background:#0b1628;border:1px solid #22334a;border-radius:24px;padding:28px;font-family:Arial,Helvetica,sans-serif;">
               <p style="margin:0 0 8px 0;font-size:11px;color:#7dd3fc;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Hotel Training Console</p>
               <p style="margin:0 0 20px 0;font-size:24px;color:#ffffff;font-weight:700;">${headline}</p>
+              ${outstandingBanner}
               ${delayedBanner}
               ${kpiRow}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">

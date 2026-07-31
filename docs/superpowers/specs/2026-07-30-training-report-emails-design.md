@@ -161,6 +161,24 @@ the report is never attempted again. The only surviving trace is a permanent `fa
 still a real (if now much narrower) way for a month to end up silently unsent in practice,
 even though it is never silently unsent in principle (a queryable trace always exists).
 
+**Outstanding-failure banner (added 2026-07-31), and its honest limit:** before rendering
+*any* report — `mode:'cron'`, `mode:'send'`, and (deliberately) `mode:'test'` too, so an
+admin can actually see the banner working before trusting it — the function queries
+`report_runs` for other `(report_type, period)` rows still sitting `'failed'`, oldest period
+first, capped at 5, and renders them as a prominent "Unsent reports need attention" block
+near the top of the email (report, period, attempt count, truncated last error). This is
+exactly the remedy the residual gap above calls for: the next report that succeeds surfaces
+the one that didn't. **What it does NOT fix, stated plainly:** the banner only ever reaches
+an inbox by riding along inside an email that itself successfully sends. If Graph `sendMail`
+(or the Azure credentials, or the network path to Graph) is broken for *every* attempt across
+*every* report — not just one report's window, but the whole feature — then nothing ever
+sends, and therefore the banner announcing that nothing is sending never arrives either. The
+`report_runs` table still holds the truth in that scenario (queryable, not silently empty),
+but no human is proactively notified. Closing that last gap for real would require an
+alerting channel that does not depend on this feature's own email delivery working — e.g. a
+Slack/Teams webhook, a separate monitoring email address, or a dashboard alert tile — which
+is explicitly out of scope here (see Out of Scope below).
+
 **Aggregation (pure TS module `report-aggregator.ts`, unit-tested):** sessions where
 `training_date ∈ [monthStart+04:00, nextMonthStart+04:00)` via `fetchAllWithCap`;
 participants fetched by `training_id`. Per session-department: trainers = distinct
@@ -238,5 +256,8 @@ function; revoking Mail.Send in Azure kills sending instantly. Sent emails are u
 - No SharePoint reads — the Supabase mirror is the reporting source (same decision as the
   Sera training query tool), with the data-quality footnote as the honesty valve.
 - No changes to existing n8n workflows or the daily reviews email.
-- No alerting side-channel beyond `report_runs` + delayed-send banners (any extra channel
-  would share the same failure domains it is meant to watch).
+- No alerting side-channel beyond `report_runs` + delayed-send/outstanding-failure banners
+  (any extra channel would share the same failure domains it is meant to watch) — see the
+  honest limitation noted under Failure modes above: a total email-delivery outage means
+  even the outstanding-failure banner never arrives, since it can only ride along inside a
+  report that itself sends successfully.

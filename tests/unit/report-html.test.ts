@@ -100,3 +100,61 @@ test('HTML-escapes department names', () => {
   assert.match(r.html, /F&amp;B &lt;script&gt;/);
   assert.doesNotMatch(r.html, /<script>/);
 });
+
+test('outstanding-failures banner absent when the array is empty or omitted', () => {
+  const omitted = renderReportEmail({
+    reportType: 'monthly_summary', periodLabel: 'July 2026',
+    data: data(), delayed: false, dueDate: '2026-08-01',
+  });
+  assert.doesNotMatch(omitted.html, /Unsent reports need attention/);
+
+  const empty = renderReportEmail({
+    reportType: 'monthly_summary', periodLabel: 'July 2026',
+    data: data(), delayed: false, dueDate: '2026-08-01', outstandingFailures: [],
+  });
+  assert.doesNotMatch(empty.html, /Unsent reports need attention/);
+});
+
+test('outstanding-failures banner present with report/period/attempts when populated', () => {
+  const { html } = renderReportEmail({
+    reportType: 'monthly_summary', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-09-01',
+    outstandingFailures: [
+      { reportType: 'reminder', period: '2026-07', attempts: 42, lastError: 'Graph 403 ErrorAccessDenied' },
+    ],
+  });
+  assert.match(html, /Unsent reports need attention/);
+  assert.match(html, /Reminder/);
+  assert.match(html, /2026-07/);
+  assert.match(html, /42 failed attempt\(s\)/);
+  assert.match(html, /Graph 403 ErrorAccessDenied/);
+  // Renders above the delayed banner slot, i.e. near the top of the card.
+  assert.ok(html.indexOf('Unsent reports need attention') < html.indexOf('Department'));
+});
+
+test('outstanding-failures banner truncates a long last_error and HTML-escapes it', () => {
+  const longError = `<script>alert(1)</script> ${'x'.repeat(300)}`;
+  const { html } = renderReportEmail({
+    reportType: 'monthly_summary', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-09-01',
+    outstandingFailures: [
+      { reportType: 'monthly_summary', period: '2026-06', attempts: 3, lastError: longError },
+    ],
+  });
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  // Truncated to ~160 chars: the tail of the 300-char run of x's must be gone.
+  assert.ok(!html.includes('x'.repeat(300)));
+  assert.match(html, /…/);
+});
+
+test('outstanding-failures banner handles a null last_error', () => {
+  const { html } = renderReportEmail({
+    reportType: 'monthly_summary', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-09-01',
+    outstandingFailures: [
+      { reportType: 'reminder', period: '2026-07', attempts: 1, lastError: null },
+    ],
+  });
+  assert.match(html, /no error recorded/);
+});

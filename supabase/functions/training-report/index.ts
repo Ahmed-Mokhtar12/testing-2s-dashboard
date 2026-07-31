@@ -8,6 +8,7 @@ import { dueReports, dubaiToday, lastDayOfMonth, reminderDay, nextDayDubaiMidnig
 import type { DueReport } from './report-schedule.ts';
 import { aggregateReport } from './report-aggregator.ts';
 import { renderReportEmail } from './report-html.ts';
+import type { OutstandingFailure } from './report-html.ts';
 
 const SENDER = 'sera@2seasonshotels.com';
 const RECIPIENTS = [
@@ -257,6 +258,59 @@ interface RequestBody {
   confirm?: boolean;
 }
 
+// --- Outstanding-failure banner ---------------------------------------------
+// Closes a silent-failure gap: a report whose ENTIRE due window fails leaves
+// a permanent 'failed' row in report_runs that nothing alerts on (see the
+// "Failure modes" honesty note in the design spec). The remedy: the next
+// email that DOES successfully go out mentions any other outstanding failed
+// (report_type, period) rows, so a human sees it instead of the failure
+// staying invisible forever. This only helps once *something* succeeds —
+// documented as a residual limitation in the design spec.
+// (OutstandingFailure itself is defined in report-html.ts, the module that
+// actually renders it, and imported here as a type-only import.)
+
+// Fetches failed report_runs rows other than the one currently being sent,
+// oldest period first, capped at 5. A query error is swallowed (never let
+// this block a real send — the banner is a nice-to-have, not a gate) but
+// reported back via `queryFailed` so callers can log/surface it rather than
+// silently pretending there were zero outstanding failures.
+async function fetchOutstandingFailures(
+  db: ReturnType<typeof serviceClient>,
+  excludeReportType: string,
+  excludePeriod: string,
+): Promise<{ failures: OutstandingFailure[]; queryFailed: boolean }> {
+  const { data, error } = await db
+    .from('report_runs')
+    .select('report_type, period, attempts, last_error')
+    .eq('status', 'failed')
+    .order('period', { ascending: true });
+  if (error) {
+    console.error('outstanding-failures query failed (banner omitted for this send):', JSON.stringify(error));
+    return { failures: [], queryFailed: true };
+  }
+  const rows = (data ?? []) as { report_type: string; period: string; attempts: number; last_error: string | null }[];
+  const failures = rows
+    .filter((r) => !(r.report_type === excludeReportType && r.period === excludePeriod))
+    .slice(0, 5)
+    .map((r) => ({ reportType: r.report_type, period: r.period, attempts: r.attempts, lastError: r.last_error }));
+  return { failures, queryFailed: false };
+}
+
+// Total count of currently-outstanding failed rows, for the cron response's
+// monitoring field (`outstandingFailures: n`) — independent of any single
+// report's exclusion above. Returns null (never blocks) on query error.
+async function countFailedReportRuns(db: ReturnType<typeof serviceClient>): Promise<number | null> {
+  const { count, error } = await db
+    .from('report_runs')
+    .select('report_type', { count: 'exact', head: true })
+    .eq('status', 'failed');
+  if (error) {
+    console.error('failed-run count query failed:', JSON.stringify(error));
+    return null;
+  }
+  return count ?? 0;
+}
+
 async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   const caller = await getCallerUser(req);
   if (!caller) return json(req, { error: 'Not authenticated.' }, 401);
@@ -275,6 +329,11 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   const db = serviceClient();
   const { sessions, participants, targets } = await fetchReportData(db, resolved.rangeFromISO, resolved.rangeToExclusiveISO);
   const data = aggregateReport(sessions, participants, targets);
+  // Deliberately included in test mode too (not just cron/send): this is the
+  // only mode an admin can trigger on demand without touching the real
+  // ledger, so it doubles as the way to SEE the banner actually working
+  // before trusting it in a real send.
+  const { failures: outstandingFailures } = await fetchOutstandingFailures(db, resolved.reportType, resolved.period);
   const { subject, html } = renderReportEmail({
     reportType: resolved.reportType,
     periodLabel: resolved.periodLabel,
@@ -283,11 +342,12 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
     dueDate: resolved.dueDate,
     daysLeftInMonth: resolved.daysLeftInMonth,
     testMode: true,
+    outstandingFailures,
   });
 
   const token = await getAppToken();
   await sendMail(token, [caller.email], subject, html);
-  return json(req, { ok: true, sentTo: caller.email, subject, period: resolved.period });
+  return json(req, { ok: true, sentTo: caller.email, subject, period: resolved.period, outstandingFailures: outstandingFailures.length });
 }
 
 // Writes the (report_type, period) ledger row's outcome. The row is always
@@ -389,6 +449,7 @@ async function runDueReport(
   report: DueReport,
   attempts: number,
   tokenFor: () => Promise<string>,
+  outstandingFailures: OutstandingFailure[] = [],
 ): Promise<{ outcome: 'sent' | 'failed'; ledgerOk: boolean; error?: string }> {
   try {
     const { sessions, participants, targets } = await fetchReportData(db, report.rangeFromISO, report.rangeToExclusiveISO);
@@ -401,6 +462,7 @@ async function runDueReport(
       delayed: report.delayed,
       dueDate: report.dueDate,
       daysLeftInMonth: report.daysLeftInMonth,
+      outstandingFailures,
     });
 
     const token = await tokenFor();
@@ -423,7 +485,7 @@ async function runDueReport(
   }
 }
 
-async function handleCron(): Promise<{ due: number; sent: number; failed: number; skipped: number; ledgerErrors: number }> {
+async function handleCron(): Promise<{ due: number; sent: number; failed: number; skipped: number; ledgerErrors: number; outstandingFailures: number }> {
   const due = dueReports(Date.now());
   const db = serviceClient();
 
@@ -445,12 +507,17 @@ async function handleCron(): Promise<{ due: number; sent: number; failed: number
     const claim = await claimRun(db, report);
     if (!claim) { skipped++; continue; }
 
-    const { outcome, ledgerOk } = await runDueReport(db, report, claim.attempts, tokenFor);
+    // Queried fresh right before each render (not once for the whole loop):
+    // an earlier report in THIS same run that just failed should already be
+    // visible in a later report's banner within the same invocation.
+    const { failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.period);
+    const { outcome, ledgerOk } = await runDueReport(db, report, claim.attempts, tokenFor, outstandingFailures);
     if (outcome === 'sent') sent++; else failed++;
     if (!ledgerOk) ledgerErrors++;
   }
 
-  return { due: due.length, sent, failed, skipped, ledgerErrors };
+  const outstandingFailures = await countFailedReportRuns(db);
+  return { due: due.length, sent, failed, skipped, ledgerErrors, outstandingFailures: outstandingFailures ?? 0 };
 }
 
 // mode:'send' — deliberate, operator-triggered, real one-off send.
@@ -535,17 +602,19 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
     }, 409);
   }
 
+  const { failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.period);
+
   let cachedToken: string | null = null;
   const tokenFor = async () => {
     if (!cachedToken) cachedToken = await getAppToken();
     return cachedToken;
   };
 
-  const { outcome, error } = await runDueReport(db, report, claim.attempts, tokenFor);
+  const { outcome, error } = await runDueReport(db, report, claim.attempts, tokenFor, outstandingFailures);
   if (outcome === 'failed') {
     return json(req, { error: error ?? 'Send failed.', period: resolved.period }, 500);
   }
-  return json(req, { ok: true, sent: 1, period: resolved.period, recipients: RECIPIENTS });
+  return json(req, { ok: true, sent: 1, period: resolved.period, recipients: RECIPIENTS, outstandingFailures: outstandingFailures.length });
 }
 
 Deno.serve(async (req) => {
