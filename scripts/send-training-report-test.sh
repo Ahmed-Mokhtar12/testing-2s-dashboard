@@ -9,7 +9,12 @@
 #   report  monthly, reminder, or both (default: both)
 #   period  optional YYYY-MM override; omit to let the function pick the
 #           natural period (previous month for monthly, current month for
-#           reminder)
+#           reminder) — NOTE: as of this writing the natural monthly period
+#           is 2026-06, which has ZERO training sessions. All real training
+#           data is dated 2026-07-29. To preview against real data, pass the
+#           period explicitly:
+#
+#             ./scripts/send-training-report-test.sh both 2026-07
 #
 # Admin access token, tried in order:
 #   1. TRAINING_REPORT_JWT env var, if already set.
@@ -49,6 +54,12 @@ if [ -n "$PERIOD" ] && ! [[ "$PERIOD" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]]; then
   exit 1
 fi
 
+if [ -z "$PERIOD" ]; then
+  echo "No period given — using each report's natural period (previous month for monthly, current month for reminder)." >&2
+  echo "That natural period may be EMPTY (e.g. 2026-06 has zero training sessions). All real data is dated 2026-07-29 —" >&2
+  echo "pass '2026-07' explicitly to preview against it, e.g.: $0 both 2026-07" >&2
+fi
+
 fallback_and_die() {
   echo "" >&2
   echo "Could not obtain an admin access token via password login." >&2
@@ -59,9 +70,16 @@ fallback_and_die() {
   echo "" >&2
   echo "     JSON.parse(localStorage.getItem('sb-yczcebfaqerlwfalrbjn-auth-token')).access_token" >&2
   echo "" >&2
-  echo "  3. Copy the printed token (no quotes) and re-run:" >&2
+  echo "  3. Copy the printed token (no quotes). In this shell, run these two lines" >&2
+  echo "     (NOT 'TRAINING_REPORT_JWT=<token> $0 ...' — an env-assignment prefix on a" >&2
+  echo "     command line gets recorded in ~/.bash_history):" >&2
   echo "" >&2
-  echo "     TRAINING_REPORT_JWT=<paste-token-here> $0 $REPORT $PERIOD" >&2
+  echo "     read -rs TRAINING_REPORT_JWT; export TRAINING_REPORT_JWT" >&2
+  echo "     (paste the token, press Enter — it is not echoed or saved to disk)" >&2
+  echo "" >&2
+  echo "  4. Then re-run with no prefix (the script reads the exported var):" >&2
+  echo "" >&2
+  echo "     $0 $REPORT $PERIOD" >&2
   echo "" >&2
   exit 1
 }
@@ -79,14 +97,29 @@ obtain_jwt() {
   read -rs -p "Password (not echoed): " LOGIN_PASSWORD
   echo "" >&2
 
-  local resp status body
-  resp=$(curl -sS -w '\n%{http_code}' \
+  # Build the login body with python3 instead of hand-spliced JSON:
+  #   - avoids malformed JSON if the password contains a quote/backslash
+  #     (fixes the GoTrue-4xx-then-confusing-fallback failure mode)
+  #   - and, combined with piping it into curl via --data-binary @- below,
+  #     keeps the password out of curl's argv entirely
+  # The password is handed to python3 via an env-var prefix (LOGIN_PASSWORD=...
+  # python3 ...), not a CLI argument: that only sets the *child* python3
+  # process's environment, which is exposed via /proc/<pid>/environ —
+  # readable only by this user (and root) — never via /proc/<pid>/cmdline,
+  # which is world-readable for the life of the process. Unset immediately
+  # after use to shrink the exposure window further.
+  local resp status body payload
+  payload=$(LOGIN_EMAIL="$LOGIN_EMAIL" LOGIN_PASSWORD="$LOGIN_PASSWORD" python3 -c 'import json, os
+print(json.dumps({"email": os.environ["LOGIN_EMAIL"], "password": os.environ["LOGIN_PASSWORD"]}))')
+  unset LOGIN_PASSWORD
+
+  resp=$(printf '%s' "$payload" | curl -sS -w '\n%{http_code}' \
     -X POST "$PROJECT_URL/auth/v1/token?grant_type=password" \
     -H "apikey: $ANON_KEY" \
     -H "Authorization: Bearer $ANON_KEY" \
     -H "Content-Type: application/json" \
-    -d "{\"email\":\"$LOGIN_EMAIL\",\"password\":\"$LOGIN_PASSWORD\"}")
-  unset LOGIN_PASSWORD
+    --data-binary @-)
+  unset payload
 
   status="${resp##*$'\n'}"
   body="${resp%$'\n'*}"
@@ -127,11 +160,16 @@ send_one() {
 
   echo ""
   echo "=== Sending TEST $report report ${PERIOD:+(period $PERIOD) }==="
+  # Auth headers (admin JWT + anon key) go through a curl --config file fed
+  # via process substitution, NOT -H flags: -H values land in this curl
+  # process's argv, which is world-readable via /proc/<pid>/cmdline for the
+  # life of the request. The config-file approach keeps the JWT out of argv
+  # entirely. (The anon key isn't sensitive — it's the same public value
+  # hardcoded above — but it rides along in the same file for simplicity.)
   local resp status http_body
   resp=$(curl -sS -w '\n%{http_code}' \
+    --config <(printf 'header = "Authorization: Bearer %s"\nheader = "apikey: %s"\n' "$JWT" "$ANON_KEY") \
     -X POST "$FUNCTION_URL" \
-    -H "Authorization: Bearer $JWT" \
-    -H "apikey: $ANON_KEY" \
     -H "Content-Type: application/json" \
     -d "$body")
   status="${resp##*$'\n'}"
