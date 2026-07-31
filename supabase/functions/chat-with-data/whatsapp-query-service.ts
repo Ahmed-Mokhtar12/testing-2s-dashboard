@@ -15,7 +15,7 @@ export class WhatsAppQueryService {
   getAvailableFunctions() {
     return [{
       name: WHATSAPP_TOOL_NAME,
-      description: "Query guest WhatsApp conversations (the dashboard's Chat History table). Returns EXACT computed statistics: total messages, unique guests, human vs AI handled, per-day breakdown, and optional message samples. ALWAYS use this tool for ANY question about WhatsApp messages, guest chats, conversations, or senders. Never estimate chat numbers yourself.",
+      description: "Query guest WhatsApp conversations (the dashboard's Chat History table). Returns EXACT computed statistics: total messages, unique guests, human vs AI handled, per-day breakdown, and optional message samples. ALWAYS use this tool for ANY question about WhatsApp messages, guest chats, conversations, or senders. Never estimate chat numbers yourself. For human-vs-AI questions, read the `handling` object: it names which signal the figures came from and carries `instruction_to_model`, which you MUST follow verbatim when present — older rows only have a flag that overstates human handling.",
       parameters: {
         type: 'object',
         properties: {
@@ -47,7 +47,7 @@ export class WhatsAppQueryService {
       );
       const { rows: data, exactCount, error } = await fetchAllWithCap<any>((from, to, withCount) => {
         let q = supabase.from('Chat History')
-          .select('created_at,"Sender Number",Name,"Sender Message","Ai Reply",human_reply,is_human_controlled', withCount ? { count: 'exact' } : {})
+          .select('created_at,"Sender Number",Name,"Sender Message","Ai Reply",human_reply,is_human_controlled,handled_by', withCount ? { count: 'exact' } : {})
           .order('created_at', { ascending: false })
           .order('id', { ascending: false })
           .range(from, to);
@@ -66,8 +66,16 @@ export class WhatsAppQueryService {
         });
         return emptyResultPayload(kind, { date_from: args?.date_from ?? null, date_to: args?.date_to ?? null });
       }
+      const nonBlank = (v: unknown) => typeof v === 'string' && v.trim() !== '';
       const summary = aggregateWhatsApp(data.map((r: any) => ({
-        created_at: r.created_at, sender: r['Sender Number'] ?? 'unknown', name: r.Name ?? null, humanControlled: !!r.is_human_controlled,
+        created_at: r.created_at, sender: r['Sender Number'] ?? 'unknown', name: r.Name ?? null,
+        humanControlled: !!r.is_human_controlled,
+        // Anything outside the CHECK constraint's three values is treated as
+        // unstamped rather than trusted — the column is only useful if an
+        // unexpected value degrades to "unknown".
+        handledBy: r.handled_by === 'ai' || r.handled_by === 'human' || r.handled_by === 'system'
+          ? r.handled_by : null,
+        hasReply: nonBlank(r.human_reply) || nonBlank(r['Ai Reply']),
       })));
       const result: any = {
         status: 'ok',
