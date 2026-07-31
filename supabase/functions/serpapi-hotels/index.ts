@@ -1,7 +1,12 @@
 // VENDORED from the deployed function (slug: serpapi-hotels, version: 20) on 2026-07-31.
 // Recovered because the March revert left this function deployed with no repo
-// source. This file is a verbatim record of production, not a reviewed source
-// of truth — do NOT redeploy from it without reviewing it first.
+// source. Reviewed on 2026-07-31 and is now the source of truth for this
+// function. Security fix (2026-07-31): set verify_jwt = true at the gateway —
+// the code is otherwise byte-for-byte what version 20 was running, and it needs
+// no URL allowlist of its own: the SerpApi query is built server-side from the
+// six-entry HOTEL_MAP below and an unknown hotel key is already a hard 400.
+// The exposure that was closed was purely the anonymous-caller one (burning
+// SerpApi credits), not an arbitrary-target one.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

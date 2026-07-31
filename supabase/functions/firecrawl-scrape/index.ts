@@ -1,10 +1,15 @@
 // VENDORED from the deployed function (slug: firecrawl-scrape, version: 37) on 2026-07-31.
 // Recovered because the March revert left this function deployed with no repo
 // source. Reviewed on 2026-07-31 and is now the source of truth for this
-// function. Security fix (2026-07-31): set verify_jwt = true at the gateway
-// (no code change). Residual: this function still accepts an arbitrary
-// caller-supplied `url` from any authenticated caller and will fetch it via
-// Firecrawl — that is unchanged and known to the owner.
+// function. Security fixes (2026-07-31), in two steps:
+//   1. verify_jwt = true at the gateway (no code change) — no anonymous callers.
+//   2. the caller-supplied `url` is now checked against a fixed host allowlist
+//      (./url-allowlist.ts) instead of being fetched as given, so an
+//      authenticated caller can no longer aim the account's Firecrawl key at an
+//      arbitrary target. The old competitor-rates workstream this function
+//      served is retired; nothing in this repo has ever called it.
+
+import { resolveScrapeUrl } from './url-allowlist.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,9 +24,11 @@ Deno.serve(async (req) => {
   try {
     const { url, options } = await req.json();
 
-    if (!url) {
+    // Allowlist check BEFORE anything else touches the key or the network.
+    const target = resolveScrapeUrl(url);
+    if (!target.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: 'URL is required' }),
+        JSON.stringify({ success: false, error: target.error }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -35,10 +42,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    let formattedUrl = url.trim();
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-      formattedUrl = `https://${formattedUrl}`;
-    }
+    // The validated, parsed URL — not the raw input. Scheme-prefixing for bare
+    // hosts moved into resolveScrapeUrl so the check and the fetch cannot drift.
+    const formattedUrl = target.url;
 
     console.log('Scraping URL:', formattedUrl);
 

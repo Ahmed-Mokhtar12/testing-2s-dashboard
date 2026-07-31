@@ -77,10 +77,16 @@ verify_jwt = true
 
 # The six blocks below vendor the deployed verify_jwt state for functions that
 # had no repo source until 2026-07-31 (see supabase/functions/<slug>/index.ts
-# header comments). On 2026-07-31, firecrawl-scrape, browserless-scrape and
-# export-booking-inquiries were reviewed and locked down to verify_jwt = true.
-# serpapi-hotels and sheraton-marriott-browser are unchanged and still mirror
-# production as of that date.
+# header comments). All six now require a JWT: firecrawl-scrape,
+# browserless-scrape and export-booking-inquiries were locked down first, then
+# serpapi-hotels; sheraton-marriott-browser and instagram-token-service were
+# already verify_jwt = true in production and were not touched.
+#
+# NOTE: these six were the *unaccounted-for* public functions, not every public
+# function on the project. execute-n8n-action, whatsapp-web-chat,
+# whatsapp-auto-release and whatsapp-control-status are still verify_jwt = false
+# by design — they are called by n8n / pg_cron with no user JWT and carry their
+# own in-body auth. They are deliberate, not leftovers.
 
 [functions.firecrawl-scrape]
 verify_jwt = true
@@ -88,9 +94,8 @@ verify_jwt = true
 [functions.browserless-scrape]
 verify_jwt = true
 
-# Public (verify_jwt = false in production) — flagged for review.
 [functions.serpapi-hotels]
-verify_jwt = false
+verify_jwt = true
 
 [functions.export-booking-inquiries]
 verify_jwt = true
