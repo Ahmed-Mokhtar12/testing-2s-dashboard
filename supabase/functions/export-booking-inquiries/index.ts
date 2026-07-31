@@ -1,7 +1,9 @@
 // VENDORED from the deployed function (slug: export-booking-inquiries, version: 9) on 2026-07-31.
 // Recovered because the March revert left this function deployed with no repo
-// source. This file is a verbatim record of production, not a reviewed source
-// of truth — do NOT redeploy from it without reviewing it first.
+// source. Reviewed on 2026-07-31 and is now the source of truth for this
+// function. Security fix (2026-07-31): set verify_jwt = true at the gateway
+// as defence-in-depth (no code change; the internal auth.getUser() +
+// is_hotel_staff RPC gate below was already correct and fail-closed).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 

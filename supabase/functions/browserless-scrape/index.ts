@@ -1,7 +1,10 @@
 // VENDORED from the deployed function (slug: browserless-scrape, version: 38) on 2026-07-31.
 // Recovered because the March revert left this function deployed with no repo
-// source. This file is a verbatim record of production, not a reviewed source
-// of truth — do NOT redeploy from it without reviewing it first.
+// source. Reviewed on 2026-07-31 and is now the source of truth for this
+// function. Security fix (2026-07-31): removed the caller-supplied `url`
+// bypass — the scrape target must now come from the HOTEL_URLS allowlist,
+// and an unknown `hotel` is a hard 400 — and set verify_jwt = true at the
+// gateway so the function can no longer be invoked anonymously.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +16,6 @@ interface ScrapeRequest {
   checkIn: string;
   checkOut: string;
   hotelCode?: string;
-  url?: string;
 }
 
 interface PriceEntry {
@@ -281,7 +283,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json() as ScrapeRequest;
-    const { hotel, checkIn, checkOut, hotelCode, url: directUrl } = body;
+    const { hotel, checkIn, checkOut, hotelCode } = body;
 
     if (!hotel || !checkIn || !checkOut) {
       return new Response(
@@ -291,14 +293,14 @@ Deno.serve(async (req) => {
     }
 
     const urlBuilder = HOTEL_URLS[hotel];
-    if (!urlBuilder && !directUrl) {
+    if (!urlBuilder) {
       return new Response(
         JSON.stringify({ success: false, error: `Unknown hotel: ${hotel}. Use: ${Object.keys(HOTEL_URLS).join(', ')}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const targetUrl = directUrl || urlBuilder(checkIn, checkOut, hotelCode);
+    const targetUrl = urlBuilder(checkIn, checkOut, hotelCode);
     console.log(`🏨 Scraping ${hotel}: ${targetUrl}`);
 
     const html = await scrapeWithBrowserless(apiKey, targetUrl);

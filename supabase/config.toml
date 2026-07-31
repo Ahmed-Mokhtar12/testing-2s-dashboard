@@ -77,23 +77,23 @@ verify_jwt = true
 
 # The six blocks below vendor the deployed verify_jwt state for functions that
 # had no repo source until 2026-07-31 (see supabase/functions/<slug>/index.ts
-# header comments). These values mirror production; they do not change it.
+# header comments). On 2026-07-31, firecrawl-scrape, browserless-scrape and
+# export-booking-inquiries were reviewed and locked down to verify_jwt = true.
+# serpapi-hotels and sheraton-marriott-browser are unchanged and still mirror
+# production as of that date.
 
-# Public (verify_jwt = false in production) — flagged for review.
 [functions.firecrawl-scrape]
-verify_jwt = false
+verify_jwt = true
 
-# Public (verify_jwt = false in production) — flagged for review.
 [functions.browserless-scrape]
-verify_jwt = false
+verify_jwt = true
 
 # Public (verify_jwt = false in production) — flagged for review.
 [functions.serpapi-hotels]
 verify_jwt = false
 
-# Public (verify_jwt = false in production) — flagged for review.
 [functions.export-booking-inquiries]
-verify_jwt = false
+verify_jwt = true
 
 [functions.sheraton-marriott-browser]
 verify_jwt = true

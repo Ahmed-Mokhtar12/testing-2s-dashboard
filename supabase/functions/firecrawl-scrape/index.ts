@@ -1,7 +1,10 @@
 // VENDORED from the deployed function (slug: firecrawl-scrape, version: 37) on 2026-07-31.
 // Recovered because the March revert left this function deployed with no repo
-// source. This file is a verbatim record of production, not a reviewed source
-// of truth — do NOT redeploy from it without reviewing it first.
+// source. Reviewed on 2026-07-31 and is now the source of truth for this
+// function. Security fix (2026-07-31): set verify_jwt = true at the gateway
+// (no code change). Residual: this function still accepts an arbitrary
+// caller-supplied `url` from any authenticated caller and will fetch it via
+// Firecrawl — that is unchanged and known to the owner.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
