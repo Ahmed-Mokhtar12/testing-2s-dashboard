@@ -22,6 +22,13 @@ function serverStub(totalRows: number, opts: { serverMaxRows?: number; failOnPag
   return { fetchPage, calls };
 }
 
+// 7888 is a FIXTURE, not live ground truth. It was the reviews row count on
+// 2026-07-29 when the B2 truncation bug was found, which is why it was chosen;
+// the real table is 5,954 rows since the 2026-07-31 dedup. Nothing here depends
+// on the live figure — the arithmetic under test is "cap 5000, server clamp
+// 1000, exact count from page 1" — so the number is deliberately left alone
+// rather than chased, and this note exists so it is not mistaken for a total
+// anyone should quote.
 test('B2 regression: cap 5000 against 7888 rows fetches five clamped pages and reports the exact total', async () => {
   const { fetchPage, calls } = serverStub(7888);
   const r = await fetchAllWithCap(fetchPage, 5000);
