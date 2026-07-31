@@ -4,6 +4,17 @@
 // function. Security fix (2026-07-31): set verify_jwt = true at the gateway
 // as defence-in-depth (no code change; the internal auth.getUser() +
 // is_hotel_staff RPC gate below was already correct and fail-closed).
+//
+// KNOWN DRIFT, deliberate: deployed version 10 still carries the pre-lint
+// regex literals and `catch {}`. The cleanup below is source-level only and is
+// proven behaviour-identical (exhaustive printable-ASCII comparison against the
+// old patterns, tests/unit/export-booking-inquiries-regex.test.ts), so it was
+// NOT redeployed just to make the bytes match — retyping 150 lines including
+// the Arabic keyword classes and the U+FEFF escape in the CSV prefix into a
+// deploy payload is the only real risk in that operation, and it buys nothing
+// functional. (Writing this comment proved the point: the first draft embedded
+// a real U+FEFF instead of naming it, caught by a non-ASCII audit.) The
+// cleanup ships with the next change that actually needs deploying.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -18,13 +29,20 @@ const supabase = createClient(
 );
 
 const KEYWORDS = /(book|reserv|room|apartment|stay|long.?term|short.?term|monthly|yearly|annual|availab|rate|price|rent|studio|bedroom|check.?in|check.?out|حجز|شقة|غرفة|إقامة|سعر|إيجار|نزول)/i;
-const EMAIL_RE = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/;
-const DATE_RE = /((?:\d{1,2}[\s/\-\.]?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{0,4})|(?:\d{4}[\-/]\d{1,2}[\-/]\d{1,2})|(?:\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}))/gi;
+// Lint-only cleanup (2026-07-31): the escapes below were redundant inside
+// character classes. Every `-` now sits first or last in its class, where it is
+// a literal and needs no backslash, and `.` is always literal inside a class.
+// The matched language is unchanged — asserted by
+// tests/unit/export-booking-inquiries-regex.test.ts against the pre-cleanup
+// patterns.
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+const DATE_RE = /((?:\d{1,2}[\s/.-]?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{0,4})|(?:\d{4}[-/]\d{1,2}[-/]\d{1,2})|(?:\d{1,2}[-/]\d{1,2}[-/]\d{2,4}))/gi;
 
 function extractMsg(m: any): string {
   if (m == null) return "";
   if (typeof m === "string") {
-    try { const j = JSON.parse(m); if (j && typeof j === "object" && "body" in j) return String(j.body ?? ""); } catch {}
+    try { const j = JSON.parse(m); if (j && typeof j === "object" && "body" in j) return String(j.body ?? ""); }
+    catch { /* not JSON — fall through and treat the string as the message body */ }
     return m;
   }
   if (typeof m === "object" && "body" in m) return String((m as any).body ?? "");
