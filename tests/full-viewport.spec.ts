@@ -149,6 +149,15 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
   }
 
   test('hotel-training wizard at 15 participants: document does not scroll, wizard column does', async ({ page }) => {
+    // This test drives ~25 real UI interactions, 15 of them popover
+    // open/select round-trips whose close animation has to settle between
+    // rows. That fits inside the 30s default when the spec runs alone and
+    // does not when the worker is shared with another spec file — it timed
+    // out at row N on a combined `full-viewport + hotel-training` run, and
+    // reproduced identically on a tree with none of that day's changes, so it
+    // is this test's budget rather than a product regression. Raised rather
+    // than trimmed: the 15-participant case IS the assertion.
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 1366, height: 768 });
     await setMockAuthSession(page);
     await mockSupabaseRest(page);
