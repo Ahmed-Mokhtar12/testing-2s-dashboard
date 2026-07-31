@@ -16,7 +16,10 @@ test.describe('Phase 5 browser checks we can automate safely', () => {
 
   test('reset password page shows fallback state without a recovery token', async ({ page }) => {
     await page.goto('/reset-password');
-    await expect(page.getByText('Invalid or expired link')).toBeVisible();
+    // Copy is 'Reset link expired' (src/pages/ResetPassword.tsx:178). The
+    // earlier 'Invalid or expired link' expectation was stale, not a product
+    // bug — the page changed and this assertion did not.
+    await expect(page.getByText('Reset link expired')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Back to sign in' })).toBeVisible();
   });
 
@@ -40,7 +43,10 @@ test.describe('Phase 5 browser checks we can automate safely', () => {
     await expect(page.getByLabel('Email')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
     await expect(page.getByLabel('Remember me')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    // exact: true — the page has both 'Sign in' and 'Sign in with Microsoft',
+    // and Playwright's accessible-name matching is substring-based, so the
+    // loose name matched two elements and failed strict mode.
+    await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   });
 
   test('auth page ships with the expected CSP meta tag', async ({ page }) => {
@@ -59,7 +65,7 @@ test.describe('Phase 5 browser checks we can automate safely', () => {
 
     const email = page.getByLabel('Email');
     const password = page.locator('#password');
-    const submit = page.getByRole('button', { name: 'Sign in' });
+    const submit = page.getByRole('button', { name: 'Sign in', exact: true }); // see above
 
     await email.fill('invalid-check@example.com');
     await password.fill('WrongPassword!123');
