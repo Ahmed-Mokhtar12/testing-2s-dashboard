@@ -23,7 +23,7 @@
 # LongTermMemory, and (because this script passes a sessionId) one into
 # "2s-dashboard_AI_Chat". Both are tagged with the session id printed at the
 # start, and the cleanup SQL is printed at the end. It also spends real LLM
-# tokens — RUNS x 6 calls per full run.
+# tokens — RUNS x 8 calls per full run (one per id in ORDER).
 set -uo pipefail
 
 PROJECT_URL="https://yczcebfaqerlwfalrbjn.supabase.co"
@@ -40,6 +40,38 @@ SESSION_ID="sera-battery-$(date -u +%Y%m%dT%H%M%SZ)"
 # Every number an assertion checks is listed here with the query that produced
 # it, so a failure can be told apart from stale expectations. Re-run these in the
 # Supabase SQL editor before trusting a failure.
+#
+# REVIEWS DEDUP, 2026-07-31 evening — read this before doubting a review case.
+# 1,935 duplicate rows were deleted from "Two Seasons and Reviews": 7,889 -> 5,954
+# rows, overall average Score 4.4643 -> 4.4262. Anything quoting 7,888/7,889 or
+# 4.46/4.57 predates that.
+#
+#   NO ASSERTION IN THIS SCRIPT NEEDED CHANGING, and that is verified rather
+#   than assumed. The two review cases are both scoped to single months, and
+#   both months came through the dedup untouched — checked against
+#   reviews_backup_20260731, the pre-delete snapshot:
+#
+#     select
+#       (select count(*) from "Two Seasons and Reviews"
+#         where "Date" between '2026-05-01' and '2026-05-31')          as may_now,     -- 23
+#       (select round(avg("Score")::numeric,2) from "Two Seasons and Reviews"
+#         where "Date" between '2026-05-01' and '2026-05-31')          as may_avg_now, -- 4.33
+#       (select count(*) from reviews_backup_20260731
+#         where "Date" between '2026-05-01' and '2026-05-31')          as may_before,  -- 23
+#       (select round(avg("Score")::numeric,2) from reviews_backup_20260731
+#         where "Date" between '2026-05-01' and '2026-05-31')          as may_avg_bef, -- 4.33
+#       (select count(*) from "Two Seasons and Reviews"
+#         where "Date" between '2026-06-01' and '2026-06-30')          as june_now;    -- 0
+#
+#   May 2026 had no duplicates to lose (the duplication is concentrated in
+#   Sep 2025 – Feb 2026), and June 2026 was already empty. So `exact_reviews`,
+#   `exact_reviews_avg` and `empty_reviews` all still assert live truth.
+#
+#   If you ADD a case about overall totals, these are the current numbers:
+#     total_reviews = 5954, overall_avg = 4.43
+#       select count(*), round(avg("Score")::numeric,2) from "Two Seasons and Reviews";
+#   Note reviews ROW_CAP is 10000 (> 5954), so an overall-totals case must NOT
+#   expect a truncation caveat — the tool now fetches the whole table.
 #
 #   wa_year_messages = 33526, wa_year_unique_senders = 3511
 #     select count(*), count(distinct "Sender Number") from "Chat History"
