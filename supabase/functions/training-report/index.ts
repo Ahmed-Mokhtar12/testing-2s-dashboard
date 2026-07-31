@@ -199,32 +199,43 @@ interface RequestBody {
 // (OutstandingFailure itself is defined in report-html.ts, the module that
 // actually renders it, and imported here as a type-only import.)
 
-// Fetches failed report_runs rows other than the one currently being sent,
-// oldest period first, capped at 5. A query error is swallowed (never let
-// this block a real send — the banner is a nice-to-have, not a gate) but
-// reported back via `queryFailed` so callers can log/surface it rather than
-// silently pretending there were zero outstanding failures.
-//
 // status='failed' alone is NOT "a real failure": ensureRunRow creates rows
 // as {status:'failed', attempts:0} before any attempt has been made, and
 // claimRun marks a row {status:'failed', last_error:CLAIM_SENTINEL} the
 // MOMENT it claims it, i.e. while a send is still in flight (or after it
 // died mid-send without recording an outcome). Either row-shape reaching a
 // manager's inbox as "1 failed attempt(s). Last error: send in progress"
-// would be a false alarm that also leaks an internal sentinel string — so
-// both are excluded here at the query level, not just filtered client-side.
+// would be a false alarm that also leaks an internal sentinel string.
+//
+// This predicate is shared by BOTH fetchOutstandingFailures (the banner
+// content) and countFailedReportRuns (the cron response's monitoring count)
+// via this one function, on purpose: those two used to apply different
+// filters, so a mid-send/never-attempted row could make the cron response
+// report `outstandingFailures: 1` while the very email it was attached to
+// showed no banner at all — a "confident wrong number" disagreement between
+// two numbers that are supposed to describe the same thing. Route the two
+// query builders through here instead of writing the three filters twice so
+// they cannot drift apart again. `any` in/out (this directory's own eslint
+// config disables no-explicit-any): supabase-js's PostgrestFilterBuilder
+// generic signature makes a precisely chain-type-preserving helper more
+// trouble than it is worth for three static filter calls.
+function excludeInFlightAndUnattempted(query: any): any {
+  return query.eq('status', 'failed').neq('last_error', CLAIM_SENTINEL).gt('attempts', 0);
+}
+
+// Fetches failed report_runs rows other than the one currently being sent,
+// oldest period first, capped at 5. A query error is swallowed (never let
+// this block a real send — the banner is a nice-to-have, not a gate) but
+// reported back via `queryFailed` so callers can log/surface it rather than
+// silently pretending there were zero outstanding failures.
 async function fetchOutstandingFailures(
   db: ReturnType<typeof serviceClient>,
   excludeReportType: string,
   excludePeriod: string,
 ): Promise<{ failures: OutstandingFailure[]; queryFailed: boolean }> {
-  const { data, error } = await db
-    .from('report_runs')
-    .select('report_type, period, attempts, last_error')
-    .eq('status', 'failed')
-    .neq('last_error', CLAIM_SENTINEL)
-    .gt('attempts', 0)
-    .order('period', { ascending: true });
+  const { data, error } = await excludeInFlightAndUnattempted(
+    db.from('report_runs').select('report_type, period, attempts, last_error'),
+  ).order('period', { ascending: true });
   if (error) {
     console.error('outstanding-failures query failed (banner omitted for this send):', JSON.stringify(error));
     return { failures: [], queryFailed: true };
@@ -237,14 +248,17 @@ async function fetchOutstandingFailures(
   return { failures, queryFailed: false };
 }
 
-// Total count of currently-outstanding failed rows, for the cron response's
-// monitoring field (`outstandingFailures: n`) — independent of any single
-// report's exclusion above. Returns null (never blocks) on query error.
+// Total count of currently-outstanding REAL failed rows (same predicate as
+// fetchOutstandingFailures — see excludeInFlightAndUnattempted above), for
+// the cron response's monitoring field (`outstandingFailures: n`) —
+// independent of any single report's own-row exclusion above. Returns null
+// (never blocks) on query error — the caller must NOT coerce that to 0,
+// since 0 has to mean "confirmed zero outstanding failures", never "the
+// count query itself failed and we don't actually know".
 async function countFailedReportRuns(db: ReturnType<typeof serviceClient>): Promise<number | null> {
-  const { count, error } = await db
-    .from('report_runs')
-    .select('report_type', { count: 'exact', head: true })
-    .eq('status', 'failed');
+  const { count, error } = await excludeInFlightAndUnattempted(
+    db.from('report_runs').select('report_type', { count: 'exact', head: true }),
+  );
   if (error) {
     console.error('failed-run count query failed:', JSON.stringify(error));
     return null;
