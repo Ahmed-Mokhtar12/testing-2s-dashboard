@@ -4,7 +4,10 @@ import { X, Trash2, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { ChatSession } from '@/hooks/useChatSessions';
+// ChatSession comes from useSeraLocalSessions — the hook RightChatPanel
+// actually feeds this component. It previously came from useChatSessions,
+// a dead duplicate whose version had optional userMessage/aiReply.
+import type { ChatSession } from '@/hooks/useSeraLocalSessions';
 
 interface SeraHistorySidebarProps {
   chatSessions: ChatSession[];

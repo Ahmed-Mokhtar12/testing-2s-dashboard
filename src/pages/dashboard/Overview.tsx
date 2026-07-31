@@ -45,7 +45,12 @@ const Overview: React.FC = () => {
     () => [
       tile('/dashboard/reviews', <Star className="h-5 w-5" />, 'Reviews', reviews.data?.kpis.total ?? 0, `Avg ${(reviews.data?.kpis.avg ?? 0).toFixed(2)} / 5`, 'primary'),
       tile('/dashboard/whatsapp', <MessageCircle className="h-5 w-5" />, 'WhatsApp', wa.data?.kpis.total ?? 0, `${wa.data?.kpis.uniqueGuests ?? 0} guests`, 'accent'),
-      tile('/dashboard/email', <Mail className="h-5 w-5" />, 'Email Threads', email.data?.kpis.total ?? 0, `${email.data?.kpis.inbound ?? 0} inbound`, 'magenta'),
+      // `kpis.inbound` never existed on useEmailInsights ({ total, newEmails,
+      // replyEmails, uniqueGuests }) — so this sub-line read "0 inbound" on
+      // every load regardless of the data, and `?? 0` hid it. This dataset is
+      // Sera's SENT mail, so there is no inbound count to show; newEmails is
+      // the same figure the Email page labels "New Emails".
+      tile('/dashboard/email', <Mail className="h-5 w-5" />, 'Email Threads', email.data?.kpis.total ?? 0, `${email.data?.kpis.newEmails ?? 0} new`, 'magenta'),
       tile('/dashboard/competitors', <TrendingUp className="h-5 w-5" />, 'Comp Rank', comps.data?.kpis.ourRank ? `#${comps.data.kpis.ourRank}` : '—', `of ${comps.data?.kpis.totalHotels ?? 0} hotels`, 'primary'),
       tile('/dashboard/info-email', <Inbox className="h-5 w-5" />, 'Info Emails', info.data?.kpis.total ?? 0, `${info.data?.kpis.forwarded ?? 0} forwarded`, 'accent'),
       tile('/dashboard/social', <Share2 className="h-5 w-5" />, 'Social DMs', social.data?.kpis.totalDMs ?? 0, `${social.data?.kpis.igComments ?? 0} IG comments`, 'magenta'),
