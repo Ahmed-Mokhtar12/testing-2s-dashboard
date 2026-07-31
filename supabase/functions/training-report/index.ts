@@ -185,10 +185,76 @@ function resolveTestReport(
   };
 }
 
+// --- Period/range resolution for 'send' mode --------------------------------
+// mode:'send' takes an EXPLICIT, operator-chosen period (never defaulted —
+// unlike resolveTestReport above) and bypasses dueReports()/EARLIEST_PERIOD
+// entirely. It exists to seed the very first real report for a pre-launch
+// period (July 2026, the only month with real training data — EARLIEST_PERIOD
+// = '2026-08' means dueReports() will never surface it on its own).
+//
+// Unlike resolveTestReport's reminder branch — which deliberately always
+// windows through the REAL current Dubai day regardless of the requested
+// period, because its entire purpose is "preview as if this ran today" — a
+// deliberate one-off send for a period that is NOT the current Dubai month
+// must use the period's own full calendar month. Reusing the "always today"
+// windowing here would silently span into a second month (or, for a period
+// safely in the past, produce an empty/garbled trailing window) — exactly
+// the kind of silent-corruption bug this engagement exists to avoid.
+function resolveSendReport(
+  report: 'monthly' | 'reminder',
+  period: string,
+  nowUtcMs: number,
+): ResolvedTestReport & { delayed: boolean } {
+  const [y, m] = period.split('-').map(Number);
+  const { ymd: today } = dubaiToday(nowUtcMs);
+
+  if (report === 'monthly') {
+    const nextY = m === 12 ? y + 1 : y;
+    const nextM = m === 12 ? 1 : m + 1;
+    const dueDate = `${nextY}-${pad(nextM)}-01`;
+    return {
+      reportType: 'monthly_summary',
+      period,
+      periodLabel: monthLabel(y, m),
+      rangeFromISO: dubaiMidnightISO(y, m, 1),
+      rangeToExclusiveISO: dubaiMidnightISO(nextY, nextM, 1),
+      dueDate,
+      // Nominal-due-date rule per the cron path: a period whose due date has
+      // already passed relative to "today" is delayed (carries the banner);
+      // a period whose due date is today or still in the future is not.
+      delayed: today > dueDate,
+    };
+  }
+
+  const [ty, tm, td] = today.split('-').map(Number);
+  const isCurrentMonth = ty === y && tm === m;
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  const dueDate = `${y}-${pad(m)}-${pad(reminderDay(y, m))}`;
+  return {
+    reportType: 'reminder',
+    period,
+    periodLabel: monthLabel(y, m),
+    rangeFromISO: dubaiMidnightISO(y, m, 1),
+    // Current month -> month-to-date (same windowing dueReports() would use
+    // today). Any other month (always in the past in practice: EARLIEST_PERIOD
+    // and isValidPeriod's 20xx floor rule out anything materially in the
+    // future) -> the period's own full calendar month, since "today" has no
+    // relevance to a month that has already closed.
+    rangeToExclusiveISO: isCurrentMonth
+      ? nextDayDubaiMidnightISO(ty, tm, td)
+      : dubaiMidnightISO(nextY, nextM, 1),
+    dueDate,
+    delayed: today > dueDate,
+    daysLeftInMonth: isCurrentMonth ? lastDayOfMonth(y, m) - td : 0,
+  };
+}
+
 interface RequestBody {
   mode?: string;
   report?: string;
   period?: string;
+  confirm?: boolean;
 }
 
 async function handleTest(req: Request, body: RequestBody): Promise<Response> {
@@ -323,7 +389,7 @@ async function runDueReport(
   report: DueReport,
   attempts: number,
   tokenFor: () => Promise<string>,
-): Promise<{ outcome: 'sent' | 'failed'; ledgerOk: boolean }> {
+): Promise<{ outcome: 'sent' | 'failed'; ledgerOk: boolean; error?: string }> {
   try {
     const { sessions, participants, targets } = await fetchReportData(db, report.rangeFromISO, report.rangeToExclusiveISO);
     const data = aggregateReport(sessions, participants, targets);
@@ -353,7 +419,7 @@ async function runDueReport(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const ledgerOk = await recordRun(db, report, { status: 'failed', attempts, last_error: message.slice(0, 2000) });
-    return { outcome: 'failed', ledgerOk };
+    return { outcome: 'failed', ledgerOk, error: message };
   }
 }
 
@@ -387,6 +453,101 @@ async function handleCron(): Promise<{ due: number; sent: number; failed: number
   return { due: due.length, sent, failed, skipped, ledgerErrors };
 }
 
+// mode:'send' — deliberate, operator-triggered, real one-off send.
+//
+// Why this exists: EARLIEST_PERIOD ('2026-08') means dueReports() will NEVER
+// surface July 2026 — the only month with real training data — so the first
+// automated email everyone receives would otherwise be an empty/near-empty
+// August report. This mode lets an admin explicitly pick a period and force
+// a real send for it, once, so the first email people actually get contains
+// real numbers.
+//
+// Safety properties (all required, see design spec "Modes" section):
+//   - Admin-gated exactly like mode:'test' (fail closed on missing/invalid JWT
+//     or a non-admin caller).
+//   - confirm:true is REQUIRED (no silent default) — the request is otherwise
+//     rejected with 400 and an explanation that this sends to the REAL
+//     recipient list, not just the caller.
+//   - period is REQUIRED (never defaulted) and validated the same way as
+//     mode:'test'.
+//   - Sends to RECIPIENTS (not the caller) with a normal (non-"[TEST]")
+//     subject.
+//   - Bypasses dueReports()/EARLIEST_PERIOD entirely: the period is explicit
+//     and operator-chosen, not schedule-derived.
+//   - Fully participates in the report_runs ledger via the SAME
+//     ensureRunRow/claimRun/recordRun path mode:'cron' uses, so it can never
+//     double-send: an already-'sent' row, or a row currently claimed by a
+//     concurrent invocation, both short-circuit to 409 before any send is
+//     attempted.
+async function handleSend(req: Request, body: RequestBody): Promise<Response> {
+  const caller = await getCallerUser(req);
+  if (!caller) return json(req, { error: 'Not authenticated.' }, 401);
+
+  const { data: isAdmin } = await callerClient(req).rpc('has_role', { _user_id: caller.id, _role: 'admin' });
+  if (!isAdmin) return json(req, { error: 'Unauthorised: admin access required.' }, 403);
+
+  if (body.report !== 'monthly' && body.report !== 'reminder') {
+    return json(req, { error: 'report must be "monthly" or "reminder".' }, 400);
+  }
+  if (typeof body.period !== 'string' || !isValidPeriod(body.period)) {
+    return json(req, { error: 'period is required and must match YYYY-MM with a month between 01 and 12 (e.g. "2026-07").' }, 400);
+  }
+  if (body.confirm !== true) {
+    return json(req, {
+      error: 'confirm:true is required. mode:"send" sends a REAL email to the real recipient list '
+        + `(${RECIPIENTS.join(', ')}) — not just the caller. Re-send the request with confirm:true once you are certain.`,
+    }, 400);
+  }
+
+  const resolved = resolveSendReport(body.report, body.period, Date.now());
+  const db = serviceClient();
+  const report: DueReport = {
+    reportType: resolved.reportType,
+    period: resolved.period,
+    dueDate: resolved.dueDate,
+    delayed: resolved.delayed,
+    rangeFromISO: resolved.rangeFromISO,
+    rangeToExclusiveISO: resolved.rangeToExclusiveISO,
+    daysLeftInMonth: resolved.daysLeftInMonth,
+  };
+
+  await ensureRunRow(db, report);
+  const claim = await claimRun(db, report);
+  if (!claim) {
+    // Either already 'sent' (the common, expected case an operator hits when
+    // re-running this by mistake) or currently held by a concurrent
+    // invocation — both are refused, and both surface whatever the ledger
+    // row actually says so the operator can see it already went out (or is
+    // in flight) instead of getting a bare "no" with no evidence.
+    const { data: existing } = await db
+      .from('report_runs')
+      .select('status, sent_at, recipients')
+      .eq('report_type', report.reportType)
+      .eq('period', report.period)
+      .maybeSingle();
+    return json(req, {
+      error: existing?.status === 'sent'
+        ? 'Already sent — refusing to send again.'
+        : 'Send already in progress for this report/period (claimed by a concurrent invocation) — refusing to send again.',
+      status: existing?.status ?? null,
+      sentAt: existing?.sent_at ?? null,
+      recipients: existing?.recipients ?? null,
+    }, 409);
+  }
+
+  let cachedToken: string | null = null;
+  const tokenFor = async () => {
+    if (!cachedToken) cachedToken = await getAppToken();
+    return cachedToken;
+  };
+
+  const { outcome, error } = await runDueReport(db, report, claim.attempts, tokenFor);
+  if (outcome === 'failed') {
+    return json(req, { error: error ?? 'Send failed.', period: resolved.period }, 500);
+  }
+  return json(req, { ok: true, sent: 1, period: resolved.period, recipients: RECIPIENTS });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders(req) });
@@ -406,12 +567,13 @@ Deno.serve(async (req) => {
   }
 
   const mode = body?.mode;
-  if (mode !== 'test' && mode !== 'cron') {
+  if (mode !== 'test' && mode !== 'cron' && mode !== 'send') {
     return json(req, { error: 'Unknown mode.' }, 400);
   }
 
   try {
     if (mode === 'test') return await handleTest(req, body);
+    if (mode === 'send') return await handleSend(req, body);
     const result = await handleCron();
     return json(req, { ok: true, ...result });
   } catch (err) {

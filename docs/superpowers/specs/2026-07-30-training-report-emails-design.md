@@ -90,6 +90,23 @@ applies), `verify_jwt = true`, deployed with a self-verifying script modeled on
   (documented curl in the plan).
 - `POST { mode: 'cron' }` — any valid JWT at the gateway (anon key suffices; see the
   amended Go-Live section for why that is safe). Runs the due-report logic below.
+- `POST { mode: 'send', report: 'monthly'|'reminder', period: 'YYYY-MM', confirm: true }`
+  — **(added 2026-07-31)** admin-gated exactly like `mode:'test'`, but sends a real,
+  operator-triggered, one-off report to the real `RECIPIENTS` (normal subject, no
+  `[TEST]` prefix). Exists because the `EARLIEST_PERIOD` epoch floor below means
+  `dueReports()` will never surface July 2026 — the only month with real training
+  data — so without this mode the first automated email anyone receives would be an
+  empty/near-empty August report instead of one with real numbers. `confirm:true` and
+  `period` are both required with no defaulting (400 otherwise, the error stating this
+  sends to the real recipient list); `dueReports()`/`EARLIEST_PERIOD` are bypassed
+  entirely since the period is explicit. It shares the exact same
+  `ensureRunRow`/`claimRun`/`recordRun` ledger path as `mode:'cron'`, so it can never
+  double-send: an already-`'sent'` row or one claimed by a concurrent invocation both
+  short-circuit to `409` with the existing `sent_at`/`recipients` instead of sending.
+  `delayed` is set from the same nominal-due-date rule the cron path uses (summary →
+  1st of the following month; reminder → `reminderDay` of its own month), so a period
+  whose due date has already passed still carries the "Delayed" banner rather than
+  pretending to be on time.
 
 **Due-report logic (all in Asia/Dubai, pure TS module `report-schedule.ts`, unit-tested):**
 
@@ -191,7 +208,11 @@ user-approved test-send**.
 
 1. Migrations (targets + report_runs) with rollback twins → 2. function deployed →
 3. user performs Azure grant → 4. user triggers test-sends for both reports, real data →
-5. **only after user approval**, the cron migration (`cron.schedule('training-report-hourly',
+4a. **(added 2026-07-31)** because `EARLIEST_PERIOD` blocks any automated send for July
+2026 — the only pre-launch month with real training data — the user may use `mode:'send'`
+once, on demand, to deliberately send the real July 2026 report(s) for real so the first
+email people actually receive contains real numbers instead of a near-empty August report
+→ 5. **only after user approval**, the cron migration (`cron.schedule('training-report-hourly',
 '0 * * * *', net.http_post …)`, precedent: the LIVE `whatsapp-auto-release-every-minute`
 cron.job row) goes live. **Amended at planning:** the cron call authenticates with the
 public anon key (the exact pattern of the live `whatsapp-auto-release` job — note this is
