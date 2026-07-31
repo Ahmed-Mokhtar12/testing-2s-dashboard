@@ -1,7 +1,49 @@
 # Cleanup inventory — Lovable leftovers and dead code
 
-**Date:** 2026-07-31 · **Scope:** read-only. Nothing in this document has been
-deleted or changed; every row is a recommendation with the evidence behind it.
+**Date:** 2026-07-31 · **Scope when written:** read-only — every row was a
+recommendation with the evidence behind it. **Partly executed the same day;**
+see the status block immediately below before reading anything as pending.
+
+---
+
+## STATUS — 2026-07-31 evening
+
+Ahmed's ruling: do the two no-judgement tiers now, hold the large frontend
+deletion until after the n8n reviews backfill ("I'd rather not have a large
+deletion commit in flight while I'm running things by hand in n8n").
+
+| Tier | State |
+|---|---|
+| The four zero-reference deletions | **DONE** — `chore(cleanup): delete four zero-reference Lovable scaffold leftovers` |
+| The 12 dead `chat-with-data` modules | **DONE** — `chore(chat-with-data): delete 12 unreachable modules and pin the import graph` |
+| The 3 dead non-UI frontend files | **NOT DONE** — not in the approved scope; still listed below |
+| The 21 unused components + 16 dependencies | **HELD** by Ahmed until after the backfill |
+| `lovable-tagger` | **STILL A DECISION** — same question as the 21 components |
+| `public/og-image.png` | **STILL WORTH ONE LOOK** — it is served as the social preview; only a human can say whether the artwork is still the Lovable default |
+
+Two things learned while executing that the read-only pass had not established:
+
+- **The `public/` items really were shipping.** Vite copies `public/`
+  verbatim instead of tree-shaking it, so `dist/lovable-uploads/` and
+  `dist/placeholder.svg` existed in the built output before and do not after.
+  This is the opposite of the 21 components, where there is genuinely no
+  bundle-size argument. Small (28 KB), but real, unlike the other tier.
+- **Two of the three PNGs are byte-identical to `public/favicon.png`**
+  (md5 `f2de3908…`), which `index.html` does reference. So the brand mark was
+  never at risk; only the third file's exact bytes left the tree, and git
+  history keeps those.
+
+There was **no local type-check protecting the edge deletion** — `tsconfig.app`
+and `tsconfig.node` exclude `supabase/functions`, and deno is not installed on
+this host. `tests/unit/edge-imports-resolve.test.ts` was added with that commit
+so the next such deletion is checked by the suite rather than by hand.
+
+A third finding fell out of writing that test: `npm run test:unit` globbed only
+`tests/unit/*.test.ts`, so
+`supabase/functions/chat-with-data/training-aggregator.test.ts` — 14 passing
+assertions — had never been run by any command in this repo. Now wired in
+(124 → 138). That is the inverse of dead code: live tests nobody executes. This
+sweep did not look for more of them, so there may be others.
 
 Method, so the rulings can be checked rather than trusted:
 
@@ -32,7 +74,7 @@ Method, so the rulings can be checked rather than trusted:
 | `bun.lockb` | Absent — only `package-lock.json`. No dual-lockfile hazard. |
 | `*-old.ts`, `*.bak` | None anywhere in `src/` or `supabase/`. |
 
-### Delete — zero references, no decision needed
+### Delete — zero references, no decision needed — **ALL FOUR DELETED 2026-07-31**
 
 | Item | Size | Evidence |
 |---|---|---|
@@ -86,7 +128,7 @@ dependencies, imported by reachable code elsewhere; deleting `form.tsx` does
 `-slider`, `-toggle`, `-toggle-group`, plus `embla-carousel-react`,
 `input-otp`, `react-resizable-panels`, `vaul`.
 
-### Edge: 12 unreachable modules in `chat-with-data`, 49,250 bytes
+### Edge: 12 unreachable modules in `chat-with-data`, 49,250 bytes — **ALL DELETED 2026-07-31**
 
 Not reachable from any of the 18 function entry points, and **deployed on every
 release** — `scripts/deploy-chat-with-data.sh` copies the whole directory and
