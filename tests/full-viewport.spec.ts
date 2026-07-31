@@ -149,15 +149,26 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
   }
 
   test('hotel-training wizard at 15 participants: document does not scroll, wizard column does', async ({ page }) => {
-    // This test drives ~25 real UI interactions, 15 of them popover
-    // open/select round-trips whose close animation has to settle between
-    // rows. That fits inside the 30s default when the spec runs alone and
-    // does not when the worker is shared with another spec file — it timed
-    // out at row N on a combined `full-viewport + hotel-training` run, and
-    // reproduced identically on a tree with none of that day's changes, so it
-    // is this test's budget rather than a product regression. Raised rather
-    // than trimmed: the 15-participant case IS the assertion.
-    test.setTimeout(120_000);
+    // ~25 real UI interactions, 15 of them popover open/select round-trips
+    // whose close animation must settle between rows. Measured on this
+    // 2-core host, single Playwright worker, against the Vite DEV server:
+    //   spec alone .................. 23s   (passes on the 30s default)
+    //   4-spec run, 120s ceiling .... FAILED
+    //   4-spec run, 600s ceiling .... passed (whole run 6.6 min)
+    // so the variance is well over 5x and driven by host contention, not by
+    // this test's own work — it also failed identically on a tree with none of
+    // that day's changes stashed away, so it is not a product regression.
+    //
+    // 300s is deliberately generous rather than tuned: a tighter number on a
+    // spread that wide is a coin flip. If this ever times out again, do NOT
+    // raise it a third time — the real fix is to stop entering 15 participants
+    // by hand and seed them through the draft-restore path instead (localStorage
+    // key `hotel-training-draft-<email>`, shape { trainingDetails, participants:
+    // ParticipantRow[], step, savedAt }, as tests/hotel-training.spec.ts's
+    // legacy-draft test does), which reaches the same 15-row layout in one click.
+    // That was not done here because the assertion under test is a layout one and
+    // rewriting the setup risks trading a slow test for a flaky one.
+    test.setTimeout(300_000);
     await page.setViewportSize({ width: 1366, height: 768 });
     await setMockAuthSession(page);
     await mockSupabaseRest(page);
