@@ -250,6 +250,33 @@ key-handling step the Vault approach would have required.
 Rollback: `cron.unschedule` (rollback file), drop tables (rollback files), delete the
 function; revoking Mail.Send in Azure kills sending instantly. Sent emails are unaffected.
 
+### Cleaning up a bad report_runs row
+
+`mode:'send'` bypasses `EARLIEST_PERIOD` and takes an operator-typed `period` — if that
+period is a typo (or the send otherwise fails) the resulting `'failed'` row is for a period
+`dueReports()` will structurally never retry (it only ever computes the current previous
+month and the current month, not an arbitrary hand-typed one), so nothing ever claims and
+retries it. Left in place, that row shows up in the outstanding-failures banner of every
+future report that DOES send successfully — forever, since nothing else clears it.
+
+The only cleanup is a manual delete of that one `(report_type, period)` row, so the report
+can be re-attempted (via `mode:'send'` again, with the correct period) or simply stops
+appearing in the banner:
+
+```sql
+delete from public.report_runs
+where report_type = 'monthly_summary' -- or 'reminder'
+  and period = '2026-07';             -- the bad period, exactly as it appears in the row
+```
+
+This is **service-role / SQL-editor only** — there is no client-facing write policy on
+`report_runs`, by design (see Idempotency above), so this cannot be done from the app or
+with the anon/authenticated key. Run it only after confirming from the row itself (and, if
+relevant, the Graph/mailbox side) that the period genuinely needs a clean slate — e.g. a
+confirmed typo'd period, or a confirmed-failed send that should be retried — not as a
+routine response to any `'failed'` row, since a legitimate in-window failure should instead
+be left alone to retry automatically via `mode:'cron'`.
+
 ## Out of Scope / Non-Goals
 
 - No targets-editing UI (dashboard/SQL editing suffices for 14 rows).
