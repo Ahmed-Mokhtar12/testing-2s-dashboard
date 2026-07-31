@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   dubaiToday, lastDayOfMonth, reminderDay, dueReports, nextDayDubaiMidnightISO, EARLIEST_PERIOD,
+  resolveSendReport, monthLabel,
 } from '../../supabase/functions/training-report/report-schedule.ts';
 
 // 2026-08-01 04:00 UTC == 08:00 Dubai
@@ -235,4 +236,101 @@ test('EARLIEST_PERIOD floor: nothing is ever due for 2026-07 or earlier', () => 
   // days left'.
   // (d) the September 1st summary for period 2026-08 IS due — covered above
   // by 'monthly summary due on the 1st at 08:00 Dubai, not 07:59'.
+});
+
+// --- M7: resolveSendReport (mode:'send' window/delayed/daysLeftInMonth) ----
+// Moved here from index.ts (which cannot be unit-tested under Node because
+// of its Deno `jsr:` imports) precisely so this — the newest, least-exercised
+// date logic in the feature — gets automated coverage. Pure move, no
+// behaviour change; see the follow-up fix report for confirmation.
+
+test('resolveSendReport: monthly for a past period — full-month window, delayed, nominal due date = 1st of following month', () => {
+  const r = resolveSendReport('monthly', '2026-06', utc('2026-09-15T10:00:00Z'));
+  assert.equal(r.reportType, 'monthly_summary');
+  assert.equal(r.period, '2026-06');
+  assert.equal(r.periodLabel, 'June 2026');
+  assert.equal(r.rangeFromISO, '2026-06-01T00:00:00+04:00');
+  assert.equal(r.rangeToExclusiveISO, '2026-07-01T00:00:00+04:00');
+  assert.equal(r.dueDate, '2026-07-01');
+  assert.equal(r.delayed, true);
+});
+
+test('resolveSendReport: reminder for a past (non-current) period — full calendar month, delayed, daysLeftInMonth 0', () => {
+  const r = resolveSendReport('reminder', '2026-06', utc('2026-09-15T10:00:00Z'));
+  assert.equal(r.reportType, 'reminder');
+  assert.equal(r.period, '2026-06');
+  assert.equal(r.rangeFromISO, '2026-06-01T00:00:00+04:00');
+  assert.equal(r.rangeToExclusiveISO, '2026-07-01T00:00:00+04:00');
+  assert.equal(r.dueDate, '2026-06-23');
+  assert.equal(r.delayed, true);
+  assert.equal(r.daysLeftInMonth, 0);
+});
+
+test('resolveSendReport: reminder for the CURRENT month — month-to-date window ending start of tomorrow, real daysLeftInMonth', () => {
+  const r = resolveSendReport('reminder', '2026-08', utc('2026-08-10T10:00:00Z'));
+  assert.equal(r.reportType, 'reminder');
+  assert.equal(r.period, '2026-08');
+  assert.equal(r.rangeFromISO, '2026-08-01T00:00:00+04:00');
+  assert.equal(r.rangeToExclusiveISO, '2026-08-11T00:00:00+04:00'); // start of tomorrow, not month-end
+  assert.equal(r.dueDate, '2026-08-24');
+  assert.equal(r.delayed, false); // due day hasn't arrived yet
+  assert.equal(r.daysLeftInMonth, 21);
+});
+
+test('resolveSendReport: monthly Dec->Jan rollover — different year for both nextY and dueDate', () => {
+  const r = resolveSendReport('monthly', '2026-12', utc('2027-01-15T10:00:00Z'));
+  assert.equal(r.period, '2026-12');
+  assert.equal(r.rangeFromISO, '2026-12-01T00:00:00+04:00');
+  assert.equal(r.rangeToExclusiveISO, '2027-01-01T00:00:00+04:00');
+  assert.equal(r.dueDate, '2027-01-01');
+  assert.equal(r.delayed, true);
+});
+
+test('resolveSendReport: reminder Dec->Jan rollover for a past, non-current period', () => {
+  const r = resolveSendReport('reminder', '2026-12', utc('2027-01-10T10:00:00Z'));
+  assert.equal(r.period, '2026-12');
+  assert.equal(r.rangeFromISO, '2026-12-01T00:00:00+04:00');
+  assert.equal(r.rangeToExclusiveISO, '2027-01-01T00:00:00+04:00');
+  assert.equal(r.dueDate, '2026-12-24');
+  assert.equal(r.delayed, true);
+  assert.equal(r.daysLeftInMonth, 0);
+});
+
+test('resolveSendReport: reminder for the current month in February, non-leap year', () => {
+  const r = resolveSendReport('reminder', '2026-02', utc('2026-02-20T10:00:00Z'));
+  assert.equal(r.rangeToExclusiveISO, '2026-02-21T00:00:00+04:00');
+  assert.equal(r.dueDate, '2026-02-21');
+  assert.equal(r.delayed, false);
+  assert.equal(r.daysLeftInMonth, 8);
+});
+
+test('resolveSendReport: reminder for the current month in February, leap year', () => {
+  const r = resolveSendReport('reminder', '2028-02', utc('2028-02-20T10:00:00Z'));
+  assert.equal(r.rangeToExclusiveISO, '2028-02-21T00:00:00+04:00');
+  assert.equal(r.dueDate, '2028-02-22'); // one day later than the non-leap case: lastDayOfMonth is 29, not 28
+  assert.equal(r.delayed, false);
+  assert.equal(r.daysLeftInMonth, 9); // one more day left than the non-leap case
+});
+
+// M1: mode:'send' bypasses EARLIEST_PERIOD entirely, and isValidPeriod's
+// `20\d{2}` floor still allows periods up to 2099-12 — so a period materially
+// in the future IS reachable here, unlike dueReports()'s own periods. This
+// documents that behaviour precisely (rather than the stale "always in the
+// past in practice" comment this replaced): a future, non-current period
+// still resolves to a normal, non-delayed, full-calendar-month window (an
+// all-zero report, since nothing has happened yet) — reachable only because
+// mode:'send' is itself gated behind admin auth + confirm:true.
+test('resolveSendReport: a future period documents the M1 behaviour — reachable, not delayed, all-zero-eligible window', () => {
+  const r = resolveSendReport('reminder', '2099-12', utc('2026-08-01T10:00:00Z'));
+  assert.equal(r.period, '2099-12');
+  assert.equal(r.rangeFromISO, '2099-12-01T00:00:00+04:00');
+  assert.equal(r.rangeToExclusiveISO, '2100-01-01T00:00:00+04:00');
+  assert.equal(r.dueDate, '2099-12-24');
+  assert.equal(r.delayed, false);
+  assert.equal(r.daysLeftInMonth, 0);
+});
+
+test('monthLabel formats a UTC month/year pair regardless of local runtime timezone', () => {
+  assert.equal(monthLabel(2026, 6), 'June 2026');
+  assert.equal(monthLabel(2027, 1), 'January 2027');
 });

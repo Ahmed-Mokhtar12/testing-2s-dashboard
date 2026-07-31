@@ -4,8 +4,10 @@ import { getCallerUser } from '../_shared/auth.ts';
 import { haveAzureCreds, getAppToken, graphFetch, GRAPH_BASE, GraphError } from '../_shared/graph.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { fetchAllWithCap } from '../chat-with-data/paged-fetch.ts';
-import { dueReports, dubaiToday, lastDayOfMonth, reminderDay, nextDayDubaiMidnightISO } from './report-schedule.ts';
-import type { DueReport } from './report-schedule.ts';
+import {
+  dueReports, dubaiToday, lastDayOfMonth, reminderDay, nextDayDubaiMidnightISO, resolveSendReport, monthLabel,
+} from './report-schedule.ts';
+import type { DueReport, ResolvedTestReport } from './report-schedule.ts';
 import { aggregateReport } from './report-aggregator.ts';
 import { renderReportEmail } from './report-html.ts';
 import type { OutstandingFailure } from './report-html.ts';
@@ -22,6 +24,14 @@ const PARTICIPANT_CAP = 10000;
 // thousands of ids that URL can exceed server/proxy length limits. Chunking
 // keeps each request's id list small regardless of how many sessions match.
 const TRAINING_ID_CHUNK = 200;
+
+// Sentinel `last_error` value claimRun writes to mark a row as "a send is
+// currently in flight". Shared by claimRun (writes it) and
+// fetchOutstandingFailures (must NOT report it as a real failure — see
+// there). Declared here, ahead of both, so it reads as shared infrastructure
+// rather than being owned by either one.
+const CLAIM_SENTINEL = 'send in progress';
+const CLAIM_STALE_MS = 15 * 60_000; // 15 minutes
 
 function serviceClient() {
   return createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -126,21 +136,6 @@ export function isValidPeriod(period: string): boolean {
   return PERIOD_RE.test(period);
 }
 
-function monthLabel(year: number, month1: number): string {
-  return new Date(Date.UTC(year, month1 - 1, 1))
-    .toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-
-interface ResolvedTestReport {
-  reportType: 'monthly_summary' | 'reminder';
-  period: string;
-  periodLabel: string;
-  rangeFromISO: string;
-  rangeToExclusiveISO: string;
-  dueDate: string;
-  daysLeftInMonth?: number;
-}
-
 function resolveTestReport(
   report: 'monthly' | 'reminder',
   periodParam: string | undefined,
@@ -186,71 +181,6 @@ function resolveTestReport(
   };
 }
 
-// --- Period/range resolution for 'send' mode --------------------------------
-// mode:'send' takes an EXPLICIT, operator-chosen period (never defaulted —
-// unlike resolveTestReport above) and bypasses dueReports()/EARLIEST_PERIOD
-// entirely. It exists to seed the very first real report for a pre-launch
-// period (July 2026, the only month with real training data — EARLIEST_PERIOD
-// = '2026-08' means dueReports() will never surface it on its own).
-//
-// Unlike resolveTestReport's reminder branch — which deliberately always
-// windows through the REAL current Dubai day regardless of the requested
-// period, because its entire purpose is "preview as if this ran today" — a
-// deliberate one-off send for a period that is NOT the current Dubai month
-// must use the period's own full calendar month. Reusing the "always today"
-// windowing here would silently span into a second month (or, for a period
-// safely in the past, produce an empty/garbled trailing window) — exactly
-// the kind of silent-corruption bug this engagement exists to avoid.
-function resolveSendReport(
-  report: 'monthly' | 'reminder',
-  period: string,
-  nowUtcMs: number,
-): ResolvedTestReport & { delayed: boolean } {
-  const [y, m] = period.split('-').map(Number);
-  const { ymd: today } = dubaiToday(nowUtcMs);
-
-  if (report === 'monthly') {
-    const nextY = m === 12 ? y + 1 : y;
-    const nextM = m === 12 ? 1 : m + 1;
-    const dueDate = `${nextY}-${pad(nextM)}-01`;
-    return {
-      reportType: 'monthly_summary',
-      period,
-      periodLabel: monthLabel(y, m),
-      rangeFromISO: dubaiMidnightISO(y, m, 1),
-      rangeToExclusiveISO: dubaiMidnightISO(nextY, nextM, 1),
-      dueDate,
-      // Nominal-due-date rule per the cron path: a period whose due date has
-      // already passed relative to "today" is delayed (carries the banner);
-      // a period whose due date is today or still in the future is not.
-      delayed: today > dueDate,
-    };
-  }
-
-  const [ty, tm, td] = today.split('-').map(Number);
-  const isCurrentMonth = ty === y && tm === m;
-  const nextY = m === 12 ? y + 1 : y;
-  const nextM = m === 12 ? 1 : m + 1;
-  const dueDate = `${y}-${pad(m)}-${pad(reminderDay(y, m))}`;
-  return {
-    reportType: 'reminder',
-    period,
-    periodLabel: monthLabel(y, m),
-    rangeFromISO: dubaiMidnightISO(y, m, 1),
-    // Current month -> month-to-date (same windowing dueReports() would use
-    // today). Any other month (always in the past in practice: EARLIEST_PERIOD
-    // and isValidPeriod's 20xx floor rule out anything materially in the
-    // future) -> the period's own full calendar month, since "today" has no
-    // relevance to a month that has already closed.
-    rangeToExclusiveISO: isCurrentMonth
-      ? nextDayDubaiMidnightISO(ty, tm, td)
-      : dubaiMidnightISO(nextY, nextM, 1),
-    dueDate,
-    delayed: today > dueDate,
-    daysLeftInMonth: isCurrentMonth ? lastDayOfMonth(y, m) - td : 0,
-  };
-}
-
 interface RequestBody {
   mode?: string;
   report?: string;
@@ -274,6 +204,15 @@ interface RequestBody {
 // this block a real send — the banner is a nice-to-have, not a gate) but
 // reported back via `queryFailed` so callers can log/surface it rather than
 // silently pretending there were zero outstanding failures.
+//
+// status='failed' alone is NOT "a real failure": ensureRunRow creates rows
+// as {status:'failed', attempts:0} before any attempt has been made, and
+// claimRun marks a row {status:'failed', last_error:CLAIM_SENTINEL} the
+// MOMENT it claims it, i.e. while a send is still in flight (or after it
+// died mid-send without recording an outcome). Either row-shape reaching a
+// manager's inbox as "1 failed attempt(s). Last error: send in progress"
+// would be a false alarm that also leaks an internal sentinel string — so
+// both are excluded here at the query level, not just filtered client-side.
 async function fetchOutstandingFailures(
   db: ReturnType<typeof serviceClient>,
   excludeReportType: string,
@@ -283,6 +222,8 @@ async function fetchOutstandingFailures(
     .from('report_runs')
     .select('report_type, period, attempts, last_error')
     .eq('status', 'failed')
+    .neq('last_error', CLAIM_SENTINEL)
+    .gt('attempts', 0)
     .order('period', { ascending: true });
   if (error) {
     console.error('outstanding-failures query failed (banner omitted for this send):', JSON.stringify(error));
@@ -333,7 +274,8 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   // only mode an admin can trigger on demand without touching the real
   // ledger, so it doubles as the way to SEE the banner actually working
   // before trusting it in a real send.
-  const { failures: outstandingFailures } = await fetchOutstandingFailures(db, resolved.reportType, resolved.period);
+  const { failures: outstandingFailures, queryFailed: outstandingQueryFailed } =
+    await fetchOutstandingFailures(db, resolved.reportType, resolved.period);
   const { subject, html } = renderReportEmail({
     reportType: resolved.reportType,
     periodLabel: resolved.periodLabel,
@@ -347,7 +289,16 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
 
   const token = await getAppToken();
   await sendMail(token, [caller.email], subject, html);
-  return json(req, { ok: true, sentTo: caller.email, subject, period: resolved.period, outstandingFailures: outstandingFailures.length });
+  // outstandingFailures is a trustworthy count, or null if the banner query
+  // itself failed — never coerced to 0, which would be indistinguishable
+  // from "confirmed no outstanding failures" (see fetchOutstandingFailures).
+  return json(req, {
+    ok: true,
+    sentTo: caller.email,
+    subject,
+    period: resolved.period,
+    outstandingFailures: outstandingQueryFailed ? null : outstandingFailures.length,
+  });
 }
 
 // Writes the (report_type, period) ledger row's outcome. The row is always
@@ -375,9 +326,6 @@ async function recordRun(
   }
   return false;
 }
-
-const CLAIM_SENTINEL = 'send in progress';
-const CLAIM_STALE_MS = 15 * 60_000; // 15 minutes
 
 // Ensures a (report_type, period) row exists so claimRun always has
 // something to read/update. ignoreDuplicates makes this a no-op once the
@@ -485,7 +433,7 @@ async function runDueReport(
   }
 }
 
-async function handleCron(): Promise<{ due: number; sent: number; failed: number; skipped: number; ledgerErrors: number; outstandingFailures: number }> {
+async function handleCron(): Promise<{ due: number; sent: number; failed: number; skipped: number; ledgerErrors: number; outstandingFailures: number | null }> {
   const due = dueReports(Date.now());
   const db = serviceClient();
 
@@ -510,14 +458,33 @@ async function handleCron(): Promise<{ due: number; sent: number; failed: number
     // Queried fresh right before each render (not once for the whole loop):
     // an earlier report in THIS same run that just failed should already be
     // visible in a later report's banner within the same invocation.
-    const { failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.period);
+    //
+    // Wrapped in try/catch (not just relying on fetchOutstandingFailures'
+    // own internal PostgREST-error handling): this call runs AFTER a
+    // successful claim, so an unexpected throw here (as opposed to a
+    // PostgREST `error` field) would otherwise escape to the top-level
+    // catch, 500 the whole invocation, and leave THIS report's row claimed
+    // with the CLAIM_SENTINEL — blocking any retry for CLAIM_STALE_MS and
+    // making the next mode:'send' return a misleading "already in progress"
+    // 409. The banner is a nice-to-have; it must never cost the send itself.
+    let outstandingFailures: OutstandingFailure[] = [];
+    try {
+      ({ failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.period));
+    } catch (err) {
+      console.error(
+        `outstanding-failures query threw unexpectedly for ${report.reportType}/${report.period} (banner omitted, send proceeds):`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
     const { outcome, ledgerOk } = await runDueReport(db, report, claim.attempts, tokenFor, outstandingFailures);
     if (outcome === 'sent') sent++; else failed++;
     if (!ledgerOk) ledgerErrors++;
   }
 
+  // null (not 0) when the count query itself failed — 0 must mean "confirmed
+  // zero outstanding failures", never "we don't actually know" (see I6).
   const outstandingFailures = await countFailedReportRuns(db);
-  return { due: due.length, sent, failed, skipped, ledgerErrors, outstandingFailures: outstandingFailures ?? 0 };
+  return { due: due.length, sent, failed, skipped, ledgerErrors, outstandingFailures };
 }
 
 // mode:'send' — deliberate, operator-triggered, real one-off send.
@@ -602,7 +569,26 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
     }, 409);
   }
 
-  const { failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.period);
+  // Wrapped in try/catch: this call runs AFTER a successful claim, so an
+  // unexpected throw here (as opposed to a PostgREST `error` field, which
+  // fetchOutstandingFailures already handles internally) would otherwise
+  // escape uncaught, 500 out of this handler, and leave the row claimed with
+  // CLAIM_SENTINEL — blocking any retry for CLAIM_STALE_MS and making the
+  // next mode:'send' attempt return a misleading "already in progress" 409
+  // for a report that never actually got a real attempt. The banner is a
+  // nice-to-have; it must never cost the send itself.
+  let outstandingFailures: OutstandingFailure[] = [];
+  let outstandingQueryFailed = false;
+  try {
+    ({ failures: outstandingFailures, queryFailed: outstandingQueryFailed } =
+      await fetchOutstandingFailures(db, report.reportType, report.period));
+  } catch (err) {
+    console.error(
+      `outstanding-failures query threw unexpectedly for ${report.reportType}/${report.period} (banner omitted, send proceeds):`,
+      err instanceof Error ? err.message : String(err),
+    );
+    outstandingQueryFailed = true;
+  }
 
   let cachedToken: string | null = null;
   const tokenFor = async () => {
@@ -610,11 +596,39 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
     return cachedToken;
   };
 
-  const { outcome, error } = await runDueReport(db, report, claim.attempts, tokenFor, outstandingFailures);
+  const { outcome, error, ledgerOk } = await runDueReport(db, report, claim.attempts, tokenFor, outstandingFailures);
   if (outcome === 'failed') {
     return json(req, { error: error ?? 'Send failed.', period: resolved.period }, 500);
   }
-  return json(req, { ok: true, sent: 1, period: resolved.period, recipients: RECIPIENTS, outstandingFailures: outstandingFailures.length });
+
+  // outstandingFailures: null (never coerced to 0) when the banner query
+  // itself failed — see I6/fetchOutstandingFailures.
+  const responseBody = {
+    ok: true,
+    ledgerOk,
+    sent: 1,
+    period: resolved.period,
+    recipients: RECIPIENTS,
+    outstandingFailures: outstandingQueryFailed ? null : outstandingFailures.length,
+  };
+
+  if (!ledgerOk) {
+    // The Graph send genuinely succeeded — do NOT report this as a failure
+    // (that would invite a retry, and a retry here is how a real duplicate
+    // email happens: see recordRun's comment). But `report_runs` still reads
+    // failed/in-progress, so it is falsely re-claimable once CLAIM_STALE_MS
+    // elapses. 200 would look identical to a completely clean send, so this
+    // uses 207 (Multi-Status) instead — still in the 2xx/"succeeded" range
+    // (never confused with a real failure by anything filtering on 5xx),
+    // but distinct enough that a human or a status-code-aware caller sees
+    // something is off, backed up by the explicit `warning` field below.
+    return json(req, {
+      ...responseBody,
+      warning: 'Email WAS sent but the ledger write failed. Do NOT re-run this command; '
+        + 'verify report_runs and the recipients\' mailboxes first.',
+    }, 207);
+  }
+  return json(req, responseBody);
 }
 
 Deno.serve(async (req) => {

@@ -117,3 +117,93 @@ export function dueReports(nowUtcMs: number): DueReport[] {
 
   return due;
 }
+
+// --- Period/range resolution for mode:'send' --------------------------------
+// Moved here from index.ts (which cannot be unit-tested under Node because
+// of its Deno `jsr:` imports) so this date logic — the newest, least-exercised
+// window computation in the feature — gets automated coverage. Pure move: no
+// behaviour change.
+
+export function monthLabel(year: number, month1: number): string {
+  return new Date(Date.UTC(year, month1 - 1, 1))
+    .toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+export interface ResolvedTestReport {
+  reportType: 'monthly_summary' | 'reminder';
+  period: string;
+  periodLabel: string;
+  rangeFromISO: string;
+  rangeToExclusiveISO: string;
+  dueDate: string;
+  daysLeftInMonth?: number;
+}
+
+// mode:'send' takes an EXPLICIT, operator-chosen period (never defaulted —
+// unlike index.ts's resolveTestReport) and bypasses dueReports()/EARLIEST_PERIOD
+// entirely. It exists to seed the very first real report for a pre-launch
+// period (July 2026, the only month with real training data — EARLIEST_PERIOD
+// = '2026-08' means dueReports() will never surface it on its own).
+//
+// Unlike resolveTestReport's reminder branch — which deliberately always
+// windows through the REAL current Dubai day regardless of the requested
+// period, because its entire purpose is "preview as if this ran today" — a
+// deliberate one-off send for a period that is NOT the current Dubai month
+// must use the period's own full calendar month. Reusing the "always today"
+// windowing here would silently span into a second month (or, for a period
+// safely in the past, produce an empty/garbled trailing window) — exactly
+// the kind of silent-corruption bug this engagement exists to avoid.
+export function resolveSendReport(
+  report: 'monthly' | 'reminder',
+  period: string,
+  nowUtcMs: number,
+): ResolvedTestReport & { delayed: boolean } {
+  const [y, m] = period.split('-').map(Number);
+  const { ymd: today } = dubaiToday(nowUtcMs);
+
+  if (report === 'monthly') {
+    const nextY = m === 12 ? y + 1 : y;
+    const nextM = m === 12 ? 1 : m + 1;
+    const dueDate = `${nextY}-${pad(nextM)}-01`;
+    return {
+      reportType: 'monthly_summary',
+      period,
+      periodLabel: monthLabel(y, m),
+      rangeFromISO: dubaiMidnightISO(y, m, 1),
+      rangeToExclusiveISO: dubaiMidnightISO(nextY, nextM, 1),
+      dueDate,
+      // Nominal-due-date rule per the cron path: a period whose due date has
+      // already passed relative to "today" is delayed (carries the banner);
+      // a period whose due date is today or still in the future is not.
+      delayed: today > dueDate,
+    };
+  }
+
+  const [ty, tm, td] = today.split('-').map(Number);
+  const isCurrentMonth = ty === y && tm === m;
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  const dueDate = `${y}-${pad(m)}-${pad(reminderDay(y, m))}`;
+  return {
+    reportType: 'reminder',
+    period,
+    periodLabel: monthLabel(y, m),
+    rangeFromISO: dubaiMidnightISO(y, m, 1),
+    // Current month -> month-to-date (same windowing dueReports() would use
+    // today). Any OTHER month is NOT reliably "always in the past": mode:'send'
+    // deliberately bypasses EARLIEST_PERIOD (that is the whole point of this
+    // mode — see above), and isValidPeriod's `20\d{2}` floor still allows any
+    // period up to 2099-12, so a future period reaches this branch too. When
+    // it does, the period's own full calendar month is used (same as a past
+    // period) since "today" has no relevance to a month that hasn't happened
+    // yet either — this yields an all-zero report. That is acceptable: it is
+    // reachable only via an explicit operator request gated behind admin
+    // auth and confirm:true, never automatically.
+    rangeToExclusiveISO: isCurrentMonth
+      ? nextDayDubaiMidnightISO(ty, tm, td)
+      : dubaiMidnightISO(nextY, nextM, 1),
+    dueDate,
+    delayed: today > dueDate,
+    daysLeftInMonth: isCurrentMonth ? lastDayOfMonth(y, m) - td : 0,
+  };
+}
