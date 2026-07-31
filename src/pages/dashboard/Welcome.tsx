@@ -15,7 +15,7 @@ const PALETTE = ['hsl(var(--chart-4))', 'hsl(var(--chart-5))', 'hsl(var(--chart-
 
 const WelcomePage: React.FC = () => {
   const isMobile = useIsMobile();
-  const { data, isLoading } = useWelcomeInsights();
+  const { data, isLoading, isError } = useWelcomeInsights();
   const k = data?.kpis;
   const chartHeight = isMobile ? 180 : 280;
   const axisFontSize = isMobile ? 9 : 11;
@@ -25,14 +25,14 @@ const WelcomePage: React.FC = () => {
       <SectionHeader title="Welcome Messages" subtitle="Arrivals & welcome message delivery" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <KpiCard label="Total arrivals" value={k?.arrivals ?? 0} icon={Plane} tone="primary" loading={isLoading} />
-        <KpiCard label="Welcome sent" value={k?.sent ?? 0} icon={Send} tone="accent" loading={isLoading} />
-        <KpiCard label="Successful" value={k?.successful ?? 0} hint={`${k?.successRate ?? 0}% rate`} icon={CheckCircle2} tone="success" loading={isLoading} />
-        <KpiCard label="Unique guests" value={k?.uniqueGuests ?? 0} icon={Users} tone="magenta" loading={isLoading} />
+        <KpiCard label="Total arrivals" value={k?.arrivals ?? 0} icon={Plane} tone="primary" loading={isLoading} error={isError} />
+        <KpiCard label="Welcome sent" value={k?.sent ?? 0} icon={Send} tone="accent" loading={isLoading} error={isError} />
+        <KpiCard label="Successful" value={k?.successful ?? 0} hint={`${k?.successRate ?? 0}% rate`} icon={CheckCircle2} tone="success" loading={isLoading} error={isError} />
+        <KpiCard label="Unique guests" value={k?.uniqueGuests ?? 0} icon={Users} tone="magenta" loading={isLoading} error={isError} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
-        <ChartCard title="Sent per day" className="lg:col-span-2" fill>
+        <ChartCard title="Sent per day" className="lg:col-span-2" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <LineChart data={data?.trend || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -44,7 +44,7 @@ const WelcomePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Status" fill>
+        <ChartCard title="Status" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.statusSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>

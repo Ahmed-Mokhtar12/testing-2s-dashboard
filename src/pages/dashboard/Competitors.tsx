@@ -15,7 +15,7 @@ const fmt = (n: number) => n ? `AED ${Math.round(n).toLocaleString()}` : '—';
 
 const CompetitorsPage: React.FC = () => {
   const isMobile = useIsMobile();
-  const { data, isLoading } = useCompetitorsInsights();
+  const { data, isLoading, isError } = useCompetitorsInsights();
   const k = data?.kpis;
   const chartHeight = isMobile ? 220 : 300;
   const axisFontSize = isMobile ? 9 : 11;
@@ -25,8 +25,8 @@ const CompetitorsPage: React.FC = () => {
       <SectionHeader title="Competitor Rates" subtitle="Live rate comparison across the comp set (AED, post-tax)" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <KpiCard label="Our avg rate" value={fmt(k?.ourAvg ?? 0)} icon={Building2} tone="primary" loading={isLoading} />
-        <KpiCard label="Comp set avg" value={fmt(k?.compAvg ?? 0)} icon={TrendingUp} tone="accent" loading={isLoading} />
+        <KpiCard label="Our avg rate" value={fmt(k?.ourAvg ?? 0)} icon={Building2} tone="primary" loading={isLoading} error={isError} />
+        <KpiCard label="Comp set avg" value={fmt(k?.compAvg ?? 0)} icon={TrendingUp} tone="accent" loading={isLoading} error={isError} />
         <KpiCard
           label="Diff vs comp set"
           value={`${(k?.diff ?? 0) >= 0 ? '+' : ''}${Math.round(k?.diff ?? 0).toLocaleString()} AED`}
@@ -34,11 +34,12 @@ const CompetitorsPage: React.FC = () => {
           icon={Percent}
           tone={(k?.diff ?? 0) >= 0 ? 'warning' : 'success'}
           loading={isLoading}
+          error={isError}
         />
-        <KpiCard label="Our rank" value={k?.ourRank ? `#${k.ourRank}` : '—'} hint={`of ${k?.totalHotels ?? 0} hotels`} icon={Trophy} tone="magenta" loading={isLoading} />
+        <KpiCard label="Our rank" value={k?.ourRank ? `#${k.ourRank}` : '—'} hint={`of ${k?.totalHotels ?? 0} hotels`} icon={Trophy} tone="magenta" loading={isLoading} error={isError} />
       </div>
 
-      <ChartCard title="Rate trend per hotel" description="Daily AED price across the period" className="lg:flex-[3] lg:min-h-0" fill>
+      <ChartCard title="Rate trend per hotel" description="Daily AED price across the period" className="lg:flex-[3] lg:min-h-0" fill error={isError}>
         <ResponsiveContainer width="100%" height={isMobile ? 220 : '100%'} minHeight={isMobile ? undefined : 160}>
           <LineChart data={data?.trend || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -54,7 +55,7 @@ const CompetitorsPage: React.FC = () => {
       </ChartCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-[2] lg:min-h-0">
-        <ChartCard title="Average price per hotel" fill>
+        <ChartCard title="Average price per hotel" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 90}>
             <BarChart data={data?.hotelAvgs || []} layout="vertical" margin={{ left: 90 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -66,7 +67,7 @@ const CompetitorsPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Days as lowest price" fill>
+        <ChartCard title="Days as lowest price" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 90}>
             <BarChart data={data?.lowestDaysArr || []} layout="vertical" margin={{ left: 90 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />

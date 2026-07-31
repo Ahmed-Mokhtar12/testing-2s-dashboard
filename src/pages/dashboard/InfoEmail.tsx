@@ -14,7 +14,7 @@ const PALETTE = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-
 
 const InfoEmailPage: React.FC = () => {
   const isMobile = useIsMobile();
-  const { data, isLoading } = useInfoEmailInsights();
+  const { data, isLoading, isError } = useInfoEmailInsights();
   const chartHeight = isMobile ? 180 : 280;
   const axisFontSize = isMobile ? 9 : 11;
 
@@ -23,14 +23,14 @@ const InfoEmailPage: React.FC = () => {
       <SectionHeader title="Info Email Audit" subtitle="Auto-routing log for info@ inbox" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <KpiCard label="Total received" value={data?.kpis.total ?? 0} icon={Inbox} tone="primary" loading={isLoading} />
-        <KpiCard label="Forwarded" value={data?.kpis.forwarded ?? 0} icon={Forward} tone="accent" loading={isLoading} />
-        <KpiCard label="Deleted" value={data?.kpis.deleted ?? 0} icon={Trash2} tone="destructive" loading={isLoading} />
-        <KpiCard label="Manual override" value={data?.kpis.overridden ?? 0} icon={ShieldAlert} tone="warning" loading={isLoading} />
+        <KpiCard label="Total received" value={data?.kpis.total ?? 0} icon={Inbox} tone="primary" loading={isLoading} error={isError} />
+        <KpiCard label="Forwarded" value={data?.kpis.forwarded ?? 0} icon={Forward} tone="accent" loading={isLoading} error={isError} />
+        <KpiCard label="Deleted" value={data?.kpis.deleted ?? 0} icon={Trash2} tone="destructive" loading={isLoading} error={isError} />
+        <KpiCard label="Manual override" value={data?.kpis.overridden ?? 0} icon={ShieldAlert} tone="warning" loading={isLoading} error={isError} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
-        <ChartCard title="Action breakdown" fill>
+        <ChartCard title="Action breakdown" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.actions || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
@@ -42,7 +42,7 @@ const InfoEmailPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Forwarded by department" className="lg:col-span-2" fill>
+        <ChartCard title="Forwarded by department" className="lg:col-span-2" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <BarChart data={data?.departments || []} layout="vertical" margin={{ left: 80 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -55,7 +55,7 @@ const InfoEmailPage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Confidence distribution" className="lg:flex-1 lg:min-h-0" fill>
+      <ChartCard title="Confidence distribution" className="lg:flex-1 lg:min-h-0" fill error={isError}>
         <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
           <BarChart data={data?.confidence || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />

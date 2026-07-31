@@ -19,14 +19,18 @@ import { tooltipStyle, tooltipItemStyle, tooltipLabelStyle, lineCursor } from '@
 
 type TileTone = 'primary' | 'accent' | 'magenta';
 
+/** Just the two flags each tile needs from its react-query result. */
+type QueryState = { isLoading: boolean; isError: boolean };
+
 const tile = (
   to: string,
   icon: React.ReactNode,
   label: string,
+  q: QueryState,
   value: string | number,
   hint?: string,
   tone: TileTone = 'primary',
-) => ({ to, icon, label, value, hint, tone });
+) => ({ to, icon, label, value, hint, tone, loading: q.isLoading, error: q.isError });
 
 const Overview: React.FC = () => {
   const { label } = useDateRange();
@@ -41,23 +45,23 @@ const Overview: React.FC = () => {
   const chartHeight = isMobile ? 180 : 240;
   const axisFontSize = isMobile ? 9 : 11;
 
-  const tiles = useMemo(
-    () => [
-      tile('/dashboard/reviews', <Star className="h-5 w-5" />, 'Reviews', reviews.data?.kpis.total ?? 0, `Avg ${(reviews.data?.kpis.avg ?? 0).toFixed(2)} / 5`, 'primary'),
-      tile('/dashboard/whatsapp', <MessageCircle className="h-5 w-5" />, 'WhatsApp', wa.data?.kpis.total ?? 0, `${wa.data?.kpis.uniqueGuests ?? 0} guests`, 'accent'),
-      // `kpis.inbound` never existed on useEmailInsights ({ total, newEmails,
-      // replyEmails, uniqueGuests }) — so this sub-line read "0 inbound" on
-      // every load regardless of the data, and `?? 0` hid it. This dataset is
-      // Sera's SENT mail, so there is no inbound count to show; newEmails is
-      // the same figure the Email page labels "New Emails".
-      tile('/dashboard/email', <Mail className="h-5 w-5" />, 'Email Threads', email.data?.kpis.total ?? 0, `${email.data?.kpis.newEmails ?? 0} new`, 'magenta'),
-      tile('/dashboard/competitors', <TrendingUp className="h-5 w-5" />, 'Comp Rank', comps.data?.kpis.ourRank ? `#${comps.data.kpis.ourRank}` : '—', `of ${comps.data?.kpis.totalHotels ?? 0} hotels`, 'primary'),
-      tile('/dashboard/info-email', <Inbox className="h-5 w-5" />, 'Info Emails', info.data?.kpis.total ?? 0, `${info.data?.kpis.forwarded ?? 0} forwarded`, 'accent'),
-      tile('/dashboard/social', <Share2 className="h-5 w-5" />, 'Social DMs', social.data?.kpis.totalDMs ?? 0, `${social.data?.kpis.igComments ?? 0} IG comments`, 'magenta'),
-      tile('/dashboard/welcome', <Send className="h-5 w-5" />, 'Welcome Sent', welcome.data?.kpis.sent ?? 0, `${welcome.data?.kpis.successRate ?? 0}% success`, 'primary'),
-    ],
-    [reviews.data, wa.data, email.data, comps.data, info.data, social.data, welcome.data]
-  );
+  // Deliberately NOT memoised. Each tile now depends on its query's isLoading
+  // and isError as well as its data, and a useMemo over 21 flags is a
+  // stale-dependency trap for the sake of rebuilding seven small objects.
+  const tiles = [
+    tile('/dashboard/reviews', <Star className="h-5 w-5" />, 'Reviews', reviews, reviews.data?.kpis.total ?? 0, `Avg ${(reviews.data?.kpis.avg ?? 0).toFixed(2)} / 5`, 'primary'),
+    tile('/dashboard/whatsapp', <MessageCircle className="h-5 w-5" />, 'WhatsApp', wa, wa.data?.kpis.total ?? 0, `${wa.data?.kpis.uniqueGuests ?? 0} guests`, 'accent'),
+    // `kpis.inbound` never existed on useEmailInsights ({ total, newEmails,
+    // replyEmails, uniqueGuests }) — so this sub-line read "0 inbound" on
+    // every load regardless of the data, and `?? 0` hid it. This dataset is
+    // Sera's SENT mail, so there is no inbound count to show; newEmails is
+    // the same figure the Email page labels "New Emails".
+    tile('/dashboard/email', <Mail className="h-5 w-5" />, 'Email Threads', email, email.data?.kpis.total ?? 0, `${email.data?.kpis.newEmails ?? 0} new`, 'magenta'),
+    tile('/dashboard/competitors', <TrendingUp className="h-5 w-5" />, 'Comp Rank', comps, comps.data?.kpis.ourRank ? `#${comps.data.kpis.ourRank}` : '—', `of ${comps.data?.kpis.totalHotels ?? 0} hotels`, 'primary'),
+    tile('/dashboard/info-email', <Inbox className="h-5 w-5" />, 'Info Emails', info, info.data?.kpis.total ?? 0, `${info.data?.kpis.forwarded ?? 0} forwarded`, 'accent'),
+    tile('/dashboard/social', <Share2 className="h-5 w-5" />, 'Social DMs', social, social.data?.kpis.totalDMs ?? 0, `${social.data?.kpis.igComments ?? 0} IG comments`, 'magenta'),
+    tile('/dashboard/welcome', <Send className="h-5 w-5" />, 'Welcome Sent', welcome, welcome.data?.kpis.sent ?? 0, `${welcome.data?.kpis.successRate ?? 0}% success`, 'primary'),
+  ];
 
   const reviewsTrend = useMemo(() => reviews.data?.trend || [], [reviews.data]);
   const whatsAppTrend = useMemo(() => wa.data?.trend || [], [wa.data]);
@@ -72,13 +76,20 @@ const Overview: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 short:gap-2 shrink-0">
         {tiles.map((currentTile) => (
           <Link key={currentTile.to} to={currentTile.to} className="group">
-            <KpiCard label={currentTile.label} value={currentTile.value} hint={currentTile.hint} tone={currentTile.tone} />
+            <KpiCard
+              label={currentTile.label}
+              value={currentTile.value}
+              hint={currentTile.hint}
+              tone={currentTile.tone}
+              loading={currentTile.loading}
+              error={currentTile.error}
+            />
           </Link>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-0">
-        <ChartCard title="Reviews · daily" description="Volume per day in selected range" fill>
+        <ChartCard title="Reviews · daily" description="Volume per day in selected range" fill error={reviews.isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <AreaChart data={reviewsTrend}>
               <defs>
@@ -96,7 +107,7 @@ const Overview: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="WhatsApp · daily" description="Guest conversations per day" fill>
+        <ChartCard title="WhatsApp · daily" description="Guest conversations per day" fill error={wa.isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <AreaChart data={whatsAppTrend}>
               <defs>

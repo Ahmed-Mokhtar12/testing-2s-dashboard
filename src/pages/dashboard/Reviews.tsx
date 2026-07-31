@@ -15,7 +15,7 @@ const PALETTE = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-
 
 const ReviewsPage: React.FC = () => {
   const isMobile = useIsMobile();
-  const { data, isLoading } = useReviewsInsights();
+  const { data, isLoading, isError } = useReviewsInsights();
   const chartHeight = isMobile ? 180 : 280;
   const axisFontSize = isMobile ? 9 : 11;
 
@@ -24,14 +24,14 @@ const ReviewsPage: React.FC = () => {
       <SectionHeader title="Reviews" subtitle="Guest feedback across all channels" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <KpiCard label="Total reviews" value={data?.kpis.total ?? 0} icon={Star} tone="primary" loading={isLoading} />
-        <KpiCard label="Average score" value={(data?.kpis.avg ?? 0).toFixed(2)} hint="out of 5" icon={BarChart3} tone="accent" loading={isLoading} />
-        <KpiCard label="Positive (≥4)" value={data?.kpis.positive ?? 0} icon={ThumbsUp} tone="success" loading={isLoading} />
-        <KpiCard label="Negative (≤2.5)" value={data?.kpis.negative ?? 0} icon={ThumbsDown} tone="destructive" loading={isLoading} />
+        <KpiCard label="Total reviews" value={data?.kpis.total ?? 0} icon={Star} tone="primary" loading={isLoading} error={isError} />
+        <KpiCard label="Average score" value={(data?.kpis.avg ?? 0).toFixed(2)} hint="out of 5" icon={BarChart3} tone="accent" loading={isLoading} error={isError} />
+        <KpiCard label="Positive (≥4)" value={data?.kpis.positive ?? 0} icon={ThumbsUp} tone="success" loading={isLoading} error={isError} />
+        <KpiCard label="Negative (≤2.5)" value={data?.kpis.negative ?? 0} icon={ThumbsDown} tone="destructive" loading={isLoading} error={isError} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
-        <ChartCard title="Daily volume" className="lg:col-span-2" fill>
+        <ChartCard title="Daily volume" className="lg:col-span-2" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <AreaChart data={data?.trend || []}>
               <defs>
@@ -49,7 +49,7 @@ const ReviewsPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Source breakdown" fill>
+        <ChartCard title="Source breakdown" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.sources || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
@@ -62,7 +62,7 @@ const ReviewsPage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Score distribution" className="lg:flex-1 lg:min-h-0" fill>
+      <ChartCard title="Score distribution" className="lg:flex-1 lg:min-h-0" fill error={isError}>
         <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
           <BarChart data={data?.distribution || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />

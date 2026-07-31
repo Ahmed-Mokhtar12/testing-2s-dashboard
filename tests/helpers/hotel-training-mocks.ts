@@ -126,7 +126,7 @@ export async function mockManageColleagueFunction(
   );
 }
 
-const PROJECT_REF = 'yczcebfaqerlwfalrbjn';
+export const PROJECT_REF = 'yczcebfaqerlwfalrbjn';
 const AUTH_KEY = `sb-${PROJECT_REF}-auth-token`;
 
 // Colleagues are now read via the sp-read-colleagues Edge Function (application

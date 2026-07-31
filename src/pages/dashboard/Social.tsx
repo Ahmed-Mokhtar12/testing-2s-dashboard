@@ -14,7 +14,7 @@ const PALETTE = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-
 
 const SocialPage: React.FC = () => {
   const isMobile = useIsMobile();
-  const { data, isLoading } = useSocialInsights();
+  const { data, isLoading, isError } = useSocialInsights();
   const chartHeight = isMobile ? 180 : 280;
   const axisFontSize = isMobile ? 9 : 11;
 
@@ -23,14 +23,14 @@ const SocialPage: React.FC = () => {
       <SectionHeader title="Social Engagement" subtitle="Instagram & Facebook DMs and comments" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <KpiCard label="IG comments" value={data?.kpis.igComments ?? 0} icon={Hash} tone="magenta" loading={isLoading} />
-        <KpiCard label="Total DMs" value={data?.kpis.totalDMs ?? 0} icon={MessageSquare} tone="primary" loading={isLoading} />
-        <KpiCard label="Instagram DMs" value={data?.kpis.igDMs ?? 0} icon={Instagram} tone="accent" loading={isLoading} />
-        <KpiCard label="Facebook DMs" value={data?.kpis.fbDMs ?? 0} icon={Facebook} tone="success" loading={isLoading} />
+        <KpiCard label="IG comments" value={data?.kpis.igComments ?? 0} icon={Hash} tone="magenta" loading={isLoading} error={isError} />
+        <KpiCard label="Total DMs" value={data?.kpis.totalDMs ?? 0} icon={MessageSquare} tone="primary" loading={isLoading} error={isError} />
+        <KpiCard label="Instagram DMs" value={data?.kpis.igDMs ?? 0} icon={Instagram} tone="accent" loading={isLoading} error={isError} />
+        <KpiCard label="Facebook DMs" value={data?.kpis.fbDMs ?? 0} icon={Facebook} tone="success" loading={isLoading} error={isError} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-0">
-        <ChartCard title="Platform split" fill>
+        <ChartCard title="Platform split" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.platformSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
@@ -42,7 +42,7 @@ const SocialPage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Event type" fill>
+        <ChartCard title="Event type" fill error={isError}>
           <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
             <PieChart>
               <Pie data={data?.eventSplit || []} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
@@ -55,7 +55,7 @@ const SocialPage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Conversation nature" description="Inferred from notes / status / message text" className="lg:flex-1 lg:min-h-0" fill>
+      <ChartCard title="Conversation nature" description="Inferred from notes / status / message text" className="lg:flex-1 lg:min-h-0" fill error={isError}>
         <ResponsiveContainer width="100%" height={isMobile ? chartHeight : '100%'} minHeight={isMobile ? undefined : 160}>
           <BarChart data={data?.natureSplit || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
