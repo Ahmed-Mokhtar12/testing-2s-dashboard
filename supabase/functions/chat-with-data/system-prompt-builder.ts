@@ -1,4 +1,12 @@
-import { ConversationData } from './conversation-context-analyzer.ts';
+// `import type`, not a value import: ConversationData is an interface, so a
+// plain `import { ConversationData }` leaves a real runtime import of a name
+// the module never exports. Deno's compiler erases it either way, so the
+// deployed function was unaffected — but Node's native type stripping cannot
+// know it is a type, keeps the statement, and throws
+// "does not provide an export named 'ConversationData'". That is what stopped
+// `node --test` from running this repo's unit tests without an external
+// transpiler. Any type-only import in this tree should say `import type`.
+import type { ConversationData } from './conversation-context-analyzer.ts';
 import { getDubaiTimezoneContext, DEFAULT_LANGUAGE } from './timezone-utils.ts';
 
 export class SystemPromptBuilder {

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SystemPromptBuilder } from '../../supabase/functions/chat-with-data/system-prompt-builder.ts';
-import { ConversationData } from '../../supabase/functions/chat-with-data/conversation-context-analyzer.ts';
+// `import type` — see the note in system-prompt-builder.ts: a value import of
+// an interface survives Node's type stripping and throws at load time.
+import type { ConversationData } from '../../supabase/functions/chat-with-data/conversation-context-analyzer.ts';
 
 const emptyConversation: ConversationData = {
   recentDataPoints: new Map(),
