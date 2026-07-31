@@ -126,10 +126,30 @@ all measured with empty data. What the suite actually verifies for those six:
 Hotel Training's participant list is different: it is the one genuinely unbounded,
 data-independent-in-the-wrong-direction piece of content in scope (more participants literally
 means a taller list, unlike the fixed-height charts). It **is** exercised with real, maximum
-data: a dedicated test drives the wizard to 15 participants (the form's own cap) at 1366×768 and
+data: a dedicated test renders 15 participants (the form's own cap) at 1366×768 and
 asserts the document still does not scroll while the wizard's own column does — proving
 overflow lands inside the panel rather than at the document level, or (post-I4) getting
 silently clipped by `main`.
+
+**Amended 2026-07-31 — how those 15 rows get there.** The test originally *drove* the wizard,
+clicking through 15 participant popovers. That made it the slowest test in the suite (23s
+alone) and, under full-suite host contention on this 2-core box, a flaky one: it blew past a
+30s ceiling, then a 120s one, then a 300s one, the last time dying inside `locator.click` with
+"element is not stable" — a popover close animation, not slow-but-progressing work. It is now
+seeded through the draft-restore path (`localStorage` key `hotel-training-draft-<email>`),
+which reaches the identical 15-row DOM in one click and runs in 4.9s with no animation at all.
+
+The assertions are unchanged, and the seeding is checked rather than assumed: 15 *empty* rows
+would also overflow, so the test asserts the first and last rows actually render
+`colleagueName (employeeId)` and that exactly 15 rows exist. Both that guard and the layout
+assertion were mutation-tested — seeding `colleague: null` fails the row guard, and seeding a
+single participant (with the guards removed) makes the wizard column stop overflowing and
+fails the layout assertion, so it is measuring the 15-row layout and not merely "the page
+rendered".
+
+What the rewrite gives up: the old version incidentally proved the wizard can be driven to 15
+rows by hand and that duplicate-blocking never runs out of selectable colleagues. Both are
+covered by `tests/hotel-training.spec.ts`, and neither was what this test asserts.
 
 Assertions:
 

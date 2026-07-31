@@ -6,7 +6,12 @@ import {
   mockColumnsFunction,
   mockTrainersFunction,
   MOCK_COLLEAGUES_MANY,
+  MOCK_TRAINERS_FLAT,
 } from './helpers/hotel-training-mocks';
+
+// setMockAuthSession's default identity. DRAFT_KEY lowercases the email
+// (src/lib/hotel-training-constants.ts), and this one is already lowercase.
+const DRAFT_EMAIL = 'user@2seasonshotels.com';
 
 const IN_SCOPE = [
   '/dashboard',
@@ -143,70 +148,111 @@ test.describe('full-viewport layout (desktop)', () => {
 test.describe('full-viewport layout — Hotel Training max participants (desktop)', () => {
   test.skip(({ isMobile }) => isMobile, 'desktop-only assertion');
 
-  async function selectByTriggerText(page: Page, triggerText: string | RegExp, optionName: string) {
-    await page.getByRole('combobox').filter({ hasText: triggerText }).click();
-    await page.getByRole('option', { name: optionName }).click();
-  }
-
   test('hotel-training wizard at 15 participants: document does not scroll, wizard column does', async ({ page }) => {
-    // ~25 real UI interactions, 15 of them popover open/select round-trips
-    // whose close animation must settle between rows. Measured on this
-    // 2-core host, single Playwright worker, against the Vite DEV server:
+    // SETUP REWRITTEN 2026-07-31 — draft-seeded, not hand-entered.
+    //
+    // The original version drove ~25 real UI interactions, 15 of them popover
+    // open/select round-trips whose close animation has to settle between rows.
+    // Measured on this 2-core host, single worker, against the Vite dev server:
     //   spec alone .................. 23s   (passes on the 30s default)
     //   4-spec run, 120s ceiling .... FAILED
     //   4-spec run, 600s ceiling .... passed (whole run 6.6 min)
-    // so the variance is well over 5x and driven by host contention, not by
-    // this test's own work — it also failed identically on a tree with none of
-    // that day's changes stashed away, so it is not a product regression.
+    //   full suite, 300s ceiling .... FAILED again (run took 11.8 min)
+    // and that last failure was not a slow-but-progressing test: it died in
+    // `locator.click` on a participant option with "element is not stable",
+    // i.e. mid-animation. The variance is over 5x and driven by host
+    // contention, so raising the ceiling a fourth time would just buy another
+    // coin flip — the previous note in this file said explicitly not to, and
+    // this is that remedy instead.
     //
-    // 300s is deliberately generous rather than tuned: a tighter number on a
-    // spread that wide is a coin flip. If this ever times out again, do NOT
-    // raise it a third time — the real fix is to stop entering 15 participants
-    // by hand and seed them through the draft-restore path instead (localStorage
-    // key `hotel-training-draft-<email>`, shape { trainingDetails, participants:
-    // ParticipantRow[], step, savedAt }, as tests/hotel-training.spec.ts's
-    // legacy-draft test does), which reaches the same 15-row layout in one click.
-    // That was not done here because the assertion under test is a layout one and
-    // rewriting the setup risks trading a slow test for a flaky one.
-    test.setTimeout(300_000);
+    // The 15 participants now arrive through the draft-restore path
+    // (localStorage `hotel-training-draft-<email>`, shape
+    // { trainingDetails, participants: ParticipantRow[], step, savedAt } — the
+    // same seam tests/hotel-training.spec.ts's legacy-draft test uses), which
+    // reaches the identical 15-row layout with ONE click and zero popover
+    // animations. The assertions below are unchanged; only the setup is.
+    //
+    // What this trades away, stated rather than hidden: the old version also
+    // incidentally proved the wizard can be driven to 15 rows by hand, and
+    // that duplicate blocking does not run out of selectable colleagues. Both
+    // of those are already covered by tests/hotel-training.spec.ts (duplicate
+    // participant blocking, reduce-count confirmation), and neither was what
+    // THIS test asserts. What is left is a layout test that measures layout.
     await page.setViewportSize({ width: 1366, height: 768 });
     await setMockAuthSession(page);
     await mockSupabaseRest(page);
     // MOCK_COLLEAGUES_MANY (not the default MOCK_COLLEAGUES_FLAT, which only
-    // has 3 active colleagues): the wizard blocks duplicate participants, so
-    // filling all 15 rows needs 15 distinct active colleagues. This is a
-    // page-scoped route override — it has no effect on other specs.
+    // has 3 active colleagues): 15 distinct active colleagues are needed, and
+    // the seeded rows below are taken from this list so the restored draft
+    // references people the directory actually returns. Page-scoped override —
+    // no effect on other specs.
     await mockColleaguesFunction(page, { list: MOCK_COLLEAGUES_MANY });
     await mockColumnsFunction(page);
     await mockTrainersFunction(page);
+
+    // Last 15 ACTIVE colleagues: col-5..col-19 (Eve Turner .. Samuel Osei).
+    // Taken from the tail rather than the head so the inactive Dave Black and
+    // the three shared MOCK_COLLEAGUES_FLAT entries are skipped without this
+    // test depending on which of them are active.
+    const seededRows = MOCK_COLLEAGUES_MANY
+      .filter((colleague) => colleague.isActive)
+      .slice(-15)
+      .map((colleague, index) => ({ rowNo: index + 1, colleague }));
+    expect(seededRows).toHaveLength(15);
+
+    await page.addInitScript(
+      ({ key, value }) => {
+        window.localStorage.setItem(key, value);
+      },
+      {
+        key: `hotel-training-draft-${DRAFT_EMAIL}`,
+        value: JSON.stringify({
+          trainingDetails: {
+            title: 'Full Viewport Max Participants',
+            department: 'Engineering',
+            durationMinutes: 60,
+            totalParticipants: 15,
+            // Serialised as a string; restoreDraft revives it with
+            // `new Date(draft.trainingDetails.date)` (HotelTraining.tsx:157).
+            date: '2026-07-15T00:00:00.000Z',
+            hour: 9,
+            minute: 0,
+            trainers: [MOCK_TRAINERS_FLAT[0]],
+          },
+          participants: seededRows,
+          step: 2,
+          savedAt: new Date().toISOString(),
+        }),
+      },
+    );
+
     await page.goto('/dashboard/hotel-training');
     await expect(page.getByRole('button', { name: 'Training Details' })).toBeVisible();
     await expect(page.getByText('Loading training data...')).toBeHidden();
 
-    await page.getByLabel('Training Title').fill('Full Viewport Max Participants');
-    await selectByTriggerText(page, 'Select department', 'Engineering');
-    await selectByTriggerText(page, 'Select duration', '1 hour');
-    await page.getByLabel('Total Participants').fill('15');
-    await page.getByRole('button', { name: /Pick a date/ }).click();
-    await page.getByRole('gridcell', { name: '15', exact: true }).first().click();
-    await selectByTriggerText(page, /09|Hour/, '09');
-    await selectByTriggerText(page, /00|Min/, '00');
-    await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
-    await page.getByRole('option', { name: 'Ahmed Mokhtar Elsayed Elaktaa' }).click();
-    await page.keyboard.press('Escape');
+    await expect(page.getByText(/You have an unsaved draft from/)).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Restore' }).click();
+    await expect(page.getByLabel('Training Title')).toHaveValue('Full Viewport Max Participants');
 
+    // `step: 2` in the draft is deliberately ignored by the app —
+    // restoreDraft() always calls setStep(1) so the details can be reviewed
+    // before submitting (HotelTraining.tsx:164). So the seeded step is not what
+    // gets us to the participants view; this click is. Because
+    // totalParticipants (15) equals participants.length (15), applyStep1 takes
+    // neither the grow nor the trim branch and the seeded rows survive intact.
     await page.getByRole('button', { name: /Next: Add Participants/ }).click();
     await expect(page.getByRole('button', { name: 'Participants' })).toBeVisible();
 
-    // 15 distinct colleagues are required — the wizard blocks duplicates —
-    // so just always take the first still-available option per row (see the
-    // extended MOCK_COLLEAGUES_MANY in hotel-training-mocks.ts).
-    for (let row = 1; row <= 15; row++) {
-      await page.getByTestId(`participant-select-${row}`).click();
-      const firstOption = page.getByRole('option').first();
-      await firstOption.waitFor({ state: 'visible' });
-      await firstOption.click();
-    }
+    // ANTI-VACUITY GUARD, and the whole reason the seeding is trustworthy: 15
+    // EMPTY rows would also make the page overflow, so proving the rows exist
+    // is not enough — they have to be FILLED, which is what the old
+    // click-through guaranteed for free. A filled trigger renders
+    // `${colleagueName} (${employeeId})` (ParticipantRow.tsx:52); an empty one
+    // does not. Checking first, last and the count covers the ways the restore
+    // could half-work.
+    await expect(page.getByTestId('participant-select-1')).toHaveText(/Eve Turner \(2001\)/);
+    await expect(page.getByTestId('participant-select-15')).toHaveText(/Samuel Osei \(2015\)/);
+    await expect(page.getByTestId(/^participant-select-\d+$/)).toHaveCount(15);
     await page.waitForLoadState('networkidle');
 
     // The claim under test: with 15 participants the DOCUMENT never scrolls
