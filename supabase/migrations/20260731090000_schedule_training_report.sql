@@ -1,8 +1,10 @@
--- DO NOT APPLY YET. This migration must be applied ONLY after the user has
--- reviewed both manual test-send emails (mode:'test', 'monthly' and
--- 'reminder' reports) and explicitly approved go-live. It is committed now
--- so the schedule definition is version-controlled ahead of that approval,
--- but it is intentionally left unapplied until then.
+-- APPLIED 2026-07-31 (jobid 3) via MCP apply_migration, after the owner
+-- reviewed both mode:'test' emails and approved go-live. Recorded in
+-- supabase_migrations.schema_migrations as version 20260731183744 name
+-- 'schedule_training_report' — note that this project's recorded versions do
+-- not match these filenames (every migration here was applied via MCP, which
+-- stamps its own timestamp), so do NOT assume `supabase db push` would be a
+-- no-op against this file.
 --
 -- Hourly heartbeat for training report emails. The function itself decides
 -- what (if anything) is due — Dubai date logic, claim-guarded via
