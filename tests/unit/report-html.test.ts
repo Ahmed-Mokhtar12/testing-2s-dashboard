@@ -27,21 +27,86 @@ test('summary email: table rows incl. zero row, dark-console styling, no target 
   assert.doesNotMatch(html, /Target/);
 });
 
-test('reminder email: days-left headline; target columns appear only when a target is set', () => {
+// CHANGED for the weekly cadence: the framing is PROGRESS, not deadline. A
+// weekly asks "how far through the month are we", so "day 7 of 31" replaces
+// "24 days left" — and on the first Friday of a month that distinction is what
+// stops a structurally small total reading as a bad month.
+test('weekly email: day-X-of-Y subject and headline; target columns appear only when a target is set', () => {
   const noTargets = renderReportEmail({
-    reportType: 'reminder', periodLabel: 'July 2026',
-    data: data(), delayed: false, dueDate: '2026-07-24', daysLeftInMonth: 7,
+    reportType: 'reminder', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-08-07',
+    daysElapsed: 7, daysLeftInMonth: 24,
   });
-  assert.match(noTargets.subject, /7 days left in July 2026/);
+  assert.equal(noTargets.subject, '2S Weekly Training Progress — August 2026 (day 7 of 31)');
+  assert.match(noTargets.html, /August 2026 month-to-date/);
+  assert.match(noTargets.html, /day 7 of 31/);
+  assert.doesNotMatch(noTargets.html, /days left/);
   assert.doesNotMatch(noTargets.html, /Target/);
 
   const withTargets = renderReportEmail({
-    reportType: 'reminder', periodLabel: 'July 2026',
+    reportType: 'reminder', periodLabel: 'August 2026',
     data: data({ anyTargetSet: true, rows: [row({ target: 40, pctOfTarget: 50 })] }),
-    delayed: false, dueDate: '2026-07-24', daysLeftInMonth: 7,
+    delayed: false, dueDate: '2026-08-07', daysElapsed: 7, daysLeftInMonth: 24,
   });
   assert.match(withTargets.html, /Target/);
   assert.match(withTargets.html, /50%/);
+});
+
+// RULING: a first Friday covering only a few days sends anyway, and must state
+// the period and days elapsed plainly so a small number reads as EARLY rather
+// than alarming. The subject carries "day 7 of 31"; this is the in-body line.
+test('weekly email: the first Friday says the figures are partial; later Fridays do not', () => {
+  const first = renderReportEmail({
+    reportType: 'reminder', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-08-07',
+    daysElapsed: 7, daysLeftInMonth: 24,
+  });
+  assert.match(first.html, /Covers 1&ndash;7 August 2026/);
+  assert.match(first.html, /7 days elapsed, 24 remaining/);
+  assert.match(first.html, /first Friday of the month/);
+  assert.match(first.html, /cover 7 days, so low totals are expected/);
+
+  const later = renderReportEmail({
+    reportType: 'reminder', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-08-21',
+    daysElapsed: 21, daysLeftInMonth: 10,
+  });
+  assert.match(later.html, /Covers 1&ndash;21 August 2026/);
+  assert.match(later.html, /21 days elapsed, 10 remaining/);
+  assert.doesNotMatch(later.html, /first Friday of the month/);
+
+  // Day 7 exactly is the boundary; day 8 is not "early".
+  const boundary = renderReportEmail({
+    reportType: 'reminder', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-08-07', daysElapsed: 8, daysLeftInMonth: 23,
+  });
+  assert.doesNotMatch(boundary.html, /first Friday of the month/);
+});
+
+// The month length is recovered as daysElapsed + daysLeftInMonth rather than by
+// calendar arithmetic, because this module is deliberately calendar-free. That
+// makes it an implicit cross-file contract; report-schedule.test.ts pins the
+// producing side, and this pins that a 30-day month reads as 30.
+test('weekly email: month length comes from the two day counts, so a 30-day month says 30', () => {
+  const sept = renderReportEmail({
+    reportType: 'reminder', periodLabel: 'September 2026',
+    data: data(), delayed: false, dueDate: '2026-09-25', daysElapsed: 25, daysLeftInMonth: 5,
+  });
+  assert.equal(sept.subject, '2S Weekly Training Progress — September 2026 (day 25 of 30)');
+});
+
+// The monthly summary is unchanged by all of this — same subject, and no weekly
+// progress line. Asserted so a future edit to the shared renderer cannot quietly
+// give the summary a "day X of Y" it should not have.
+test('summary email is untouched by the weekly framing', () => {
+  const { subject, html } = renderReportEmail({
+    reportType: 'monthly_summary', periodLabel: 'August 2026',
+    data: data(), delayed: false, dueDate: '2026-09-01',
+  });
+  assert.equal(subject, '2S Monthly Training Summary — August 2026');
+  assert.match(html, /August 2026 training summary/);
+  assert.doesNotMatch(html, /month-to-date/);
+  assert.doesNotMatch(html, /days elapsed/);
 });
 
 test('pct pill tiers: green >=100%, amber 50-99%, red <50%, gray no-target — each with its tier hex', () => {
@@ -120,11 +185,15 @@ test('outstanding-failures banner present with report/period/attempts when popul
     reportType: 'monthly_summary', periodLabel: 'August 2026',
     data: data(), delayed: false, dueDate: '2026-09-01',
     outstandingFailures: [
-      { reportType: 'reminder', period: '2026-07', attempts: 42, lastError: 'Graph 403 ErrorAccessDenied' },
+      { reportType: 'reminder', period: '2026-07', occurrence: '2026-07-24', attempts: 42, lastError: 'Graph 403 ErrorAccessDenied' },
     ],
   });
   assert.match(html, /Unsent reports need attention/);
   assert.match(html, /Reminder/);
+  // Names the OCCURRENCE, not just the period: four weekly rows can share
+  // period 2026-07, so "the reminder for 2026-07 failed" identifies nothing —
+  // a reader could not tell which Friday, or whether two of them failed.
+  assert.match(html, /due <strong>2026-07-24<\/strong>/);
   assert.match(html, /2026-07/);
   assert.match(html, /42 failed attempt\(s\)/);
   assert.match(html, /Graph 403 ErrorAccessDenied/);
@@ -138,7 +207,7 @@ test('outstanding-failures banner truncates a long last_error and HTML-escapes i
     reportType: 'monthly_summary', periodLabel: 'August 2026',
     data: data(), delayed: false, dueDate: '2026-09-01',
     outstandingFailures: [
-      { reportType: 'monthly_summary', period: '2026-06', attempts: 3, lastError: longError },
+      { reportType: 'monthly_summary', period: '2026-06', occurrence: '2026-07-01', attempts: 3, lastError: longError },
     ],
   });
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
@@ -153,7 +222,7 @@ test('outstanding-failures banner handles a null last_error', () => {
     reportType: 'monthly_summary', periodLabel: 'August 2026',
     data: data(), delayed: false, dueDate: '2026-09-01',
     outstandingFailures: [
-      { reportType: 'reminder', period: '2026-07', attempts: 1, lastError: null },
+      { reportType: 'reminder', period: '2026-07', occurrence: '2026-07-31', attempts: 1, lastError: null },
     ],
   });
   assert.match(html, /no error recorded/);

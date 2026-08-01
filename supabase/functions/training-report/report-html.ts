@@ -11,6 +11,11 @@ import type { ReportData, DeptReportRow } from './report-aggregator.ts';
 export interface OutstandingFailure {
   reportType: string;
   period: string;
+  // Which scheduled send failed. Required, not optional: with a weekly cadence
+  // four or five reminder occurrences share one period, so "the reminder for
+  // 2026-08 failed" no longer identifies anything — a reader could not tell
+  // which Friday, or whether two separate Fridays failed.
+  occurrence: string;
   attempts: number;
   lastError: string | null;
 }
@@ -22,6 +27,12 @@ export interface RenderReportEmailOptions {
   delayed: boolean;
   dueDate: string;            // YYYY-MM-DD
   daysLeftInMonth?: number;
+  // Reminder only: days of the month covered so far, i.e. the day-of-month of
+  // the send. The weekly's framing is PROGRESS, not deadline — "day 7 of 31"
+  // rather than "24 days left" — because on the first Friday of a month a small
+  // total is early, not alarming, and the subject has to say so before anyone
+  // opens the mail.
+  daysElapsed?: number;
   testMode?: boolean;
   // Other (report_type, period) rows currently sitting 'failed' in
   // report_runs, excluding the one this email itself covers. Rendered as a
@@ -136,7 +147,7 @@ function outstandingFailuresBanner(failures?: OutstandingFailure[]): string {
     const label = REPORT_TYPE_LABEL[f.reportType] ?? f.reportType;
     return `
               <li style="margin:0 0 6px 0;">
-                <strong>${esc(label)}</strong> for <strong>${esc(f.period)}</strong> — ${esc(f.attempts)} failed attempt(s). Last error: ${esc(truncateError(f.lastError))}
+                <strong>${esc(label)}</strong> due <strong>${esc(f.occurrence)}</strong> (${esc(f.period)}) — ${esc(f.attempts)} failed attempt(s). Last error: ${esc(truncateError(f.lastError))}
               </li>`;
   }).join('');
   return `
@@ -151,11 +162,41 @@ function outstandingFailuresBanner(failures?: OutstandingFailure[]): string {
       </table>`;
 }
 
+// Total days in the period's month, recovered from the two numbers the caller
+// already supplies rather than re-deriving the calendar in this module (which is
+// deliberately calendar-free — see the file header). daysElapsed counts today
+// inclusive and daysLeftInMonth counts the days after today, so they sum to the
+// month length.
+function daysInMonthFrom(opts: RenderReportEmailOptions): number {
+  return (opts.daysElapsed ?? 0) + (opts.daysLeftInMonth ?? 0);
+}
+
 function subjectFor(opts: RenderReportEmailOptions): string {
   const base = opts.reportType === 'monthly_summary'
     ? `2S Monthly Training Summary — ${opts.periodLabel}`
-    : `2S Training Reminder — ${opts.daysLeftInMonth ?? 0} days left in ${opts.periodLabel}`;
+    : `2S Weekly Training Progress — ${opts.periodLabel} (day ${opts.daysElapsed ?? 0} of ${daysInMonthFrom(opts)})`;
   return opts.testMode ? `[TEST] ${base}` : base;
+}
+
+// Ruling: a first Friday covering only a few days still sends, and must state
+// the period and days elapsed plainly so a small number reads as EARLY rather
+// than as a bad month. The "day X of Y" subject and this line are that
+// statement; the threshold is 7 because the first Friday of any month falls on
+// day 1-7 by definition, so this shows on exactly the send where the totals are
+// structurally partial.
+const EARLY_MONTH_DAYS = 7;
+
+function weeklyProgressNote(opts: RenderReportEmailOptions): string {
+  if (opts.reportType !== 'reminder') return '';
+  const elapsed = opts.daysElapsed ?? 0;
+  const total = daysInMonthFrom(opts);
+  const early = elapsed > 0 && elapsed <= EARLY_MONTH_DAYS
+    ? ` This is the first Friday of the month — the figures below cover ${elapsed} day${elapsed === 1 ? '' : 's'}, so low totals are expected.`
+    : '';
+  return `
+      <p style="margin:0 0 18px 0;color:#94a3b8;font-size:13px;line-height:1.5;">
+        Covers 1&ndash;${esc(elapsed)} ${esc(opts.periodLabel)} &middot; ${esc(elapsed)} day${elapsed === 1 ? '' : 's'} elapsed, ${esc(opts.daysLeftInMonth ?? 0)} remaining.${esc(early)}
+      </p>`;
 }
 
 export function renderReportEmail(opts: RenderReportEmailOptions): RenderedReportEmail {
@@ -164,7 +205,8 @@ export function renderReportEmail(opts: RenderReportEmailOptions): RenderedRepor
 
   const headline = opts.reportType === 'monthly_summary'
     ? `${esc(opts.periodLabel)} training summary`
-    : `${esc(opts.daysLeftInMonth ?? 0)} days left in ${esc(opts.periodLabel)}`;
+    : `${esc(opts.periodLabel)} month-to-date &mdash; day ${esc(opts.daysElapsed ?? 0)} of ${esc(daysInMonthFrom(opts))}`;
+  const progressNote = weeklyProgressNote(opts);
 
   const outstandingBanner = outstandingFailuresBanner(opts.outstandingFailures);
 
@@ -207,6 +249,7 @@ export function renderReportEmail(opts: RenderReportEmailOptions): RenderedRepor
             <td style="background:#0b1628;border:1px solid #22334a;border-radius:24px;padding:28px;font-family:Arial,Helvetica,sans-serif;">
               <p style="margin:0 0 8px 0;font-size:11px;color:#7dd3fc;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Hotel Training Console</p>
               <p style="margin:0 0 20px 0;font-size:24px;color:#ffffff;font-weight:700;">${headline}</p>
+              ${progressNote}
               ${outstandingBanner}
               ${delayedBanner}
               ${kpiRow}

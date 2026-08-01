@@ -5,7 +5,8 @@ import { haveAzureCreds, getAppToken, graphFetch, GRAPH_BASE, GraphError } from 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { fetchAllWithCap } from '../chat-with-data/paged-fetch.ts';
 import {
-  dueReports, dubaiToday, lastDayOfMonth, reminderDay, nextDayDubaiMidnightISO, resolveSendReport, monthLabel,
+  dueReports, dubaiToday, lastDayOfMonth, nextDayDubaiMidnightISO, resolveSendReport,
+  resolveSendOccurrence, monthLabel, fridaysInMonth, weeklyOccurrenceDay, bannerCutoffOccurrence,
 } from './report-schedule.ts';
 import type { DueReport, ResolvedTestReport } from './report-schedule.ts';
 import { aggregateReport } from './report-aggregator.ts';
@@ -170,19 +171,35 @@ function resolveTestReport(
   // `td + 1` into an ISO literal, which produced an invalid out-of-range
   // date (e.g. "...-07-32...") on the last Dubai day of a month.
   const [y, m] = periodParam ? periodParam.split('-').map(Number) : [ty, tm];
+  // Nominal due date under the WEEKLY cadence. reminderDay() (lastDay-7) is
+  // gone. For the current month, preview the occurrence actually in force —
+  // falling back to the month's first Friday before any Friday 08:00 has
+  // passed, so an admin previewing on the 2nd still gets a sensible date rather
+  // than a null. For any other month, the last Friday, matching what
+  // resolveSendOccurrence defaults to.
+  const fridays = fridaysInMonth(y, m);
+  const isCurrentMonth = ty === y && tm === m;
+  const occDay = isCurrentMonth
+    ? (weeklyOccurrenceDay(y, m, td, 23) ?? fridays[0])
+    : fridays[fridays.length - 1];
   return {
     reportType: 'reminder',
     period: `${y}-${pad(m)}`,
     periodLabel: monthLabel(y, m),
     rangeFromISO: dubaiMidnightISO(y, m, 1),
     rangeToExclusiveISO: nextDayDubaiMidnightISO(ty, tm, td),
-    dueDate: `${y}-${pad(m)}-${pad(reminderDay(y, m))}`,
+    dueDate: `${y}-${pad(m)}-${pad(occDay)}`,
     daysLeftInMonth: lastDayOfMonth(y, m) - td,
+    daysElapsed: td,
   };
 }
 
 interface RequestBody {
   mode?: string;
+  // mode:'send' only, reminder only, optional: which Friday this send records
+  // itself against. Defaults to the last Friday of `period`. Validated (and
+  // sometimes refused outright) by resolveSendOccurrence.
+  occurrence?: string;
   report?: string;
   period?: string;
   confirm?: boolean;
@@ -223,6 +240,29 @@ function excludeInFlightAndUnattempted(query: any): any {
   return query.eq('status', 'failed').neq('last_error', CLAIM_SENTINEL).gt('attempts', 0);
 }
 
+// Ages stale REMINDER failures out of both surfaces. A reminder that failed six
+// weeks ago is not actionable and, with the banner capped at five rows and the
+// weekly cadence generating ~52 occurrences a year instead of 12, old noise
+// would crowd out anything current.
+//
+// Aged-out rows are NOT deleted and NOT hidden from the database — they stay in
+// report_runs and remain queryable:
+//   select * from report_runs where status = 'failed' order by occurrence desc;
+// They simply stop being surfaced in the email banner and the cron's count.
+//
+// Monthly summaries never age out: twelve a year, and a missed month is always
+// worth seeing.
+//
+// Applied to BOTH fetchOutstandingFailures and countFailedReportRuns through
+// this one function, for the same reason excludeInFlightAndUnattempted is
+// shared: those two numbers describe the same thing, and they have already
+// drifted apart once in this file's history. `report_type` and `occurrence` are
+// both NOT NULL, so neither filter hits the SQL `NULL <> x` trap that broke an
+// earlier version of the claim query.
+function excludeAgedOutReminders(query: any, cutoffOccurrence: string): any {
+  return query.or(`report_type.neq.reminder,occurrence.gte.${cutoffOccurrence}`);
+}
+
 // Fetches failed report_runs rows other than the one currently being sent,
 // oldest period first, capped at 5. A query error is swallowed (never let
 // this block a real send — the banner is a nice-to-have, not a gate) but
@@ -231,20 +271,34 @@ function excludeInFlightAndUnattempted(query: any): any {
 async function fetchOutstandingFailures(
   db: ReturnType<typeof serviceClient>,
   excludeReportType: string,
-  excludePeriod: string,
+  excludeOccurrence: string,
 ): Promise<{ failures: OutstandingFailure[]; queryFailed: boolean }> {
-  const { data, error } = await excludeInFlightAndUnattempted(
-    db.from('report_runs').select('report_type, period, attempts, last_error'),
-  ).order('period', { ascending: true });
+  const { data, error } = await excludeAgedOutReminders(
+    excludeInFlightAndUnattempted(
+      db.from('report_runs').select('report_type, period, occurrence, attempts, last_error'),
+    ),
+    bannerCutoffOccurrence(Date.now()),
+  )
+    // Ordered by period AND THEN occurrence: four reminder rows can now share a
+    // period, so period alone is no longer a deterministic sort and the
+    // five-row cap would drop an arbitrary one of them.
+    .order('period', { ascending: true })
+    .order('occurrence', { ascending: true });
   if (error) {
     console.error('outstanding-failures query failed (banner omitted for this send):', JSON.stringify(error));
     return { failures: [], queryFailed: true };
   }
-  const rows = (data ?? []) as { report_type: string; period: string; attempts: number; last_error: string | null }[];
+  const rows = (data ?? []) as { report_type: string; period: string; occurrence: string; attempts: number; last_error: string | null }[];
   const failures = rows
-    .filter((r) => !(r.report_type === excludeReportType && r.period === excludePeriod))
+    // Excluded by OCCURRENCE, not period. Excluding by period would have hidden
+    // every OTHER failed Friday of the same month from the banner — the exact
+    // rows a manager most needs to see, silently dropped.
+    .filter((r) => !(r.report_type === excludeReportType && r.occurrence === excludeOccurrence))
     .slice(0, 5)
-    .map((r) => ({ reportType: r.report_type, period: r.period, attempts: r.attempts, lastError: r.last_error }));
+    .map((r) => ({
+      reportType: r.report_type, period: r.period, occurrence: r.occurrence,
+      attempts: r.attempts, lastError: r.last_error,
+    }));
   return { failures, queryFailed: false };
 }
 
@@ -256,8 +310,11 @@ async function fetchOutstandingFailures(
 // since 0 has to mean "confirmed zero outstanding failures", never "the
 // count query itself failed and we don't actually know".
 async function countFailedReportRuns(db: ReturnType<typeof serviceClient>): Promise<number | null> {
-  const { count, error } = await excludeInFlightAndUnattempted(
-    db.from('report_runs').select('report_type', { count: 'exact', head: true }),
+  const { count, error } = await excludeAgedOutReminders(
+    excludeInFlightAndUnattempted(
+      db.from('report_runs').select('report_type', { count: 'exact', head: true }),
+    ),
+    bannerCutoffOccurrence(Date.now()),
   );
   if (error) {
     console.error('failed-run count query failed:', JSON.stringify(error));
@@ -289,7 +346,7 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   // ledger, so it doubles as the way to SEE the banner actually working
   // before trusting it in a real send.
   const { failures: outstandingFailures, queryFailed: outstandingQueryFailed } =
-    await fetchOutstandingFailures(db, resolved.reportType, resolved.period);
+    await fetchOutstandingFailures(db, resolved.reportType, resolved.dueDate);
   const { subject, html } = renderReportEmail({
     reportType: resolved.reportType,
     periodLabel: resolved.periodLabel,
@@ -297,6 +354,7 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
     delayed: false,
     dueDate: resolved.dueDate,
     daysLeftInMonth: resolved.daysLeftInMonth,
+    daysElapsed: resolved.daysElapsed,
     testMode: true,
     outstandingFailures,
   });
@@ -315,9 +373,13 @@ async function handleTest(req: Request, body: RequestBody): Promise<Response> {
   });
 }
 
-// Writes the (report_type, period) ledger row's outcome. The row is always
+// Writes the (report_type, occurrence) ledger row's outcome. The row is always
 // pre-created by ensureRunRow + claimRun before this is called, so this is a
 // plain UPDATE, not an upsert.
+//
+// KEYED ON occurrence, NOT period. Under the weekly cadence four or five
+// reminder rows share one period, so `.eq('period', …)` here would have marked
+// every Friday of the month sent on the first Friday's success.
 //
 // The write's own error was previously discarded: if it failed AFTER a
 // successful Graph send, no 'sent' row would exist and the next hourly tick
@@ -334,24 +396,56 @@ async function recordRun(
     const { error } = await db.from('report_runs')
       .update({ updated_at: new Date().toISOString(), ...patch })
       .eq('report_type', report.reportType)
-      .eq('period', report.period);
+      .eq('occurrence', report.occurrence);
     if (!error) return true;
-    console.error(`report_runs write failed (attempt ${attempt}/2) for ${report.reportType}/${report.period}:`, JSON.stringify(error));
+    console.error(`report_runs write failed (attempt ${attempt}/2) for ${report.reportType}/${report.occurrence}:`, JSON.stringify(error));
   }
   return false;
 }
 
-// Ensures a (report_type, period) row exists so claimRun always has
+// Ensures a (report_type, occurrence) row exists so claimRun always has
 // something to read/update. ignoreDuplicates makes this a no-op once the
 // row is already there, regardless of its current status.
 async function ensureRunRow(db: ReturnType<typeof serviceClient>, report: DueReport): Promise<void> {
   await db.from('report_runs').upsert(
-    { report_type: report.reportType, period: report.period, status: 'failed', attempts: 0 },
-    { onConflict: 'report_type,period', ignoreDuplicates: true },
+    {
+      report_type: report.reportType,
+      period: report.period,
+      occurrence: report.occurrence,
+      status: 'failed',
+      attempts: 0,
+    },
+    { onConflict: 'report_type,occurrence', ignoreDuplicates: true },
   );
 }
 
-// Atomically claims (report_type, period) for a send attempt, so two
+// Records an occurrence that is deliberately NOT sent, so the weekly series has
+// no unexplained gap. Currently one cause: the 1st of the month is a Friday, so
+// the monthly summary and a weekly collide and the summary wins.
+//
+// Never touches a row that is already 'sent' or already 'skipped'. The first
+// guard matters because the skip decision is re-evaluated on every hourly tick
+// for the rest of that week — without it, `updated_at` would churn hourly for
+// six days; and if an occurrence somehow did send, overwriting it with 'skipped'
+// would destroy the record of a real email.
+async function recordSkip(
+  db: ReturnType<typeof serviceClient>,
+  report: DueReport,
+  reason: string,
+): Promise<boolean> {
+  const { error } = await db.from('report_runs')
+    .update({ status: 'skipped', skipped_reason: reason, updated_at: new Date().toISOString() })
+    .eq('report_type', report.reportType)
+    .eq('occurrence', report.occurrence)
+    .not('status', 'in', '("sent","skipped")');
+  if (error) {
+    console.error(`report_runs skip write failed for ${report.reportType}/${report.occurrence}:`, JSON.stringify(error));
+    return false;
+  }
+  return true;
+}
+
+// Atomically claims (report_type, occurrence) for a send attempt, so two
 // overlapping handleCron invocations (mode:'cron' accepts the public anon
 // key, so this is deliberately reachable, not just a pg_cron-overlap edge
 // case) cannot both send. Returns the pre-claim attempts count on success,
@@ -379,11 +473,14 @@ async function claimRun(
     .from('report_runs')
     .select('status, attempts, last_error, updated_at')
     .eq('report_type', report.reportType)
-    .eq('period', report.period)
+    .eq('occurrence', report.occurrence)
     .maybeSingle();
   const existing = row as { status: string; attempts: number; last_error: string | null; updated_at: string } | null;
 
-  if (!existing || existing.status === 'sent') return null;
+  // 'skipped' is as final as 'sent' here: an occurrence the scheduler
+  // deliberately stood down from must never be claimed for a send later in the
+  // same week.
+  if (!existing || existing.status === 'sent' || existing.status === 'skipped') return null;
 
   const stale = existing.last_error !== CLAIM_SENTINEL
     || (Date.now() - new Date(existing.updated_at).getTime()) > CLAIM_STALE_MS;
@@ -394,8 +491,8 @@ async function claimRun(
     .from('report_runs')
     .update({ status: 'failed', attempts, last_error: CLAIM_SENTINEL, updated_at: new Date().toISOString() })
     .eq('report_type', report.reportType)
-    .eq('period', report.period)
-    .eq('status', existing.status) // optimistic-concurrency token (only 2 possible values; can't be 'sent' here)
+    .eq('occurrence', report.occurrence)
+    .eq('status', existing.status) // optimistic-concurrency token (can only be 'failed' here — 'sent'/'skipped' returned above)
     .eq('updated_at', existing.updated_at) // ditto — moves the instant anyone else writes the row
     .select('report_type');
 
@@ -424,6 +521,7 @@ async function runDueReport(
       delayed: report.delayed,
       dueDate: report.dueDate,
       daysLeftInMonth: report.daysLeftInMonth,
+      daysElapsed: report.daysElapsed,
       outstandingFailures,
     });
 
@@ -466,6 +564,20 @@ async function handleCron(): Promise<{ due: number; sent: number; failed: number
 
   for (const report of due) {
     await ensureRunRow(db, report);
+
+    // Recorded-but-not-sent. Written BEFORE claimRun, never through it: a skip
+    // is not an attempt, so it must not increment `attempts` or take the
+    // CLAIM_SENTINEL — either would make the row look like a failed send to the
+    // outstanding-failure banner. recordSkip is a no-op once the row is already
+    // 'skipped', which matters because this branch is re-entered on every
+    // hourly tick for the rest of that week.
+    if (report.skipReason) {
+      const ok = await recordSkip(db, report, report.skipReason);
+      if (!ok) ledgerErrors++;
+      skipped++;
+      continue;
+    }
+
     const claim = await claimRun(db, report);
     if (!claim) { skipped++; continue; }
 
@@ -483,7 +595,7 @@ async function handleCron(): Promise<{ due: number; sent: number; failed: number
     // 409. The banner is a nice-to-have; it must never cost the send itself.
     let outstandingFailures: OutstandingFailure[] = [];
     try {
-      ({ failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.period));
+      ({ failures: outstandingFailures } = await fetchOutstandingFailures(db, report.reportType, report.occurrence));
     } catch (err) {
       console.error(
         `outstanding-failures query threw unexpectedly for ${report.reportType}/${report.period} (banner omitted, send proceeds):`,
@@ -547,7 +659,13 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
     }, 400);
   }
 
-  const resolved = resolveSendReport(body.report, body.period, Date.now());
+  // Resolved and GUARDED before anything else touches the ledger. This is what
+  // stops a manual reminder send from occupying a Friday the scheduler still
+  // owns — see resolveSendOccurrence for the collision it prevents.
+  const occ = resolveSendOccurrence(body.report, body.period, body.occurrence, Date.now());
+  if ('error' in occ) return json(req, { error: occ.error }, 400);
+
+  const resolved = resolveSendReport(body.report, body.period, Date.now(), occ.occurrence);
   const db = serviceClient();
   const report: DueReport = {
     reportType: resolved.reportType,
@@ -557,6 +675,8 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
     rangeFromISO: resolved.rangeFromISO,
     rangeToExclusiveISO: resolved.rangeToExclusiveISO,
     daysLeftInMonth: resolved.daysLeftInMonth,
+    daysElapsed: resolved.daysElapsed,
+    occurrence: resolved.occurrence,
   };
 
   await ensureRunRow(db, report);
@@ -569,15 +689,18 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
     // in flight) instead of getting a bare "no" with no evidence.
     const { data: existing } = await db
       .from('report_runs')
-      .select('status, sent_at, recipients')
+      .select('status, sent_at, recipients, skipped_reason')
       .eq('report_type', report.reportType)
-      .eq('period', report.period)
+      .eq('occurrence', report.occurrence)
       .maybeSingle();
     return json(req, {
       error: existing?.status === 'sent'
         ? 'Already sent — refusing to send again.'
-        : 'Send already in progress for this report/period (claimed by a concurrent invocation) — refusing to send again.',
+        : existing?.status === 'skipped'
+          ? `This occurrence was deliberately skipped by the scheduler — refusing to send it. Reason: ${existing.skipped_reason}`
+          : 'Send already in progress for this report/occurrence (claimed by a concurrent invocation) — refusing to send again.',
       status: existing?.status ?? null,
+      occurrence: report.occurrence,
       sentAt: existing?.sent_at ?? null,
       recipients: existing?.recipients ?? null,
     }, 409);
@@ -595,7 +718,7 @@ async function handleSend(req: Request, body: RequestBody): Promise<Response> {
   let outstandingQueryFailed = false;
   try {
     ({ failures: outstandingFailures, queryFailed: outstandingQueryFailed } =
-      await fetchOutstandingFailures(db, report.reportType, report.period));
+      await fetchOutstandingFailures(db, report.reportType, report.occurrence));
   } catch (err) {
     console.error(
       `outstanding-failures query threw unexpectedly for ${report.reportType}/${report.period} (banner omitted, send proceeds):`,
