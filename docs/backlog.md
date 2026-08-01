@@ -156,7 +156,15 @@ import RESOLVES, which is a different and much weaker property.
 Running an actual type-checker over the tree for the first time:
 
 ```
-npx --yes deno@2 check --node-modules-dir=auto --config <(echo '{"compilerOptions":{"lib":["deno.window","deno.ns","dom","dom.iterable","esnext"]}}') \
+# The config MUST be a real file. Passing it via process substitution
+#   --config <(echo '{...}')
+# fails with: failed to create directory '/proc/<pid>/fd/node_modules/.deno/…'
+# because --node-modules-dir=auto resolves node_modules relative to the config
+# file's own directory, and /proc/<pid>/fd is not a real directory.
+cat > /tmp/deno-check.json <<'JSON'
+{"compilerOptions":{"lib":["deno.window","deno.ns","dom","dom.iterable","esnext"]}}
+JSON
+npx --yes deno@2 check --node-modules-dir=auto --config /tmp/deno-check.json \
   supabase/functions/*/index.ts
 ```
 
