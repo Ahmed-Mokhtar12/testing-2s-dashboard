@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Spec: `docs/superpowers/specs/2026-07-30-training-report-emails-design.md` (as amended: no target values — reminder omits Target/Gap/Status columns while all targets are NULL).
-- Recipients: `amir.monir@2seasonshotels.com`, `xarmaigne.narciso@2seasonshotels.com`, `ahmed.mokhtar@2seasonshotels.com`. Sender: `sera@2seasonshotels.com`.
+- Recipients: `Departmental.Trainers@2seasonshotels.com` — a distribution list, replacing the three named individuals (`amir.monir`, `xarmaigne.narciso`, `ahmed.mokhtar`) on 2026-08-01. Sender: `sera@2seasonshotels.com`. Delivery to a DL is not confirmed by a successful send — see `docs/backlog.md` B4.
 - All month boundaries in Asia/Dubai (+04:00 fixed, no DST) — same convention as `training-aggregator.ts` `buildDateRange`.
 - Man-hours = Σ(`duration_minutes`/60 × participant-row count of the session), 1 decimal. Attribution: `training_sessions.department`. Distinct trainers from `trainer_names` (trim, case-insensitive). Distinct colleagues by `employee_id` (lowercased).
 - Reminder day = `lastDay(month) − 7`. Monthly summary due day 1. Earliest send 08:00 Dubai; grace windows: summary 7 days, reminder 3 days.
@@ -597,11 +597,7 @@ import { aggregateReport } from './report-aggregator.ts';
 import { renderReportEmail } from './report-html.ts';
 
 const SENDER = 'sera@2seasonshotels.com';
-const RECIPIENTS = [
-  'amir.monir@2seasonshotels.com',
-  'xarmaigne.narciso@2seasonshotels.com',
-  'ahmed.mokhtar@2seasonshotels.com',
-];
+const RECIPIENTS = ['Departmental.Trainers@2seasonshotels.com'];
 const SESSION_CAP = 2000;
 const PARTICIPANT_CAP = 10000;
 

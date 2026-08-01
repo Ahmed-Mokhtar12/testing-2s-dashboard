@@ -14,11 +14,21 @@ import { renderReportEmail } from './report-html.ts';
 import type { OutstandingFailure } from './report-html.ts';
 
 const SENDER = 'sera@2seasonshotels.com';
-const RECIPIENTS = [
-  'amir.monir@2seasonshotels.com',
-  'xarmaigne.narciso@2seasonshotels.com',
-  'ahmed.mokhtar@2seasonshotels.com',
-];
+// The Departmental Trainers distribution list, replacing the three named
+// individuals on 2026-08-01 — the DL covers them.
+//
+// DELIVERY IS NOT CONFIRMED BY A SUCCESSFUL SEND, and a DL makes that sharper
+// than three mailboxes did. Graph's sendMail returns 202 Accepted, meaning
+// "queued", so graphFetch cannot throw for anything that happens afterwards: a
+// DL sender restriction (AcceptMessagesOnlyFromSendersOrMembers), a moderation
+// hold, or any other rejection arrives as an NDR in SENDER's mailbox and this
+// function records status='sent' regardless. See docs/backlog.md B4.
+//
+// Note also that mode:'test' sends to the CALLER, never to this list, so a
+// clean preview proves the render and says nothing about whether the DL
+// accepts mail from SENDER. The only proof is a real send plus a human on the
+// list confirming receipt.
+const RECIPIENTS = ['Departmental.Trainers@2seasonshotels.com'];
 const SESSION_CAP = 2000;
 const PARTICIPANT_CAP = 10000;
 // PostgREST builds `.in('training_id', ids)` as a URL query string; with

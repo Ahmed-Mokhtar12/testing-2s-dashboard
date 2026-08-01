@@ -57,10 +57,13 @@ ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6I
 FUNCTION_URL="$PROJECT_URL/functions/v1/training-report"
 DEFAULT_EMAIL="ahmed.mokhtar@2seasonshotels.com"
 
-# Display only. The function's RECIPIENTS list (index.ts:16-20) is the
-# authority; if these ever disagree, the function wins and this comment is the
-# bug. Shown here so the confirmation prompt names actual people.
-RECIPIENTS_DISPLAY="amir.monir@2seasonshotels.com, xarmaigne.narciso@2seasonshotels.com, ahmed.mokhtar@2seasonshotels.com"
+# Display only. The function's RECIPIENTS list in
+# supabase/functions/training-report/index.ts is the authority; if these ever
+# disagree, the function wins and this line is the bug. Shown here so the
+# confirmation prompt names who is actually about to be emailed. (Deliberately
+# no line number: a stale line reference is the same drift this comment warns
+# about.)
+RECIPIENTS_DISPLAY="Departmental.Trainers@2seasonshotels.com (distribution list)"
 
 REPORT="${1:-monthly}"
 PERIOD="${2:-2026-07}"

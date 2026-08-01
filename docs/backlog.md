@@ -9,6 +9,49 @@ logged, newest first.
 
 ---
 
+## B4 — a sent training report is never confirmed delivered
+
+**Logged:** 2026-08-01 · **Raised by:** Ahmed, on the switch to a distribution list
+
+Graph's `POST /users/{sender}/sendMail` returns **202 Accepted** — the message is
+queued, not delivered. `graphFetch` throws only on a non-2xx, so nothing that
+happens after acceptance can reach us: a rejected recipient, a moderation hold,
+a full mailbox, a bounce. All of them produce an NDR in **`sera@`'s mailbox**,
+which nothing monitors, while `report_runs` records `status='sent'`.
+
+**Why now.** Recipients changed from three individual mailboxes to
+`Departmental.Trainers@2seasonshotels.com` on 2026-08-01. A DL adds two rejection
+paths that individual mailboxes do not have:
+
+- `AcceptMessagesOnlyFromSendersOrMembers` — an explicit allow-list of permitted
+  senders, common on lists like this one. `sera@` would not be on it.
+- `ModerationEnabled` — the message waits for an approver instead of being
+  delivered, indefinitely and invisibly.
+
+Both are silent on our side. Ahmed's framing: *"a delivery failure to a DL is
+exactly the kind of thing that looks like success on our side."*
+
+**What "done" looks like.** Reconcile after sending rather than trusting the
+202: read `sera@`'s mailbox for NDRs correlated to a send (by subject, or by a
+token planted in the message), and flip the matching `report_runs` row to
+`failed` with the bounce text in `last_error`. The outstanding-failure banner
+then surfaces it on the next report without any new mechanism.
+
+**Cost and risk.** Needs a Graph **`Mail.Read`** application permission the app
+does not currently hold, which means an IT request and admin consent (model it on
+`docs/it-requests/2026-07-31-mail-send-mailbox-scoping.md`). Note this is the
+same missing half as **B1**: we confirm the *request* and never the *outcome*.
+B1 is "did it send twice", B4 is "did it arrive at all" — related enough that
+whoever does one should read the other, distinct enough that neither fixes the
+other.
+
+**Interim mitigation, no code.** After any recipient change, check `sera@`'s Sent
+Items (Graph accepted) and Inbox (an "Undeliverable:" NDR) within five minutes of
+the first real send, and have one person on the list confirm receipt.
+`mode:'test'` cannot substitute — it sends to the caller, never to `RECIPIENTS`.
+
+---
+
 ## B3 — the live auth config is not in version control, and nothing checks it
 
 **Logged:** 2026-08-01 · **Found while** diagnosing the Microsoft sign-in outage
