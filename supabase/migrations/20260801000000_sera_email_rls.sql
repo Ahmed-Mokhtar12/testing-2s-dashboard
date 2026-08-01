@@ -1,0 +1,59 @@
+-- Close anonymous access to the four unprotected sera_email_* tables.
+--
+-- WHAT WAS WRONG. These four had `relrowsecurity = false` while the `anon`
+-- role held Supabase's default blanket grants, so the public anon key —
+-- published in src/integrations/supabase/client.ts and shipped in every
+-- frontend bundle — could not only READ them but INSERT, UPDATE and DELETE.
+-- Confirmed read-side with a live anonymous fetch (HTTP 200 + real rows) and
+-- write-side from the catalogue:
+--
+--   select has_table_privilege('anon','public.sera_email_regression_cases','INSERT'),
+--          has_table_privilege('anon','public.sera_email_regression_cases','UPDATE'),
+--          has_table_privilege('anon','public.sera_email_regression_cases','DELETE');
+--   -- t | t | t   with relrowsecurity = false
+--
+-- The sharpest consequence was not the leak: sera_email_regression_cases holds
+-- 24 hand-built regression cases, and anyone with the anon key could have
+-- deleted them.
+--
+-- WHY DENY-ALL IS SAFE HERE, and why this is not a guess. The earlier audit
+-- deliberately stopped short of this change because "enabling RLS with no
+-- policies is deny-all, which could break whatever writes it". That question
+-- is now settled by an experiment already running in production:
+--
+--   sera_email_inbox_log and sera_email_threads ALREADY have RLS enabled with
+--   ZERO policies -- and sera_email_inbox_log is still being written. It went
+--   from 697 to 700 rows during this audit, newest received_at
+--   2026-08-01 00:50:23+04.
+--
+-- A client authenticating as `anon` or `authenticated` cannot insert a single
+-- row into a table in that state. Rows are landing anyway, so the Sera email
+-- pipeline's Supabase credential is the SERVICE ROLE, which bypasses RLS
+-- entirely. The same lockdown therefore costs it nothing.
+--
+-- Deny-all (RLS on, zero policies) is also exactly the shape the two sibling
+-- tables already use, so this makes the set consistent rather than inventing a
+-- new access model. No staff-read policy is added on purpose: nothing in this
+-- repo reads these tables (grep: zero references outside the generated
+-- src/integrations/supabase/types.ts), so a read policy would grant access no
+-- caller wants yet.
+--
+-- HOW TO TELL IF THIS BROKE SOMETHING. The evaluator/regression stack writes
+-- from n8n, which Claude does not touch and cannot inspect. If a workflow that
+-- populates these used the anon key rather than the service role, its writes
+-- will now fail. The signal is rows stopping, and because those n8n nodes have
+-- masked onError (docs/n8n-resilience-sweep-2026-07-30.md) the failure will be
+-- SILENT -- so check by counting rather than by waiting for an error:
+--
+--   select 'cases' t, count(*), max(created_at) from public.sera_email_regression_cases
+--   union all select 'runs', count(*), max(created_at) from public.sera_email_regression_runs
+--   union all select 'patch', count(*), max(created_at) from public.sera_email_patch_history
+--   union all select 'ledger', count(*), max(last_seen_at) from public.sera_email_recommendation_ledger;
+--
+-- ROLLBACK: supabase/migrations/20260801000000_sera_email_rls_rollback.sql
+-- (four `disable row level security` statements — instant, no data involved).
+
+alter table public.sera_email_regression_cases      enable row level security;
+alter table public.sera_email_regression_runs       enable row level security;
+alter table public.sera_email_patch_history         enable row level security;
+alter table public.sera_email_recommendation_ledger enable row level security;
