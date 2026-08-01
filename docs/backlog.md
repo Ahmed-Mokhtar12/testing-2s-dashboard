@@ -54,9 +54,13 @@ the send-idempotency contract.
 
 ---
 
-## B2 — 31 type errors in the edge functions nobody had ever type-checked
+## B2 — nothing type-checks supabase/functions (QUEUED TASK, not just a note)
 
 **Logged:** 2026-08-01 · **Found while** verifying the weekly-cadence change
+**Upgraded to a task** 2026-08-01 at Ahmed's request: "That's the same shape as
+the vacuous tsc — not a wrong check, an absent one, and invisible because
+everything downstream reported green." The function three people read numbers
+from is inside the unchecked directory, which is the reason it is a task.
 
 Nothing type-checks `supabase/functions` in this repo. `npm run typecheck`
 covers `tsconfig.app.json` and `tsconfig.node.json`, neither of which includes
@@ -77,9 +81,24 @@ clean.** These are a LEAD, not 31 confirmed bugs — the mix is:
 - 10 × `TS2345` `'string | undefined'` not assignable to `'string'`
 - 7 × `TS18046` `'error' is of type 'unknown'`
 - 4 × `TS7006`/`TS7022` implicit `any`
-- a handful of narrowing complaints, of which `Property 'reviews' does not
-  exist on type 'never'` in `chat-with-data` is the one that most smells like a
-  real defect rather than missing strictness annotations.
+- a handful of narrowing complaints.
+
+**CORRECTION, and it matters for how this task is scoped.** I originally
+singled out `Property 'reviews' does not exist on type 'never'` in
+`chat-with-data/index.ts:217` as the one that "smells like a real defect", and
+Ahmed reasonably asked for the task to be built around it. It is not a defect.
+`specificData` is `const specificData = null` at `index.ts:126`, deliberately, so
+the checker narrowing it to `never` is CORRECT — it is reporting that
+`dataPoints: specificData?.reviews?.length || ... || 'general'` has always
+evaluated to `'general'`. And `queryAnalysis.dataPoints` is consumed nowhere:
+zero references across `src/` and `supabase/functions/`. So it is dead weight in
+a response payload, not a number anyone reads.
+
+Which leaves the honest position: **there is no known real bug in the 31.** They
+are strictness gaps and dead code. The reason to do this task is the ABSENT
+CHECK, not any error currently in the list — nothing has been verifying edge code
+all week, so the next real defect there would also be invisible. Scope it that
+way, and treat the 31 as cleanup encountered on the way.
 
 An earlier run without the `dom` lib reported 37; six of those were an artifact
 of the ad-hoc config, not the code. Anyone re-running this must use a real
