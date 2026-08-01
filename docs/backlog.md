@@ -9,6 +9,68 @@ logged, newest first.
 
 ---
 
+## B5 — clean-code findings in the $batch / participant-cap work
+
+**Logged:** 2026-08-01 · **Found by** a clean-code guard pass over the six
+commits that shipped the `$batch` write path and the 15 → 100 cap.
+
+Seven findings, none of them a correctness bug. Recorded because a guard pass
+that exists only in a chat reply is the same failure this repo has now hit twice
+(see `docs/testing-lessons.md` sections 6 and 8 — knowledge that was written down
+somewhere nothing reads).
+
+### Do NOT fix these before the first successful training submission
+
+This is the argument, not a preference:
+
+`$batch` is deployed as **sp-submit-training v12** and its live behaviour has
+never been observed. No Azure credentials exist in the dev environment and the
+e2e suite mocks the function at the HTTP boundary, so the first real submission is
+the only proof of the wire format.
+
+Finding 1 is a refactor of `writeParticipantsInBatches` — **the exact function
+whose live behaviour is unproven**. If it were refactored first and the next
+submission then failed, the cause would be ambiguous between the batch format and
+the refactor, and disentangling them means another deploy cycle to find out. The
+whole point of a behaviour-preserving refactor is that it is invisible; that
+property is worthless if it lands during the one window where an unexplained
+failure is expected.
+
+**This argument expires the moment a real submission succeeds.** After that the
+format is proven, a later failure is attributable, and these should be fixed in
+ONE commit and ONE redeploy — not three redeploys of the same function.
+
+Nothing here carries behaviour risk, so deferring costs nothing but the debt.
+
+### Findings, with evidence
+
+| # | Severity | Finding |
+|---|---|---|
+| 1 | Med-High | `writeParticipantsInBatches` does three things — chunking, dispatching, classifying responses. **64 code lines** against a 20-line target; cyclomatic **~13–17** against a ceiling of 10 (`participant-batch.ts:89-170`). Fix: extract `classifyBatchResponses(chunk, responses) -> { retry, failed }`, which both shrinks the parent to ~25 lines and names the part that is actually subtle. |
+| 2 | Med | `mutationFn` in `src/hooks/useTrainingSubmit.ts` is **113 code lines** (98 before the partial-write fix, so +15). Note the commit boundary was correct: extracting it inside the bug-fix commit would have bundled a refactor with a fix, which is its own violation. The debt is real and needs its own commit. |
+| 3 | Med | **`batchSize` is speculative configurability, and it generated its own supporting artifacts.** No production caller passes it. Because it exists, the `Math.max(1, Math.min(...))` clamp exists; because the clamp exists, one of the 11 unit tests exists solely to cover it. Three artifacts, all passing, all justifying each other, zero production callers. Deleting the option removes a parameter, a guard and a test in one move — the cleanest single fix in the list. See `docs/testing-lessons.md` section 9. |
+| 4 | Low | `describe(body)` in `participant-batch.ts` is an intent-less name that also collides with the testing-framework verb. Rename to `describeErrorBody`. |
+| 5 | Low | `BatchSender` and `ParticipantFailure` are exported with **zero** external references — used only inside their own module. Just-in-case exports; drop the `export`. |
+| 6 | Low | Missing boundary case: **exactly 20 items** (one full chunk, no remainder). Covered today: 0, 1, 3, 25, 30, 40, 45, 100. The 45-item case does exercise a full-chunk boundary, so the gap is small but it is the one arithmetic edge nothing hits directly. |
+| 7 | Nit | `landedRows.length === 0 ? { error: null } : await supabase...` fabricates a success-shaped object to keep the destructuring uniform. Not a fake-success return (it is a local guard, not a value handed to a caller) but it is opaque; an explicit `if` reads better. |
+
+### What the pass cleared, so it is not re-litigated
+
+No catch-all error swallowing (the single `catch` reports all 20 rows as failed
+rather than returning empty success); no hardcoded success values or fixture data
+in production code; no weakened tests; the `{ fields }` request body was inherited
+from the proven sequential implementation rather than copied from something
+similar; comment-to-code ratio 0.43 in the new module, all explaining *why*.
+
+Two checks that looked defensive were confirmed to be documented Graph
+requirements — recorded as a lesson in its own right, see
+`docs/testing-lessons.md` section 8.
+
+**What "done" looks like.** One commit fixing 1–7, one redeploy via
+`scripts/deploy-sp-submit-training.sh`, after a real submission has succeeded.
+
+---
+
 ## B4 — a sent training report is never confirmed delivered
 
 **Logged:** 2026-08-01 · **Raised by:** Ahmed, on the switch to a distribution list
