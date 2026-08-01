@@ -183,3 +183,43 @@ so it cannot be looked up in the portal and cannot be known before that app has
 received a token for that user. Hand-inserting identity rows is therefore not
 risky-but-possible; it is not possible, and a wrong value produces a row that
 makes an account *look* linked while nothing works.
+
+---
+
+## 7. When one value has to be declared twice, test that the copies agree
+
+**Rule: if a value cannot be shared, make its drift fail the build.**
+
+`src/` and `supabase/functions/` cannot import from each other. The edge tree is
+Deno, both tsconfigs exclude it, and a cross-boundary import would break the
+`git archive` the deploy scripts build. So some values genuinely must exist twice,
+and "keep these in sync" comments do not keep anything in sync.
+
+Three instances, all cheap to guard:
+
+| value | copies | what drift looks like |
+|---|---|---|
+| the participant cap | `hotel-training-constants.ts`, `sp-submit-training/index.ts` | a wizard the user can fill and cannot submit — 99 rows of work lost at the last click |
+| the report recipients | `training-report/index.ts`, `send-training-report-real.sh`, the design spec | the "REAL SEND" prompt names the wrong people at the exact moment the operator decides |
+| `api.max_rows` | `config.toml`, every `.limit()` | silent truncation at 1000 rows (see section 2) |
+
+Each is guarded by a unit test that reads both files and compares
+(`participant-cap-agrees`, `report-recipients-agree`, `no-overclamp-limit`). They
+are cheap, hermetic, and they fail on the commit that causes the drift rather than
+in production weeks later.
+
+Two things that make such a test worth having rather than decorative:
+
+- **Assert the extraction worked.** These tests pull values out with a regex. A
+  renamed constant makes the regex match nothing, and "nothing equals nothing"
+  passes. Assert each side is a real, usable value *before* comparing —
+  `participant-cap-agrees` requires both to be positive integers, which is what
+  catches the rename.
+- **Guard the messages too, not just the validators.** A validator allowing 100
+  while its message reads "Maximum 15" is the same drift in different clothes,
+  and the message is the half a user believes. Derive user-facing text from the
+  constant and have the test reject literals.
+
+**Do not** test that the value equals a specific number. That is a config value;
+a test restating it only ever fails when someone changes it deliberately, which
+is noise. Test that the copies agree.

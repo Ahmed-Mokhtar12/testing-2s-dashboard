@@ -40,6 +40,7 @@ bumped:
 ```
 SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-chat-with-data.sh
 SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-training-report.sh
+SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-submit-training.sh
 ```
 
 The token stays in the operator's own shell. The MCP `deploy_edge_function` tool
