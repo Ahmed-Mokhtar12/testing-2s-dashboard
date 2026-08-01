@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { DURATION_OPTIONS } from '@/lib/hotel-training-constants';
+import { DURATION_OPTIONS, MAX_PARTICIPANTS } from '@/lib/hotel-training-constants';
 import { cn } from '@/lib/utils';
 import type { TrainerRef, TrainingDetailsValues } from '@/types/hotel-training';
 
@@ -88,7 +88,7 @@ function createSchema(locationTypeAsString?: ColumnType, remarksTypeAsString?: C
       .number({ required_error: 'Total participants is required' })
       .int('Must be a whole number')
       .min(1, 'Must be at least 1')
-      .max(15, 'Maximum 15 participants per training'),
+      .max(MAX_PARTICIPANTS, `Maximum ${MAX_PARTICIPANTS} participants per training`),
     location: optionalColumnSchema(locationTypeAsString),
     remarks: optionalColumnSchema(remarksTypeAsString),
     date: z.date({ required_error: 'Date is required' }),

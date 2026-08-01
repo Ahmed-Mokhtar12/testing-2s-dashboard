@@ -67,3 +67,24 @@ export const REMARKS_TYPE_AS_STRING = 'Text';
 
 export const DRAFT_KEY = (email: string) =>
   `hotel-training-draft-${email.toLowerCase()}`;
+
+// Maximum participants in one training session. Raised 15 -> 100 on 2026-08-01.
+//
+// THIS NUMBER IS DECLARED TWICE, and it has to be. The edge function
+// supabase/functions/sp-submit-training/index.ts enforces the same cap, and the
+// two runtimes cannot share a module: the edge tree is Deno, both tsconfigs
+// exclude it, and an import across the boundary would break the git archive the
+// deploy scripts build. A form that accepts 100 while the function rejects
+// anything over 15 is worse than no change at all, so the drift is made
+// detectable instead of pretended away —
+// tests/unit/participant-cap-agrees.test.ts fails the build if the two numbers
+// disagree.
+//
+// Derive every user-facing message from this constant rather than writing the
+// number into a string; a message saying "Maximum 15" while the validator allows
+// 100 is the same drift wearing different clothes.
+//
+// NOTE the wizard blocks duplicate participants, so filling N rows needs N
+// distinct ACTIVE colleagues in the directory. If the active roster is smaller
+// than this cap, the roster is the real ceiling.
+export const MAX_PARTICIPANTS = 100;

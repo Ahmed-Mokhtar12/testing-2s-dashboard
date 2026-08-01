@@ -23,8 +23,7 @@ export const MOCK_COLLEAGUES_FLAT = [
 // DOM matches for the same name — reproduced locally). Keeping the two
 // fixtures independent means this test's data has zero effect on the
 // existing 15-test wizard suite.
-export const MOCK_COLLEAGUES_MANY = [
-  ...MOCK_COLLEAGUES_FLAT,
+const NAMED_EXTRA_COLLEAGUES = [
   { id: 'col-5', employeeId: '2001', colleagueName: 'Eve Turner', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
   { id: 'col-6', employeeId: '2002', colleagueName: 'Frank Ng', position: 'Staff', section: 'Engineering', department: 'Engineering', isActive: true },
   { id: 'col-7', employeeId: '2003', colleagueName: 'Grace Kim', position: 'Staff', section: 'Finance', department: 'Finance', isActive: true },
@@ -41,6 +40,55 @@ export const MOCK_COLLEAGUES_MANY = [
   { id: 'col-18', employeeId: '2014', colleagueName: 'Rania Saeed', position: 'Staff', section: 'Engineering', department: 'Engineering', isActive: true },
   { id: 'col-19', employeeId: '2015', colleagueName: 'Samuel Osei', position: 'Staff', section: 'Front Office', department: 'Front Office', isActive: true },
 ];
+
+// Only these four appear in MOCK_COLUMNS_FLAT.departments, so generated rows stay
+// consistent with the directory the wizard is told exists.
+const FILLER_DEPARTMENTS = ['Engineering', 'Finance', 'Front Office', 'Human Resources'];
+
+// Deterministic filler, so a roster can reach any cap without hand-writing a
+// hundred lines. Generated rather than random on purpose: Math.random() in a
+// fixture makes a failing test unreproducible, and this file's whole job is to
+// make the 100-participant layout test repeatable.
+function fillerColleagues(count: number) {
+  return Array.from({ length: count }, (_, index) => {
+    const n = index + 1;
+    const department = FILLER_DEPARTMENTS[n % FILLER_DEPARTMENTS.length];
+    return {
+      id: `col-gen-${n}`,
+      employeeId: String(3000 + n),
+      // Zero-padded so the display order is the array order — an unpadded
+      // "Trainee 10" sorts before "Trainee 2" in any name-ordered UI and would
+      // make first/last row assertions surprising.
+      colleagueName: `Trainee ${String(n).padStart(3, '0')}`,
+      position: 'Staff',
+      section: department,
+      department,
+      isActive: true,
+    };
+  });
+}
+
+/**
+ * A roster with at least `activeNeeded` ACTIVE colleagues.
+ *
+ * The wizard blocks duplicate participants, so filling N participant rows needs
+ * N distinct active colleagues; MOCK_COLLEAGUES_FLAT has only 3. Kept SEPARATE
+ * from MOCK_COLLEAGUES_FLAT rather than extending it: appending to the shared
+ * fixture was tried first and made tests/hotel-training.spec.ts flaky (the
+ * participant Popover's close animation can leave its previous content mounted
+ * for a moment, and a longer option list widened that race enough to
+ * occasionally produce two DOM matches for one name — reproduced locally). So
+ * this list's size has zero effect on the wizard suite.
+ */
+export function makeManyColleagues(activeNeeded: number) {
+  // `activeNeeded` filler rows are generated REGARDLESS of how many named active
+  // colleagues already exist, so the LAST `activeNeeded` active entries are
+  // always generated ones. Callers slice from the tail exactly so their seeded
+  // rows never depend on which of the shared MOCK_COLLEAGUES_FLAT entries happen
+  // to be active (Dave Black is not); subtracting the named count would put
+  // those shared entries back inside the slice and reintroduce that coupling.
+  return [...MOCK_COLLEAGUES_FLAT, ...NAMED_EXTRA_COLLEAGUES, ...fillerColleagues(activeNeeded)];
+}
 
 // The sp-read-columns Edge Function returns the flattened ListColumnsResult
 // shape (not the raw Graph { value: [...] } shape).

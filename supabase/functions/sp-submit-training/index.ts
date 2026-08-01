@@ -44,6 +44,18 @@ const TRAINER_EMAILS: Record<string, string> = {
 // temporary diagnostic deploy (see task report); stable per site.
 const UIL_LIST_ID = '265691f8-3786-4e9f-932f-79835f30a6cf';
 
+// Maximum participants in one session. Raised 15 -> 100 on 2026-08-01.
+//
+// MUST equal MAX_PARTICIPANTS in src/lib/hotel-training-constants.ts. It cannot
+// simply import it: this is the Deno tree, both tsconfigs exclude it, and an
+// import across the runtime boundary would break the git archive the deploy
+// scripts build. So the two are checked against each other instead —
+// tests/unit/participant-cap-agrees.test.ts fails the build if they disagree.
+//
+// This gate is the one that matters: a form accepting 100 while this rejects
+// anything over 15 means a wizard the user can fill and cannot submit.
+const MAX_PARTICIPANTS = 100;
+
 // Module-scope cache: persists across requests for the lifetime of a warm
 // Deno isolate, with no invalidation. If a trainer's User Information List
 // item is ever deleted and recreated (e.g. the trainer is removed and
@@ -174,8 +186,8 @@ function badRequest(body: SubmitBody, trainers: TrainerRef[] | null): string | n
   if (!body.title?.trim()) return 'Title is required.';
   if (!body.department?.trim()) return 'Department is required.';
   if (!Number.isFinite(body.durationMinutes) || body.durationMinutes <= 0) return 'Invalid duration.';
-  if (!Number.isInteger(body.totalParticipants) || body.totalParticipants < 1 || body.totalParticipants > 15) {
-    return 'Total participants must be between 1 and 15.';
+  if (!Number.isInteger(body.totalParticipants) || body.totalParticipants < 1 || body.totalParticipants > MAX_PARTICIPANTS) {
+    return `Total participants must be between 1 and ${MAX_PARTICIPANTS}.`;
   }
   if (!trainers) return 'At least one valid trainer is required.';
   if (!body.trainingDate || Number.isNaN(Date.parse(body.trainingDate))) return 'Invalid training date.';

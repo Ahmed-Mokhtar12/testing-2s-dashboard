@@ -5,9 +5,10 @@ import {
   mockColleaguesFunction,
   mockColumnsFunction,
   mockTrainersFunction,
-  MOCK_COLLEAGUES_MANY,
+  makeManyColleagues,
   MOCK_TRAINERS_FLAT,
 } from './helpers/hotel-training-mocks';
+import { MAX_PARTICIPANTS } from '../src/lib/hotel-training-constants';
 
 // setMockAuthSession's default identity. DRAFT_KEY lowercases the email
 // (src/lib/hotel-training-constants.ts), and this one is already lowercase.
@@ -140,15 +141,18 @@ test.describe('full-viewport layout (desktop)', () => {
 // different insights hooks is high-effort and brittle (see I5(b) — the spec
 // is amended instead to say so honestly). Hotel Training's participant list
 // is the one genuinely unbounded, data-independent piece of content in
-// scope, so it gets exercised for real: fill the wizard to the maximum 15
-// participants and prove the overflow lands inside the wizard column, not
-// at the document (or, post-I4, silently clipped) level. Patterns below are
+// scope, so it gets exercised for real: fill the wizard to MAX_PARTICIPANTS
+// (raised 15 -> 100 on 2026-08-01) and prove the overflow lands inside the
+// wizard column, not at the document (or, post-I4, silently clipped) level.
+// The cap is imported rather than restated so this stays a CEILING test — a
+// ceiling test pinned below the ceiling has stopped testing what it claims.
+// Patterns below are
 // copied from tests/hotel-training.spec.ts's fillTrainingDetails/
 // selectParticipant helpers.
 test.describe('full-viewport layout — Hotel Training max participants (desktop)', () => {
   test.skip(({ isMobile }) => isMobile, 'desktop-only assertion');
 
-  test('hotel-training wizard at 15 participants: document does not scroll, wizard column does', async ({ page }) => {
+  test(`hotel-training wizard at ${MAX_PARTICIPANTS} participants: document does not scroll, wizard column does`, async ({ page }) => {
     // SETUP REWRITTEN 2026-07-31 — draft-seeded, not hand-entered.
     //
     // The original version drove ~25 real UI interactions, 15 of them popover
@@ -165,11 +169,11 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
     // coin flip — the previous note in this file said explicitly not to, and
     // this is that remedy instead.
     //
-    // The 15 participants now arrive through the draft-restore path
+    // The participants now arrive through the draft-restore path
     // (localStorage `hotel-training-draft-<email>`, shape
     // { trainingDetails, participants: ParticipantRow[], step, savedAt } — the
     // same seam tests/hotel-training.spec.ts's legacy-draft test uses), which
-    // reaches the identical 15-row layout with ONE click and zero popover
+    // reaches the identical full-height layout with ONE click and zero popover
     // animations. The assertions below are unchanged; only the setup is.
     //
     // What this trades away, stated rather than hidden: the old version also
@@ -181,24 +185,25 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
     await page.setViewportSize({ width: 1366, height: 768 });
     await setMockAuthSession(page);
     await mockSupabaseRest(page);
-    // MOCK_COLLEAGUES_MANY (not the default MOCK_COLLEAGUES_FLAT, which only
-    // has 3 active colleagues): 15 distinct active colleagues are needed, and
-    // the seeded rows below are taken from this list so the restored draft
-    // references people the directory actually returns. Page-scoped override —
-    // no effect on other specs.
-    await mockColleaguesFunction(page, { list: MOCK_COLLEAGUES_MANY });
+    // A generated roster (not the default MOCK_COLLEAGUES_FLAT, which has only 3
+    // active colleagues): the wizard blocks duplicates, so MAX_PARTICIPANTS
+    // distinct active colleagues are needed, and the seeded rows below are taken
+    // from this list so the restored draft references people the directory
+    // actually returns. Page-scoped override — no effect on other specs.
+    const roster = makeManyColleagues(MAX_PARTICIPANTS);
+    await mockColleaguesFunction(page, { list: roster });
     await mockColumnsFunction(page);
     await mockTrainersFunction(page);
 
-    // Last 15 ACTIVE colleagues: col-5..col-19 (Eve Turner .. Samuel Osei).
-    // Taken from the tail rather than the head so the inactive Dave Black and
-    // the three shared MOCK_COLLEAGUES_FLAT entries are skipped without this
-    // test depending on which of them are active.
-    const seededRows = MOCK_COLLEAGUES_MANY
+    // The last MAX_PARTICIPANTS ACTIVE colleagues, which makeManyColleagues
+    // guarantees are all generated filler. Taken from the tail rather than the
+    // head so the inactive Dave Black and the shared MOCK_COLLEAGUES_FLAT entries
+    // are skipped without this test depending on which of them are active.
+    const seededRows = roster
       .filter((colleague) => colleague.isActive)
-      .slice(-15)
+      .slice(-MAX_PARTICIPANTS)
       .map((colleague, index) => ({ rowNo: index + 1, colleague }));
-    expect(seededRows).toHaveLength(15);
+    expect(seededRows).toHaveLength(MAX_PARTICIPANTS);
 
     await page.addInitScript(
       ({ key, value }) => {
@@ -211,7 +216,7 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
             title: 'Full Viewport Max Participants',
             department: 'Engineering',
             durationMinutes: 60,
-            totalParticipants: 15,
+            totalParticipants: MAX_PARTICIPANTS,
             // Serialised as a string; restoreDraft revives it with
             // `new Date(draft.trainingDetails.date)` (HotelTraining.tsx:157).
             date: '2026-07-15T00:00:00.000Z',
@@ -238,24 +243,34 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
     // restoreDraft() always calls setStep(1) so the details can be reviewed
     // before submitting (HotelTraining.tsx:164). So the seeded step is not what
     // gets us to the participants view; this click is. Because
-    // totalParticipants (15) equals participants.length (15), applyStep1 takes
+    // totalParticipants equals participants.length (both MAX_PARTICIPANTS),
+    // applyStep1 takes
     // neither the grow nor the trim branch and the seeded rows survive intact.
     await page.getByRole('button', { name: /Next: Add Participants/ }).click();
     await expect(page.getByRole('button', { name: 'Participants' })).toBeVisible();
 
-    // ANTI-VACUITY GUARD, and the whole reason the seeding is trustworthy: 15
-    // EMPTY rows would also make the page overflow, so proving the rows exist
-    // is not enough — they have to be FILLED, which is what the old
-    // click-through guaranteed for free. A filled trigger renders
+    // ANTI-VACUITY GUARD, and the whole reason the seeding is trustworthy:
+    // MAX_PARTICIPANTS EMPTY rows would also make the page overflow, so proving
+    // the rows exist is not enough — they have to be FILLED, which is what the
+    // old click-through guaranteed for free. A filled trigger renders
     // `${colleagueName} (${employeeId})` (ParticipantRow.tsx:52); an empty one
     // does not. Checking first, last and the count covers the ways the restore
     // could half-work.
-    await expect(page.getByTestId('participant-select-1')).toHaveText(/Eve Turner \(2001\)/);
-    await expect(page.getByTestId('participant-select-15')).toHaveText(/Samuel Osei \(2015\)/);
-    await expect(page.getByTestId(/^participant-select-\d+$/)).toHaveCount(15);
+    //
+    // Expectations are DERIVED from seededRows rather than written out. The
+    // previous version pinned 'Eve Turner (2001)' and 'Samuel Osei (2015)', which
+    // silently became the wrong people the moment the roster grew — a literal in
+    // a test is a time bomb (docs/testing-lessons.md section 4).
+    const firstSeeded = seededRows[0].colleague;
+    const lastSeeded = seededRows[seededRows.length - 1].colleague;
+    await expect(page.getByTestId('participant-select-1'))
+      .toHaveText(new RegExp(`${firstSeeded.colleagueName} \\(${firstSeeded.employeeId}\\)`));
+    await expect(page.getByTestId(`participant-select-${MAX_PARTICIPANTS}`))
+      .toHaveText(new RegExp(`${lastSeeded.colleagueName} \\(${lastSeeded.employeeId}\\)`));
+    await expect(page.getByTestId(/^participant-select-\d+$/)).toHaveCount(MAX_PARTICIPANTS);
     await page.waitForLoadState('networkidle');
 
-    // The claim under test: with 15 participants the DOCUMENT never scrolls
+    // The claim under test: at MAX_PARTICIPANTS the DOCUMENT never scrolls
     // (locked shell holds), and the resulting overflow is absorbed by a
     // scroll container inside the shell rather than growing the page. That
     // container is `<main>` (overflow-y-auto), not the wizard column itself —

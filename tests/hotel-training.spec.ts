@@ -9,6 +9,9 @@ import {
   setMockAuthSession,
   type CapturedWrite,
 } from './helpers/hotel-training-mocks';
+// Relative, not the '@/' alias: no test in this suite uses the alias, and
+// Playwright resolves its own transform rather than Vite's.
+import { MAX_PARTICIPANTS } from '../src/lib/hotel-training-constants';
 
 const ADMIN_EMAIL = 'ahmed.mokhtar@2seasonshotels.com';
 const USER_EMAIL = 'user@2seasonshotels.com';
@@ -166,12 +169,15 @@ test.describe('Hotel Training', () => {
     await expect(page.getByLabel('Total Participants')).toHaveValue('3');
   });
 
-  test('total participants above 15 is blocked with an error message', async ({ page }) => {
+  test(`total participants above ${MAX_PARTICIPANTS} is blocked with an error message`, async ({ page }) => {
     await openHotelTraining(page);
-    await fillTrainingDetails(page, 16, 'Participant Cap Test');
+    // Derived from the constant, not the literal 16 this test used to hold. The
+    // cap moved 15 -> 100 on 2026-08-01 and a test pinning the old number would
+    // have gone on passing while asserting the wrong ceiling.
+    await fillTrainingDetails(page, MAX_PARTICIPANTS + 1, 'Participant Cap Test');
     await page.getByRole('button', { name: /Next: Add Participants/ }).click();
 
-    await expect(page.getByText('Maximum 15 participants per training')).toBeVisible();
+    await expect(page.getByText(`Maximum ${MAX_PARTICIPANTS} participants per training`)).toBeVisible();
     // The wizard did not advance: the details form is still shown and the
     // participants step content is not.
     await expect(page.getByLabel('Total Participants')).toBeVisible();
