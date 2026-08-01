@@ -223,3 +223,94 @@ Two things that make such a test worth having rather than decorative:
 **Do not** test that the value equals a specific number. That is a config value;
 a test restating it only ever fails when someone changes it deliberately, which
 is noise. Test that the copies agree.
+
+---
+
+## 8. A check that looks defensive may be required — cite the spec, not your instinct
+
+**Rule: an asserted requirement and an invented one are textually identical.
+Only a citation tells them apart.**
+
+Two checks in the `$batch` write path read like exactly the over-caution a
+clean-code pass exists to strip:
+
+- matching `$batch` responses to requests by `id` instead of by position
+- rejecting duplicate `rowNo` values on data the client generates as `index + 1`
+
+Both were written with a confident justification:
+
+```
+// Graph does NOT guarantee that responses come back in request order, so
+// they must be matched by id.
+```
+```
+// rowNo is now the $batch correlation id, so it MUST be unique: Graph rejects
+// a batch containing two requests with the same id ... The client generates
+// rowNo as index+1 so this cannot currently happen, but the function must not
+// depend on that.
+```
+
+Reading Microsoft's JSON batching documentation confirmed both, in those words:
+*"Individual responses might appear in a different order than the requests"* and
+*"Must be unique in the batch, otherwise the batch request fails with a `400`
+error code."* So neither is defensive. They are the contract.
+
+**The part worth keeping.** Those comments were written from memory and were
+*right*, but nothing in them said so. A comment asserting a requirement and a
+comment inventing one look the same on the page — same confidence, same shape,
+no way for the next reader to tell which they are holding. The verification is
+what moved them from asserted to documented, and it happened by luck of a later
+review rather than by design.
+
+**And the danger is symmetric.** The general rule "do not add guards for cases the
+caller contract already excludes" would license deleting the `rowNo` check on
+sight: the client really does generate `index + 1`, so a duplicate really is
+impossible *today*. Deleting it would have removed a documented API requirement
+and left a failure mode where either the whole batch 400s or one row's error is
+attributed to a different person. The same uncertainty that got these built could
+just as easily have got them deleted.
+
+This is a different shape from section 2. There the check was wrong. Here the
+check was right and the *reason recorded for it* was unverified — which is one
+review away from the same outcome.
+
+**Rules.**
+- When you write a guard, cite the sentence in the spec that requires it, not the
+  behaviour you believe. A comment that names its source survives review; one that
+  sounds confident invites deletion.
+- Before deleting a check as speculative, go and find the contract that governs
+  it. *"It looks paranoid"* is not evidence, and neither is *"the current caller
+  can't produce that."*
+
+---
+
+## 9. Speculative configurability grows its own supporting artifacts
+
+**Rule: for any option, name the production caller. If the only callers are
+tests, delete the option and the tests with it.**
+
+`writeParticipantsInBatches` took an optional `batchSize`. No production caller
+passes it — Graph's limit of 20 is the only value that has ever been used. But it
+did not sit there inertly:
+
+1. The option exists, so it can be given a wrong value.
+2. So a clamp exists — `Math.max(1, Math.min(opts.batchSize ?? LIMIT, LIMIT))`.
+3. So a test exists — *"an oversized batchSize is clamped to the Graph limit
+   rather than trusted"* — which is the only test that passes `batchSize` at all.
+
+Three artifacts, all passing, each one justified by the one above it, and the
+whole cluster resting on zero production callers. Deleting the option deletes the
+clamp and the test with it.
+
+**Why it is hard to see.** The test is what makes the parameter look
+load-bearing. A green test reads as evidence that the code matters, and coverage
+cannot distinguish *"this is needed"* from *"this is exercised"*. Worse, the clamp is
+genuine-looking defensive programming, so a reviewer checking for over-caution
+finds a guard that is doing real validation — of an input nothing supplies.
+
+**The tell.** Ask *"what breaks if I delete this?"* and follow the answer one more
+step. If everything that breaks exists only because of the thing being deleted,
+the cluster is dead weight, however green it is.
+
+Related: this is YAGNI, but the ordinary form of YAGNI is one unused thing. The
+form worth watching is the one that recruits a guard and a test to look necessary.
