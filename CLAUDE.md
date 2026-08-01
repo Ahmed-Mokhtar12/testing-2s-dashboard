@@ -80,6 +80,24 @@ day-of-month must be computed from the Dubai calendar date, never from the UTC
 instant — they diverge in the 20:00–23:59 UTC window. `report-schedule.ts` uses
 `Date.UTC(...)` purely as a calendar calculator for this reason.
 
+## Auth
+
+- The **Azure Tenant URL** must be the tenant *GUID*, never the tenant domain:
+  `https://login.microsoftonline.com/2e9f09ed-8e4e-48d6-b37e-77b4bd4941a4`.
+  Microsoft always issues ID tokens with the GUID in `iss`, and GoTrue validates
+  `iss` against this setting *before* looking up any user — so the domain form
+  breaks Microsoft sign-in for **every** account at once, with a
+  `500: Error getting user profile from external provider` on `/callback` and
+  nothing in the app to suggest a config problem. The domain form restricts
+  nothing that the GUID form does not; it is simply wrong.
+- Three accounts (`info@`, `teleopr@`, `2srewards@`) have an `azure` identity and
+  **no password**. Anything that breaks OAuth locks them out completely — they
+  have no fallback. Check them explicitly before and after any auth change.
+- Signup is disabled, and that is deliberate. It does **not** block linking a new
+  provider to an existing user: same-email automatic linking does not create a
+  user, so it never consults `disable_signup`.
+- None of this is in version control. See `docs/backlog.md` B3.
+
 ## Commits
 
 One task per commit, on `main`. Commit messages carry the evidence: what was

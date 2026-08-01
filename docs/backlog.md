@@ -9,6 +9,47 @@ logged, newest first.
 
 ---
 
+## B3 — the live auth config is not in version control, and nothing checks it
+
+**Logged:** 2026-08-01 · **Found while** diagnosing the Microsoft sign-in outage
+
+The Azure Tenant URL was changed from the tenant GUID to the tenant domain some
+time after 2026-06-11 — the last successful Microsoft login. Nothing in the repo
+records the change, nothing asserts the live value, and nothing failed until
+users did. Sign-in was broken for **every** account for an unknown number of
+weeks; the only reason it surfaced when it did is that somebody tried.
+
+The correct value has been written down since 2026-06-09 in
+`docs/superpowers/plans/2026-06-09-azure-ad-login.md:56` — *"Azure Tenant URL:
+`https://login.microsoftonline.com/<Directory-tenant-ID>`"*. Being written down
+did not help, because nothing read it. That is the point of this item: the
+knowledge existed and was not connected to anything that could fail.
+
+**Why now.** Every gate in this repo covers code. The auth configuration is a
+dashboard setting with the same power to lock every user out, and zero coverage —
+no typecheck, no test, no deploy script, no review. It is the largest uncovered
+surface left that can take the whole product down.
+
+**What "done" looks like.** A committed expectation for the few auth settings
+that are load-bearing, and a manual script that diffs the live config against it:
+
+- Azure Tenant URL == `https://login.microsoftonline.com/2e9f09ed-8e4e-48d6-b37e-77b4bd4941a4`
+- signup disabled
+- email provider enabled (the password fallback depends on it, and it is the only
+  fallback the three azure-only mailboxes do *not* have)
+
+Read the live values from `GET /v1/projects/{ref}/config/auth` with a management
+token, print a diff, exit non-zero on any drift. Same operator-run shape as
+`scripts/deploy-*.sh`, for the same reason: it needs a token that must not live
+in this repo, so it can never join the hermetic `test:unit` gate.
+
+**Cost and risk.** Small — one script, one expectations file. The real judgment
+call is *which* settings to pin: pin everything and the diff becomes noisy, gets
+ignored, and joins the list of checks that report green because nobody reads
+them. Pin only what would be an outage.
+
+---
+
 ## B1 — Training report emails are at-least-once, not exactly-once
 
 **Logged:** 2026-08-01 · **Raised by:** Ahmed, on the weekly-cadence switch

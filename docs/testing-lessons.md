@@ -130,3 +130,56 @@ And once, live code looked dead: a grep for `error-handler` matches both the dea
 **Rule: check reachability from an entry point, then confirm with a second,
 independent method** (import specifiers *and* exported-symbol names). One-way
 greps keep dead clusters alive forever.
+
+---
+
+## 6. A hypothesis that explains every symptom can still be wrong
+
+**Rule: before explaining a failure, read the failure.**
+
+Microsoft sign-in stopped working. The known facts fitted one story exactly:
+`disable_signup` had recently been turned on, every affected account had an
+`email` identity but no `azure` one, and creating an identity looks a great deal
+like a signup. That story accounted for every observation — including why the
+three azure-only mailboxes were believed to be fine. It was wrong.
+
+One line of the auth log settled it:
+
+```
+azure: ID token issuer "https://login.microsoftonline.com/<tenant-guid>/v2.0"
+  does not match expected issuer "https://login.microsoftonline.com/2seasonshotels.com/v2.0"
+→ 500: Error getting user profile from external provider   (path /callback)
+```
+
+The Azure Tenant URL held the tenant **domain** where GoTrue needs the tenant
+**GUID**. Issuer validation happens while parsing the ID token — before any user
+lookup — so it fails identically for every account and never reaches the signup
+or linking decision. `disable_signup` was never consulted. Two unrelated changes
+landed near each other and the nearer one got the blame.
+
+Two things made the wrong story convincing, and both are shapes that recur:
+
+- **Stored state was read as a result.** The three azure-only mailboxes have
+  `azure` rows in `auth.identities`, so they were assumed to still work. They did
+  not — with issuer validation failing for everyone and no password set, they
+  were the *only* accounts with no way in at all. The believed-healthy set was
+  the worst-affected set. This is `relrowsecurity = true` versus a refused INSERT
+  again (CLAUDE.md → Database): a row records something that worked once, under a
+  configuration that may since have changed.
+- **The obvious verification would have passed vacuously.** The person
+  diagnosing it holds both identities, so their own Microsoft sign-in takes the
+  identity-*found* path. A green result there proves the issuer fix and says
+  nothing whatever about whether linking works for accounts that have no `azure`
+  row — which was the entire question.
+
+**Rule: verify a fix with an account that actually takes the broken path.** Not
+the nearest account, not the operator's own, not the one that is easiest to test.
+
+**Corollary on identifiers.** `auth.identities.provider_id` for Azure is the
+`sub` claim, not the directory object id — verified against the live rows
+(`provider_id = identity_data->>'sub'` for all four, `= oid` for none, length 43
+rather than a GUID's 36). Microsoft's `sub` is unique per user *per application*,
+so it cannot be looked up in the portal and cannot be known before that app has
+received a token for that user. Hand-inserting identity rows is therefore not
+risky-but-possible; it is not possible, and a wrong value produces a row that
+makes an account *look* linked while nothing works.
