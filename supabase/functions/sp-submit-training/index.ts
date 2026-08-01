@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
+import { writeParticipantsInBatches, type BatchResponse } from './participant-batch.ts';
 
 interface ParticipantRow {
   rowNo: number;
@@ -182,6 +183,14 @@ function badRequest(body: SubmitBody, trainers: TrainerRef[] | null): string | n
   if (body.participants.length !== body.totalParticipants) {
     return `Participant count mismatch: expected ${body.totalParticipants}, got ${body.participants.length}.`;
   }
+  // rowNo is now the $batch correlation id, so it MUST be unique: Graph rejects
+  // a batch containing two requests with the same id, and a duplicate would also
+  // make one row's result silently stand in for another's when failures are
+  // mapped back. The client generates rowNo as index+1 so this cannot currently
+  // happen, but the function must not depend on that.
+  if (new Set(body.participants.map((row) => row.rowNo)).size !== body.participants.length) {
+    return 'Participant rowNo values must be unique.';
+  }
   return null;
 }
 
@@ -262,31 +271,46 @@ Deno.serve(async (req) => {
       },
     );
 
-    const failedParticipants: Array<{ row: ParticipantRow; error: string }> = [];
-    for (const row of body.participants) {
-      try {
-        await graphFetch(
+    // One $batch per 20 rows, instead of one awaited POST per row. See
+    // participant-batch.ts for the reasoning: SharePoint throttles list-write
+    // bursts, and each 429 costs a Retry-After wait PER CALL, so at 100
+    // participants the sequential loop could exceed the 400s edge-function wall
+    // clock and return a 504 with SharePoint half-written.
+    const batchFailures = await writeParticipantsInBatches(
+      body.participants.map((row) => ({
+        rowNo: row.rowNo,
+        fields: {
+          Title: row.colleagueName,
+          TrainingID: body.trainingId,
+          RowNo: row.rowNo,
+          EmployeeID: row.employeeId,
+          ColleagueName: row.colleagueName,
+          Position: row.position,
+          Section: row.section,
+          Department: row.department,
+        },
+      })),
+      // Sub-request URLs inside a $batch are relative to the version root and
+      // must NOT carry the https://graph.microsoft.com/v1.0 prefix.
+      `/sites/${siteId}/lists/${LIST_IDS.participants}/items`,
+      async (requests) => {
+        const data = await graphFetch<{ responses?: BatchResponse[] }>(
           token,
-          `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.participants}/items`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              fields: {
-                Title: row.colleagueName,
-                TrainingID: body.trainingId,
-                RowNo: row.rowNo,
-                EmployeeID: row.employeeId,
-                ColleagueName: row.colleagueName,
-                Position: row.position,
-                Section: row.section,
-                Department: row.department,
-              },
-            }),
-          },
+          `${GRAPH_BASE}/$batch`,
+          { method: 'POST', body: JSON.stringify({ requests }) },
         );
-      } catch (err) {
-        failedParticipants.push({ row, error: err instanceof Error ? err.message : String(err) });
-      }
+        return data?.responses ?? [];
+      },
+    );
+
+    // Response contract is deliberately unchanged — { row, error } per failure —
+    // so the frontend's partial-write handling and its regression test keep
+    // working without knowing that batching happened.
+    const failedParticipants: Array<{ row: ParticipantRow; error: string }> = [];
+    const byRowNo = new Map(body.participants.map((row) => [row.rowNo, row]));
+    for (const failure of batchFailures) {
+      const row = byRowNo.get(failure.rowNo);
+      if (row) failedParticipants.push({ row, error: failure.error });
     }
 
     return json(req, { sharepointId: session.id, failedParticipants });
