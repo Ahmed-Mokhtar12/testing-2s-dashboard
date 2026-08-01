@@ -7,6 +7,7 @@ import {
   mockSupabaseRest,
   mockTrainersFunction,
   setMockAuthSession,
+  type CapturedWrite,
 } from './helpers/hotel-training-mocks';
 
 const ADMIN_EMAIL = 'ahmed.mokhtar@2seasonshotels.com';
@@ -21,15 +22,20 @@ async function openHotelTraining(
     trainersFailure?: boolean;
     onSubmitBody?: (body: unknown) => void;
     onManageBody?: (body: unknown) => void;
+    failRowNos?: number[];
+    onWrite?: (write: CapturedWrite) => void;
   } = {},
 ) {
   await setMockAuthSession(page, email);
   await mockColleaguesFunction(page);
   await mockColumnsFunction(page);
   await mockTrainersFunction(page, { failure: opts.trainersFailure });
-  await mockSubmitFunction(page, { onBody: opts.onSubmitBody });
+  await mockSubmitFunction(page, { onBody: opts.onSubmitBody, failRowNos: opts.failRowNos });
   await mockManageColleagueFunction(page, { onBody: opts.onManageBody });
-  await mockSupabaseRest(page, { trainingSessionFailure: opts.supabaseFailure });
+  await mockSupabaseRest(page, {
+    trainingSessionFailure: opts.supabaseFailure,
+    onWrite: opts.onWrite,
+  });
   await page.goto('/dashboard/hotel-training');
   await expect(page.getByText('Hotel Training').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Training Details' })).toBeVisible();
@@ -273,6 +279,68 @@ test.describe('Hotel Training', () => {
 
     await expect(page.getByText('Training saved to SharePoint. Dashboard sync pending.')).toBeVisible({ timeout: 10_000 });
     await expect.poll(async () => page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith('hotel-training-draft-')))).toBe(false);
+  });
+
+  // REGRESSION TEST for the defect that blocked raising the participant cap to
+  // 100. A single failed SharePoint participant row used to make
+  // useTrainingSubmit return BEFORE every Supabase write, so the session was not
+  // recorded as 'partial' — it was absent from the database entirely, invisible
+  // to the training report, with no sync-queue row to recover from. At 15 rows a
+  // failure was rare enough to go unnoticed; at 100 with SharePoint throttling
+  // it becomes routine.
+  //
+  // This asserts the three writes that used to not happen, plus the fact that
+  // the failed row is EXCLUDED from the participants insert — inserting it would
+  // claim someone was recorded who was not, and would make the row count agree
+  // with total_participants, defeating report-aggregator's mismatch check.
+  test('SharePoint partial failure still mirrors the session to the database as partial', async ({ page }) => {
+    const writes: CapturedWrite[] = [];
+    await openHotelTraining(page, USER_EMAIL, {
+      failRowNos: [2],
+      onWrite: (write) => writes.push(write),
+    });
+    await goToParticipants(page, 3, 'Partial SharePoint Write');
+
+    await selectParticipant(page, 1, 'Alice Smith');
+    await selectParticipant(page, 2, 'Bob Jones');
+    await selectParticipant(page, 3, 'Carol White');
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+    await page.getByRole('button', { name: 'Confirm & Submit' }).last().click();
+
+    // The operator is told not to resubmit. "Please retry" was the old copy, and
+    // following it minted a new trainingId and duplicated the SharePoint session
+    // — the session list item has no TrainingID field, so the function cannot
+    // dedupe a resubmission.
+    await expect(page.getByText(/Do NOT submit again/)).toBeVisible({ timeout: 10_000 });
+
+    const posts = (table: string) =>
+      writes.filter((write) => write.table === table && write.method === 'POST');
+
+    // ANTI-VACUITY: if the route interception or the URL parsing broke, every
+    // filter below would return [] and the length assertions would be the only
+    // thing standing between that and a green test. Assert we captured writes at
+    // all first.
+    expect(writes.length).toBeGreaterThan(0);
+
+    const sessions = posts('training_sessions');
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].body).toMatchObject({
+      sync_status: 'partial',
+      // The DECLARED count, not the 2 rows that landed. This is what makes the
+      // gap detectable downstream.
+      total_participants: 3,
+    });
+
+    const participantPosts = posts('training_participants');
+    expect(participantPosts).toHaveLength(1);
+    const inserted = participantPosts[0].body as Array<{ row_no: number }>;
+    expect(inserted.map((row) => row.row_no)).toEqual([1, 3]);
+
+    const queued = posts('training_sync_queue');
+    expect(queued).toHaveLength(1);
+    expect(queued[0].body).toMatchObject({
+      failure_reason: expect.stringContaining('1 of 3 participant row(s) failed'),
+    });
   });
 
   test('colleague load failure surfaces an error instead of empty dropdowns', async ({ page }) => {

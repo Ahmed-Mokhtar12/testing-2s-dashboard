@@ -72,12 +72,46 @@ export function useTrainingSubmit() {
 
       const failed = failedParticipants;
 
-      if (failed.length > 0) {
-        return { trainingId, sharepointId, syncStatus: 'partial', failedParticipants: failed };
-      }
+      // A SharePoint participant failure USED TO return here, before any of the
+      // Supabase writes below. The effect was that a single failed row lost the
+      // whole session from the database: no training_sessions row, no
+      // training_participants, and no training_sync_queue row either — that
+      // write lives in the catch of the block below, which the early return
+      // skipped. The session was not "partial" in the database, it was ABSENT,
+      // and training_sessions is what the training report reads, so the session
+      // appeared in no report at all and sync_status never said anything.
+      //
+      // At 15 participants a single row failure was unlikely enough that this
+      // stayed theoretical (training_sync_queue has never held a row). At 100 it
+      // becomes routine, so the cap could not be raised over it.
+      //
+      // Now: the session is always mirrored, marked 'partial', with the rows
+      // that DID land — and the failures are recorded for a human.
+      const failedRowNos = new Set(failed.map((entry) => entry.row.rowNo));
+      const landedRows = rows.filter((row) => !failedRowNos.has(row.rowNo));
+      const sharePointPartial = failed.length > 0;
 
       const userEmail = session?.user?.email ?? '';
-      let syncStatus: 'synced' | 'partial' = 'synced';
+      let syncStatus: 'synced' | 'partial' = sharePointPartial ? 'partial' : 'synced';
+
+      // Recorded first and independently: training_sync_queue has no foreign key
+      // to training_sessions, so this survives even if every write below fails.
+      // NOTE for whoever reads this next: nothing DRAINS this queue. It is an
+      // admin-readable record that something needs doing by hand, not an
+      // automatic retry.
+      if (sharePointPartial) {
+        try {
+          await supabase.from('training_sync_queue').insert({
+            training_id: trainingId,
+            payload: { trainingDetails, participants: failed.map((entry) => entry.row), sharepointId } as unknown as Json,
+            failure_reason:
+              `${failed.length} of ${rows.length} participant row(s) failed to write to SharePoint: `
+              + failed.map((entry) => `row ${entry.row.rowNo} (${entry.row.employeeId}): ${entry.error}`).join('; '),
+          });
+        } catch {
+          // Best-effort; SharePoint remains the source of truth.
+        }
+      }
 
       try {
         const { error: sessionError } = await supabase.from('training_sessions').insert({
@@ -90,7 +124,13 @@ export function useTrainingSubmit() {
           remarks: trainingDetails.remarks != null ? String(trainingDetails.remarks) : null,
           training_date: isoDate,
           trainer_names: trainingDetails.trainers.map((trainer) => trainer.displayName),
+          // The DECLARED count, deliberately — NOT landedRows.length. This is
+          // what makes the gap detectable: report-aggregator.ts flags a session
+          // when sync_status !== 'synced' OR total_participants !== the number of
+          // participant rows found. Writing the landed count here would make the
+          // row look internally consistent and hide the missing people.
           total_participants: trainingDetails.totalParticipants,
+          sync_status: syncStatus,
           submitted_by: userEmail,
         });
 
@@ -98,17 +138,25 @@ export function useTrainingSubmit() {
           throw sessionError;
         }
 
-        const { error: participantError } = await supabase.from('training_participants').insert(
-          rows.map((row) => ({
-            training_id: trainingId,
-            row_no: row.rowNo,
-            employee_id: row.employeeId,
-            colleague_name: row.colleagueName,
-            position: row.position,
-            section: row.section,
-            department: row.department,
-          })),
-        );
+        // Only the rows SharePoint accepted. Inserting the failed ones would
+        // claim people were recorded who were not, and would then AGREE with
+        // total_participants — defeating the aggregator's mismatch check.
+        // Guarded: .insert([]) on a partial where every row failed is a
+        // pointless round-trip, and PostgREST's response to it is not worth
+        // depending on.
+        const { error: participantError } = landedRows.length === 0
+          ? { error: null }
+          : await supabase.from('training_participants').insert(
+            landedRows.map((row) => ({
+              training_id: trainingId,
+              row_no: row.rowNo,
+              employee_id: row.employeeId,
+              colleague_name: row.colleagueName,
+              position: row.position,
+              section: row.section,
+              department: row.department,
+            })),
+          );
 
         if (participantError) {
           await supabase
@@ -136,7 +184,10 @@ export function useTrainingSubmit() {
         }
       }
 
-      return { trainingId, sharepointId, syncStatus, failedParticipants: [] };
+      // `failed`, not []. The old code could only reach this line when nothing
+      // had failed, so a literal [] was correct then and is a lie now — the UI
+      // decides what to tell the operator from this array.
+      return { trainingId, sharepointId, syncStatus, failedParticipants: failed };
     },
   });
 }

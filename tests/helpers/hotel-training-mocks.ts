@@ -92,7 +92,14 @@ export async function mockColumnsFunction(page: Page) {
 
 export async function mockSubmitFunction(
   page: Page,
-  opts: { onBody?: (body: unknown) => void } = {},
+  opts: {
+    onBody?: (body: unknown) => void;
+    // Row numbers SharePoint should reject, so the partial-write path can be
+    // exercised. The real function returns { row, error } per failure; the row
+    // is echoed back from the request so the shape matches production exactly
+    // rather than being invented here.
+    failRowNos?: number[];
+  } = {},
 ) {
   await page.route(
     `https://${PROJECT_REF}.supabase.co/functions/v1/sp-submit-training`,
@@ -100,8 +107,15 @@ export async function mockSubmitFunction(
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, body: 'ok' });
       }
-      opts.onBody?.(route.request().postDataJSON());
-      return route.fulfill({ json: { sharepointId: MOCK_SP_SESSION_ID, failedParticipants: [] } });
+      const body = route.request().postDataJSON() as {
+        participants?: Array<{ rowNo: number }>;
+      };
+      opts.onBody?.(body);
+      const failRowNos = new Set(opts.failRowNos ?? []);
+      const failedParticipants = (body?.participants ?? [])
+        .filter((row) => failRowNos.has(row.rowNo))
+        .map((row) => ({ row, error: 'Graph API 429: throttled' }));
+      return route.fulfill({ json: { sharepointId: MOCK_SP_SESSION_ID, failedParticipants } });
     },
   );
 }
@@ -152,10 +166,36 @@ export async function mockColleaguesFunction(
   );
 }
 
-export async function mockSupabaseRest(page: Page, opts: { trainingSessionFailure?: boolean } = {}) {
+export interface CapturedWrite {
+  table: string;
+  method: string;
+  body: unknown;
+}
+
+export async function mockSupabaseRest(
+  page: Page,
+  opts: {
+    trainingSessionFailure?: boolean;
+    // Records every non-GET REST call so a test can assert what was actually
+    // written. Needed because the interesting property of the partial-write path
+    // is which rows reach the database, and that is invisible from the UI.
+    onWrite?: (write: CapturedWrite) => void;
+  } = {},
+) {
   await page.route(`https://${PROJECT_REF}.supabase.co/rest/v1/**`, async (route) => {
     const url = route.request().url();
     const method = route.request().method();
+
+    if (opts.onWrite && method !== 'GET' && method !== 'OPTIONS') {
+      const table = new URL(url).pathname.replace(/^\/rest\/v1\//, '');
+      let body: unknown = null;
+      try {
+        body = route.request().postDataJSON();
+      } catch {
+        body = route.request().postData();
+      }
+      opts.onWrite({ table, method, body });
+    }
 
     if (opts.trainingSessionFailure && url.includes('/training_sessions') && method === 'POST') {
       return route.fulfill({ status: 500, json: { message: 'DB error' } });

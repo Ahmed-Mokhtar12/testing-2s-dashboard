@@ -244,8 +244,17 @@ export default function HotelTraining() {
       {
         onSuccess: (result) => {
           if (result.failedParticipants.length > 0) {
+            // Deliberately NOT "Please retry". Submitting again mints a fresh
+            // trainingId and creates a SECOND SharePoint session: the session
+            // list item carries no TrainingID field, so sp-submit-training
+            // cannot recognise a resubmission and dedupe it. The old copy's
+            // advice was the fastest route to duplicated data.
             toast.error(
-              `Training saved, but ${result.failedParticipants.length} participant row(s) failed to save. Please retry.`,
+              `Training saved as ${result.trainingId}: ${result.failedParticipants.length} of `
+                + `${trainingDetails.totalParticipants} participant rows did not reach SharePoint. `
+                + 'Do NOT submit again — that would create a duplicate session. The missing rows '
+                + 'are recorded for an admin to add.',
+              { duration: 15000 },
             );
             return;
           }
