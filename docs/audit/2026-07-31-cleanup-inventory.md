@@ -8,18 +8,57 @@ see the status block immediately below before reading anything as pending.
 
 ## STATUS — 2026-07-31 evening
 
-Ahmed's ruling: do the two no-judgement tiers now, hold the large frontend
-deletion until after the n8n reviews backfill ("I'd rather not have a large
-deletion commit in flight while I'm running things by hand in n8n").
+Ahmed's first ruling was to do the two no-judgement tiers and hold the large
+frontend deletion until after the n8n reviews backfill ("I'd rather not have a
+large deletion commit in flight while I'm running things by hand in n8n"). He
+released the held tier later the same day, so everything except `lovable-tagger`
+is now executed.
 
 | Tier | State |
 |---|---|
 | The four zero-reference deletions | **DONE** — `chore(cleanup): delete four zero-reference Lovable scaffold leftovers` |
 | The 12 dead `chat-with-data` modules | **DONE** — `chore(chat-with-data): delete 12 unreachable modules and pin the import graph` |
-| The 3 dead non-UI frontend files | **NOT DONE** — not in the approved scope; still listed below |
-| The 21 unused components + 16 dependencies | **HELD** by Ahmed until after the backfill |
-| `lovable-tagger` | **STILL A DECISION** — same question as the 21 components |
+| The 21 unused components + 16 dependencies | **DONE** — released by Ahmed and executed the same day |
+| The 3 dead non-UI frontend files | **DONE** — same commit as the components |
+| `lovable-tagger` | **STILL A DECISION, THE ONLY ONE LEFT** — see below |
 | `public/og-image.png` | **STILL WORTH ONE LOOK** — it is served as the social preview; only a human can say whether the artwork is still the Lovable default |
+
+Measured outcome of the component tier, rather than the estimate this document
+originally carried:
+
+| | before | after |
+|---|---|---|
+| `package.json` direct dependencies | 72 | **56** |
+| packages in the tree | — | **19 removed** (16 direct + 3 transitive) |
+| `node_modules` | 532 MB | **527 MB** |
+| `dist` total | 4.6 MB | **4.6 MB — unchanged** |
+
+The `dist` row is the point. This document predicted no bundle-size win because
+Vite already tree-shakes unimported components, and deleting 23 source files and
+19 packages moved the built output by less than the rounding. The estimate of
+"3.7 MB of node_modules" was slightly low; the measured delta is ~5 MB, since
+removing 16 direct dependencies also dropped 3 transitive ones.
+
+Also confirmed, having done it: deleting `form.tsx` did **not** free
+`react-hook-form`, `@hookform/resolvers` or `zod`, and deleting `chart.tsx` did
+not free `recharts`. All four still have live importers (3, 3, 3 and 8
+respectively), exactly as predicted below.
+
+One trap this tier repeated: `ui/toggle.tsx` looks live to a per-file grep,
+because `ui/toggle-group.tsx` imports `toggleVariants` from it — and nothing
+imports `toggle-group`. Same self-referencing-dead-cluster shape as the four
+dead `chat-with-data` modules. A one-way "does anything import this?" check
+keeps both.
+
+### `lovable-tagger` — the last open decision
+
+Not deleted, deliberately, because it is the only item here that removes a
+capability rather than dead weight: it is what lets Lovable's visual editor map
+the rendered DOM back to source, so deleting it means this project can no longer
+be opened there usefully. It is a devDependency gated on `mode === 'development'`
+in `vite.config.ts`, so it never reaches production and there is no security or
+performance argument either way. One line in `vite.config.ts` plus one
+`npm uninstall` whenever the answer is "Lovable is retired for this project".
 
 Two things learned while executing that the read-only pass had not established:
 
@@ -87,8 +126,8 @@ Method, so the rulings can be checked rather than trusted:
 
 | Item | Trade-off |
 |---|---|
-| `lovable-tagger` + `componentTagger()` in `vite.config.ts` | devDependency, and gated on `mode === 'development'`, so it never reaches production. It injects element attributes that let Lovable's visual editor map the DOM back to source. Delete if the Lovable editor is retired for this project; keep if you might open it there again. No security or performance argument either way. |
-| 21 unimported shadcn/ui components + the 16 dependencies only they use | See Point 3 for the list. **There is no bundle-size argument** — I checked `dist/assets/*.js` for `NavigationMenu`, `Menubar`, `HoverCard`, `InputOTP` and `ResizablePanel` and all five appear in **zero** built chunks; Vite already tree-shakes them. The real costs are 3.7 MB of `node_modules`, install and CI time, 16 more packages of supply-chain surface, and 64 KB of source that a reviewer has to skip past. The real cost of deleting is that re-adding one means `npx shadcn add <name>` again. |
+| `lovable-tagger` + `componentTagger()` in `vite.config.ts` — **STILL OPEN** | devDependency, and gated on `mode === 'development'`, so it never reaches production. It injects element attributes that let Lovable's visual editor map the DOM back to source. Delete if the Lovable editor is retired for this project; keep if you might open it there again. No security or performance argument either way. |
+| 21 unimported shadcn/ui components + the 16 dependencies only they use — **DELETED** | See Point 3 for the list. **There is no bundle-size argument** — I checked `dist/assets/*.js` for `NavigationMenu`, `Menubar`, `HoverCard`, `InputOTP` and `ResizablePanel` and all five appear in **zero** built chunks; Vite already tree-shakes them. The real costs are 3.7 MB of `node_modules`, install and CI time, 16 more packages of supply-chain surface, and 64 KB of source that a reviewer has to skip past. The real cost of deleting is that re-adding one means `npx shadcn add <name>` again. |
 | `package.json` name `vite_react_shadcn_ts` | Cosmetic only — `private: true`, never published. |
 | `public/og-image.png` | **Referenced** by `og:image` and `twitter:image`, so it is being served as the dashboard's social preview. Keep the file — but worth opening it once to confirm it is not still the Lovable default artwork, which I cannot judge from the bytes. |
 
@@ -101,7 +140,7 @@ Method, so the rulings can be checked rather than trusted:
 
 ## Point 3 — dead and orphaned code
 
-### Frontend: 24 unreachable files
+### Frontend: 24 unreachable files — **ALL 24 DELETED 2026-07-31**
 
 **3 non-UI files, 2,979 bytes.** Unreachable from `main.tsx`, and grep finds
 **zero** occurrences of their names anywhere in `src/`, `tests/` or `docs/`:
