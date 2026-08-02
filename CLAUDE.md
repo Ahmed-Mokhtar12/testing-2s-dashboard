@@ -47,6 +47,22 @@ The token stays in the operator's own shell. The MCP `deploy_edge_function` tool
 requires every file's contents inline, which for a multi-file function means
 hand-reproducing tens of KB — use the scripts.
 
+The **frontend** deploys the same way, `bash scripts/deploy-frontend.sh`. nginx
+does not serve the files: it proxies to `serve dist -l 3007 -s` running under PM2
+as `testing-2s-dashboard`. Consequences worth knowing before deploying by hand:
+
+- Cache headers come from `public/serve.json`, which Vite copies into `dist/`, and
+  **`serve` reads it once at startup**. Swapping `dist` without
+  `pm2 restart testing-2s-dashboard` changes the files and silently keeps the old
+  cache policy, while looking like a complete success.
+- `serve` validates `serve.json` against `@zeit/schemas` with
+  `additionalProperties: false` and **refuses to start** if it fails — an invalid
+  config takes the site down at the next restart rather than degrading caching.
+  `tests/unit/serve-config-valid.test.ts` fails the build on that.
+- The script verifies against the public URL after restarting and exits non-zero
+  unless the freshly built asset is actually being served with the declared
+  headers.
+
 Several edge modes are gated on a real **admin user JWT** (`getCallerUser` then
 `has_role`). A service-role key has no user and fails the first check, so these
 cannot be driven without the operator's session:
