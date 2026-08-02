@@ -314,3 +314,46 @@ the cluster is dead weight, however green it is.
 
 Related: this is YAGNI, but the ordinary form of YAGNI is one unused thing. The
 form worth watching is the one that recruits a guard and a test to look necessary.
+
+## 10. A test suite that never runs the built app cannot see build-only failures
+
+**Rule: whatever assembles the thing users load must itself be under test. If the
+suite talks to the dev server, no test in it can fail for a bundling reason.**
+
+`playwright.config.ts` pointed its `webServer` at `npm run dev`. 105 tests, two
+browser projects, and not one of them had ever loaded a production bundle.
+
+So when `build.rollupOptions.output.manualChunks` was added, the entire suite was
+blind to what it did:
+
+- The built app threw `Cannot access 'P' before initialization` on first paint — a
+  cross-chunk circular import. Nothing rendered at all. `vite dev` serves unbundled
+  ES modules, so it cannot reproduce this class of failure even in principle.
+- The chunking also made first load *worse*. A catch-all `return 'vendor'` swept
+  route-only dependencies (recharts, emoji-picker-react) into a chunk the entry
+  needed part of, so ~570 kB of lazily-loaded code became eager: 1638 kB where the
+  unsplit entry had been 1537 kB. The build printed no warning; both numbers look
+  like a large bundle.
+
+Neither was caught by typecheck, by lint, by `test:unit`, or by the full Playwright
+suite. All five were green. It was caught by loading the page.
+
+**It reached the live site.** `npm run build` writes to `dist/`, which is the
+directory PM2's `serve` reads, so a build run to *inspect* chunk sizes deployed the
+broken bundle as a side effect. Recovery was a rebuild from `HEAD`'s config — but
+the interval was real, and the lesson is that a build command with a default output
+path is a deploy in disguise.
+
+**Two fixes, and the cheap one is the test.**
+
+1. `PW_BUILD=1 npx playwright test` builds to `dist-test/` and serves it with the
+   same `serve <dir> -l <port> -s` command line PM2 uses. The same 105 tests then
+   cover chunk init order, `public/serve.json` (an invalid one stops `serve`
+   booting), and the SPA rewrite. Adding it was ~20 lines of config.
+2. Never `npm run build` without `--outDir`. `scripts/deploy-frontend.sh` builds
+   from a git archive in a temp directory for this reason.
+
+**The general shape.** Ask what production does that the test environment does not.
+Here it was three things — bundling, minification, and static file serving — and
+the suite's coverage of all three was zero while reading as comprehensive. A
+green suite bounds the failures it can observe, not the failures that exist.

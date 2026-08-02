@@ -129,16 +129,69 @@ Three decisions that turned out to matter more than the table itself:
 
 **Not live until `bash scripts/deploy-sp-function.sh --all` runs.**
 
-## Phase 3 — keep what the browser already fetched
+## Phase 3 — the entry bundle
 
-- React Query persistence to localStorage, so a reload renders from the last
-  known-good data instead of refetching.
-- Prefetch the three queries on navigation intent (hover/focus of the sidebar
-  link), so the fetch starts before the route mounts.
-- `manualChunks` — the 433 KB (1505 KB decoded) main bundle is downloaded before
-  anything renders, on every route including `/auth`.
+The three items here were written as "do these last and only if the re-measure
+still shows them mattering". Measuring changed what the work was.
 
-Do these last and only if the re-measure still shows them mattering.
+### What the entry chunk actually contained
+
+A diagnostic build that gave every npm package its own chunk (into `dist-test`,
+never `dist`) named the real cost, and it was not chunk grouping:
+
+| Package | Built size |
+|---|---|
+| pdfjs-dist | 372.6 KB |
+| emoji-picker-react | 297.3 KB |
+| recharts | 274.6 KB |
+| mammoth | 148.3 KB |
+| dingbat-to-unicode | 117.2 KB |
+| react-dom | 126.8 KB |
+| bluebird | 83.4 KB |
+| @xmldom/xmldom | 58.5 KB |
+| xmlbuilder | 43.4 KB |
+
+`emoji-picker-react` and `recharts` were already in lazy route chunks. But
+**pdfjs-dist and mammoth's whole tree — about 820 KB — were in the entry chunk**,
+downloaded before anything renders, including on `/auth` where no document can be
+uploaded at all. The chain was
+`App → DashboardShell → RightChatPanel → useChat → useFileUpload →
+enhancedFileUploadHandler → clientSideDocumentProcessor`.
+
+Two of those three edges existed only to carry an **interface**. `import { ProcessingProgress }`
+rather than `import type { ProcessingProgress }` is a value import, so the module
+loads for its side effects. The third needed the class itself, and became an
+`await import()` inside the one function that uses it — by which point the user has
+already chosen a file.
+
+**Entry chunk 1537 kB → 659 kB, gzip 443 → 200 kB.** The parser is now an 877 kB
+chunk fetched only on upload.
+
+### The vendor split
+
+Then `manualChunks` for `react`/`@radix-ui`/`@supabase` only, with `undefined`
+returned for everything else: a 283 kB entry plus 426 kB of vendor code that an
+application change does not invalidate. Costs ~14 kB gzip on a first visit, saves
+~115 kB gzip on every visit after a deploy, given the `immutable` headers from
+Phase 1.3.
+
+The first attempt at this used a catch-all `return 'vendor'`. It made first load
+worse (1638 kB eager, above the unsplit 1537 kB) **and** crashed the built app with
+`Cannot access 'P' before initialization` — and every gate was green, because
+nothing in the suite had ever loaded a production bundle. `PW_BUILD=1` now exists
+so it can. See `docs/testing-lessons.md` §10.
+
+### Not done, and why
+
+- **React Query persistence to localStorage** — dropped. With the mirror serving
+  in ~100 ms it would save ~100 ms, needs a new dependency, and would change
+  staleness behaviour for every query in the app including pages that must stay
+  byte-identical. The cost is app-wide and the benefit is one page.
+- **Prefetch on navigation intent** — dropped. It was designed to hide a 3.5 s
+  wait. Phase 1.1 means step 1 renders with no network at all, and Phase 2 means
+  colleagues arrive in ~100 ms while the user is still typing into step 1. There is
+  no longer a wait to hide, and it would mean restructuring three hooks to expose
+  their query options plus a special case in `AppSidebar` for one route.
 
 ## Environment note
 

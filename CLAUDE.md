@@ -17,9 +17,22 @@ something going wrong, or by an explicit decision — nothing is aspirational.
 npm run typecheck      # tsc -p tsconfig.app.json && tsc -p tsconfig.node.json
 npm run lint
 npm run test:unit      # node --test, tests/unit/ AND supabase/functions/**/*.test.ts
-npm run build          # runs typecheck first
-npx playwright test    # ~6 min, 97 passing / 37 skipped placeholders
+npm run build          # runs typecheck first — WRITES TO dist/, WHICH IS LIVE
+npx playwright test    # ~8 min, 105 passing / 37 skipped placeholders
+PW_BUILD=1 npx playwright test   # the same tests against a production build
 ```
+
+**`npm run build` with no `--outDir` is a deploy.** It writes to `dist/`, which is
+the directory PM2's `serve` reads, so a build run to inspect chunk sizes puts that
+bundle live. Use `--outDir dist-test`, or `scripts/deploy-frontend.sh`, which
+builds from a git archive in a temp directory.
+
+**The default suite runs against `npm run dev`, which does not bundle.** No test in
+it can fail for a bundling reason: `manualChunks` output, chunk init order,
+`public/serve.json` and the SPA rewrite are all invisible to it. `PW_BUILD=1`
+builds to `dist-test/` and serves it with the same `serve` command line PM2 uses.
+Required after any change to `vite.config.ts` or `public/serve.json`. See
+`docs/testing-lessons.md` §10 for the failure that established this.
 
 **`tsc --noEmit` at the repo root checks NOTHING** — the root `tsconfig.json` has
 `files: []` plus `references`, so it loads no files and exits 0 regardless. Only

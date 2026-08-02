@@ -1,5 +1,12 @@
 import { Message } from '@/types/chat';
-import { ClientSideDocumentProcessor, ProcessingProgress } from './clientSideDocumentProcessor';
+// TYPE-ONLY, and the `type` keyword is load-bearing. clientSideDocumentProcessor
+// statically imports pdfjs-dist and mammoth, whose dependency trees together came
+// to ~820 kB minified. This module is reached from the entry chunk
+// (App -> DashboardShell -> RightChatPanel -> useChat -> useFileUpload), so a
+// plain value import here put all of it in the bundle downloaded before ANYTHING
+// renders — including /auth, where no document can be uploaded at all. The class
+// is now pulled in on demand, in processFileUpload below.
+import type { ProcessingProgress } from './clientSideDocumentProcessor';
 
 const createMessageId = () => crypto.randomUUID();
 
@@ -39,6 +46,10 @@ export const processFileUpload = async (
   onProgress?: (progress: ProcessingProgress) => void
 ): Promise<Message> => {
   const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  // Loaded here rather than at module scope: this is the only place the parser is
+  // used, and by the time we get here the user has already picked a file, so a
+  // one-off chunk fetch is invisible next to reading and parsing the document.
+  const { ClientSideDocumentProcessor } = await import('./clientSideDocumentProcessor');
   const processor = new ClientSideDocumentProcessor(onProgress);
   const result = await processor.processDocument(file, currentSessionId);
 

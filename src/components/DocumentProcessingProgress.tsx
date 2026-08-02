@@ -1,6 +1,8 @@
 import React from 'react';
 import { FileText, Loader2, CheckCircle, X } from 'lucide-react';
-import { ProcessingProgress } from '@/utils/clientSideDocumentProcessor';
+// TYPE-ONLY: a plain import of this interface drags pdfjs-dist and mammoth
+// (~820 kB) into the entry chunk. See the note in enhancedFileUploadHandler.ts.
+import type { ProcessingProgress } from '@/utils/clientSideDocumentProcessor';
 import { cn } from '@/lib/utils';
 
 interface DocumentProcessingProgressProps {

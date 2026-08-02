@@ -6,7 +6,9 @@ import {
   processFileUpload,
   createFileUploadErrorMessage,
 } from '@/utils/enhancedFileUploadHandler';
-import { ProcessingProgress } from '@/utils/clientSideDocumentProcessor';
+// TYPE-ONLY: a plain import of this interface drags pdfjs-dist and mammoth
+// (~820 kB) into the entry chunk. See the note in enhancedFileUploadHandler.ts.
+import type { ProcessingProgress } from '@/utils/clientSideDocumentProcessor';
 
 export const useFileUpload = () => {
   const { toast } = useToast();

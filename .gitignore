@@ -26,3 +26,4 @@ dist-ssr
 .superpowers/
 supabase/.temp/
 test-results/
+dist-test
