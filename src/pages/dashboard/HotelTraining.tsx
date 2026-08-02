@@ -79,8 +79,10 @@ export default function HotelTraining() {
     isError: colleaguesFailed,
     error: colleaguesError,
   } = useColleagues();
-  const { data: columns, isLoading: columnsLoading } = useListColumns();
-  const { data: trainers = [], isLoading: trainersLoading } = useTrainers();
+  // No isLoading destructured for these two: both supply placeholderData, so
+  // there is no state in which the page needs to know they are in flight.
+  const { data: columns } = useListColumns();
+  const { data: trainers = [] } = useTrainers();
   const { mutate: submitTraining, isPending } = useTrainingSubmit();
 
   const [step, setStep] = useState<WizardStep>(1);
@@ -314,7 +316,19 @@ export default function HotelTraining() {
     );
   }
 
-  const isLoading = colleaguesLoading || columnsLoading || trainersLoading;
+  // No page-wide loading gate. It used to be
+  //   colleaguesLoading || columnsLoading || trainersLoading
+  // which blanked the whole wizard until the SLOWEST of three cold edge functions
+  // answered — measured at 3.5-3.8 s typically and 16 s once, with the page
+  // showing nothing but "Loading training data..." throughout
+  // (docs/perf/hotel-training-baseline.md).
+  //
+  // Nothing on step 1 actually needs a network answer: departments come from
+  // constants, the column types default to 'Text', and the trainer list has a
+  // built-in fallback — all three hooks now supply placeholderData, so step 1
+  // renders on the first paint. Only the participant picker genuinely needs live
+  // data, so only step 2 waits, and by then the user has spent several seconds
+  // filling in step 1.
 
   const registerTrainingContent = (
     <div className="mx-auto w-full max-w-2xl space-y-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
@@ -390,52 +404,50 @@ export default function HotelTraining() {
         ))}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          Loading training data...
-        </div>
-      ) : (
+      {step === 1 && (
+        <TrainingDetailsForm
+          key={detailsFormVersion}
+          defaultValues={trainingDetails ?? restoredDraftDetails}
+          departments={columns?.departments ?? []}
+          trainerOptions={trainers}
+          locationTypeAsString={columns?.locationTypeAsString ?? 'Text'}
+          remarksTypeAsString={columns?.remarksTypeAsString ?? 'Text'}
+          onDraftChange={setDraftTrainingDetails}
+          onNext={handleStep1Next}
+        />
+      )}
+      {step === 2 && (
         <>
-          {step === 1 && (
-            <TrainingDetailsForm
-              key={detailsFormVersion}
-              defaultValues={trainingDetails ?? restoredDraftDetails}
-              departments={columns?.departments ?? []}
-              trainerOptions={trainers}
-              locationTypeAsString={columns?.locationTypeAsString ?? 'Text'}
-              remarksTypeAsString={columns?.remarksTypeAsString ?? 'Text'}
-              onDraftChange={setDraftTrainingDetails}
-              onNext={handleStep1Next}
-            />
+          {colleaguesFailed && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>
+                {colleaguesError?.message ?? 'Could not load colleagues from SharePoint.'}
+              </AlertDescription>
+            </Alert>
           )}
-          {step === 2 && (
-            <>
-              {colleaguesFailed && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertDescription>
-                    {colleaguesError?.message ?? 'Could not load colleagues from SharePoint.'}
-                  </AlertDescription>
-                </Alert>
-              )}
-              <ParticipantsStep
-                participants={participants}
-                allColleagues={colleagues}
-                onBack={() => setStep(1)}
-                onNext={() => setStep(3)}
-                onChange={handleParticipantChange}
-              />
-            </>
-          )}
-          {step === 3 && trainingDetails && (
-            <ConfirmationStep
-              trainingDetails={trainingDetails}
+          {colleaguesLoading && participants.every((row) => row.colleague === null) ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              Loading colleagues...
+            </div>
+          ) : (
+            <ParticipantsStep
               participants={participants}
-              isPending={isPending}
-              onBack={() => setStep(2)}
-              onConfirm={handleConfirmSubmit}
+              allColleagues={colleagues}
+              onBack={() => setStep(1)}
+              onNext={() => setStep(3)}
+              onChange={handleParticipantChange}
             />
           )}
         </>
+      )}
+      {step === 3 && trainingDetails && (
+        <ConfirmationStep
+          trainingDetails={trainingDetails}
+          participants={participants}
+          isPending={isPending}
+          onBack={() => setStep(2)}
+          onConfirm={handleConfirmSubmit}
+        />
       )}
     </div>
   );

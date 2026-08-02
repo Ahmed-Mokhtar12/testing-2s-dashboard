@@ -7,6 +7,8 @@ import {
   mockSupabaseRest,
   mockTrainersFunction,
   setMockAuthSession,
+  PROJECT_REF,
+  MOCK_COLUMNS_FLAT,
   type CapturedWrite,
 } from './helpers/hotel-training-mocks';
 // Relative, not the '@/' alias: no test in this suite uses the alias, and
@@ -347,6 +349,71 @@ test.describe('Hotel Training', () => {
     expect(queued[0].body).toMatchObject({
       failure_reason: expect.stringContaining('1 of 3 participant row(s) failed'),
     });
+  });
+
+  // PERFORMANCE REGRESSION GUARD. The page used to blank itself behind
+  //   isLoading = colleaguesLoading || columnsLoading || trainersLoading
+  // so it showed "Loading training data..." until the SLOWEST of three cold edge
+  // functions answered — measured in production at 3.5-3.8 s typically and 15.7 s
+  // once (docs/perf/hotel-training-baseline.md).
+  //
+  // Step 1 needs no network answer: departments come from constants, the column
+  // types default to 'Text', and the trainer list has a built-in fallback. This
+  // holds the three reads open and asserts the form is not just PRESENT but
+  // USABLE well before they land.
+  test('step 1 renders and is usable before the SharePoint reads finish', async ({ page }) => {
+    // 15 s, deliberately far longer than production's worst measured 15.7 s is
+    // near. The delay is never actually waited on when the test passes; making it
+    // long is what gives the assertions below room to be slow on a contended host
+    // WITHOUT weakening what they prove. A 5 s delay with 1 s assertion timeouts
+    // was flaky here for exactly that reason — the fix is a longer delay, not a
+    // looser assertion.
+    const DELAY_MS = 15000;
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockSupabaseRest(page);
+
+    for (const fn of ['sp-read-colleagues', 'sp-read-columns', 'sp-read-trainers']) {
+      await page.route(`https://${PROJECT_REF}.supabase.co/functions/v1/${fn}`, async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          return route.fulfill({ status: 200, body: 'ok' });
+        }
+        await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+        return route.fulfill({ json: fn === 'sp-read-columns' ? MOCK_COLUMNS_FLAT : [] });
+      });
+    }
+
+    const started = Date.now();
+    await page.goto('/dashboard/hotel-training');
+    await expect(page.getByLabel('Training Title')).toBeVisible({ timeout: 8000 });
+
+    // The old gate's text. Its absence is the change under test.
+    await expect(page.getByText('Loading training data...')).toHaveCount(0);
+
+    // ANTI-VACUITY: a rendered-but-empty form satisfies everything above. The
+    // department select is populated from constants and the trainer picker from
+    // FALLBACK_TRAINERS, so both must be usable while the reads are still in
+    // flight — that is the actual claim.
+    //
+    // EVERY assertion here is time-bounded, and that is the point. An earlier
+    // version left these at the default timeout, so when placeholderData was
+    // removed the test simply waited out the 5 s delay, found the real data and
+    // passed — proving nothing. A generous timeout turns "renders immediately"
+    // into "renders eventually" without changing a line of the assertion.
+    await page.getByRole('combobox').filter({ hasText: 'Select department' }).click();
+    await expect(page.getByRole('option', { name: 'Engineering' })).toBeVisible({ timeout: 3000 });
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('combobox').filter({ hasText: 'Select trainers...' }).click();
+    await expect(page.getByRole('option', { name: 'Ahmed Mokhtar' }).first())
+      .toBeVisible({ timeout: 3000 });
+
+    // The whole interaction — render, open both pickers, read their options —
+    // must finish before the reads land, or none of it was served from fallbacks.
+    const elapsed = Date.now() - started;
+    expect(
+      elapsed,
+      `form was only usable after ${elapsed} ms; the reads land at ${DELAY_MS} ms, so this did not prove immediacy`,
+    ).toBeLessThan(DELAY_MS);
   });
 
   test('colleague load failure surfaces an error instead of empty dropdowns', async ({ page }) => {

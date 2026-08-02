@@ -18,5 +18,13 @@ export function useTrainers() {
       }
     },
     staleTime: 30 * 60 * 1000,
+    // Same reasoning as useListColumns: the trainer picker is usable immediately
+    // with the three known trainers rather than empty for ~3 s, and the live UIL
+    // list replaces them when it arrives. placeholderData rather than initialData
+    // so the fetch still happens — see the note there.
+    //
+    // This is the same list queryFn already falls back to on failure, so it can
+    // never show a trainer that submit cannot resolve.
+    placeholderData: FALLBACK_TRAINERS,
   });
 }

@@ -32,5 +32,17 @@ export function useListColumns() {
       }
     },
     staleTime: 30 * 60 * 1000,
+    // Render step 1 immediately instead of waiting ~3 s for a cold edge function.
+    // placeholderData, NOT initialData: initialData is stored as real cached data
+    // and respects staleTime, so with staleTime at 30 minutes the live value
+    // would never be fetched at all. placeholderData shows the fallback while the
+    // request is genuinely in flight and is replaced when it lands.
+    //
+    // Safe because the fallback IS the live answer in the normal case: the only
+    // live-derived values are locationTypeAsString/remarksTypeAsString, both
+    // 'Text' unless someone changes field_5/field_7 to Number in SharePoint. If
+    // that happens, TrainingDetailsForm rebuilds its Zod schema from the prop
+    // (useMemo on those two values), so the upgrade applies without a remount.
+    placeholderData: STATIC_FALLBACK,
   });
 }
