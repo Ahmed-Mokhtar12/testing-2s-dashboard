@@ -127,6 +127,18 @@ Three decisions that turned out to matter more than the table itself:
   own failures, and `readMirror` returns null for every reason at all. A mirror
   problem degrades performance, never correctness.
 
+Access proved from both sides, by behaviour rather than by catalogue:
+
+| Acting as | SELECT | INSERT / UPDATE / DELETE |
+|---|---|---|
+| `anon`, via live REST with the published key | 401 / 42501 | 401 / 42501 |
+| `authenticated`, `set local role` with RLS on | 1 row, payload readable | all refused, `insufficient_privilege` |
+| `service_role` | yes | yes — the only writer |
+
+The `authenticated` SELECT check matters as much as the refusals: if it had been
+blocked, the mirror would simply never be used after deploy, and the only symptom
+would be no speed-up at all.
+
 **Not live until `bash scripts/deploy-sp-function.sh --all` runs.**
 
 ## Phase 3 — the entry bundle ✅ `c04820e`
