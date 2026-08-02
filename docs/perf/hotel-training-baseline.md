@@ -127,3 +127,73 @@ have sent someone to reconfigure nginx, which was not the problem.
   `sp-read-colleagues` walks one Graph page (`$top=500`) or several. Not reachable
   from the dev environment: the `AZURE_*` secrets are write-only and every
   endpoint that could answer requires an admin session.
+
+---
+
+# After (2026-08-02, same day)
+
+Measured against **a local `serve dist-test -l 3097 -s`** — the same command line
+PM2 runs — not against the live host, because the changes below are committed but
+not yet deployed. Reproduce:
+
+```
+npx vite build --outDir dist-test --emptyOutDir
+serve dist-test -l 3097 -s &
+node scripts/measure-page-baseline.mjs http://127.0.0.1:3097/dashboard/hotel-training --warm
+```
+
+**Read the bytes, not the clock.** On localhost there is no network latency, so
+TTFB (16 ms) and FCP (196 ms) are not comparable to the live host's 261 ms and
+2160 ms and are omitted below. Transferred bytes and cache state are comparable,
+and they are what changed. One caveat in the honest direction: `serve` compresses
+with gzip while nginx serves brotli, so the live figures should come out *below*
+the "after" column.
+
+| | Before (live, brotli) | After (local, gzip) |
+|---|---|---|
+| **Total over the wire, cold** | **674.9 KB** | **253.1 KB** |
+| **Total over the wire, warm reload** | **224.4 KB** | **0.0 KB** |
+| Resources downloaded on a warm reload | 2 | **0** |
+| Resources revalidated on a warm reload (a round trip each) | 4 | **0** |
+| Resources served from cache on a warm reload | 1 | **9 of 9** |
+| `/assets/*` responses with no `Cache-Control` | 6 | **0** |
+
+Cold, by bytes actually transferred:
+
+| Wire | Decoded | Resource |
+|---|---|---|
+| 82.0 KB | 276.6 KB | `/assets/index-*.js` — was 433.0 KB / 1505.0 KB |
+| 46.3 KB | 165.1 KB | `/assets/vendor-radix-*.js` (new) |
+| 45.7 KB | 139.5 KB | `/assets/vendor-react-*.js` (new) |
+| 31.1 KB | 111.4 KB | `/assets/vendor-supabase-*.js` (new) |
+| 29.8 KB | 29.5 KB | `/assets/two-seasons-logo-full-*.png` — was 222.5 KB |
+| 13.3 KB | 70.6 KB | `/assets/index-*.css` (unchanged) |
+
+The three vendor chunks are new but not new *bytes* — they came out of the entry,
+which fell from 433.0 KB to 82.0 KB on the wire. Their point is the deploy after
+this one: they are `immutable` and their content hashes do not change when
+application code does.
+
+## What each change is worth, separately
+
+- **The warm reload going to zero** is `public/serve.json`. Nine of nine
+  subresources served from cache with no network at all, where before four spent a
+  round trip revalidating and the logo was re-downloaded in full.
+- **222.5 KB → 29.8 KB** is the logo, downscaled from 815×699 to 256×220 for a
+  56 px box.
+- **433.0 KB → 82.0 KB** on the entry is two things: pdfjs-dist and mammoth
+  (~820 KB decoded) leaving it for a lazy chunk, and the vendor split.
+
+## Still not measured, and why
+
+- **The three data calls.** They never fire without a session, so the only way to
+  see them is the authenticated variant at the top of this file. What Phase 2
+  changes is which server answers: `public.sharepoint_mirror` via PostgREST, which
+  is always warm, instead of three edge isolates that measured 2474–15751 ms. The
+  numbers to compare are the edge-log table above against the same table taken
+  after `scripts/deploy-sp-function.sh --all` — the calls should be **absent**, not
+  faster.
+- **The live host.** Everything above is committed and none of it is live.
+  `scripts/deploy-frontend.sh` applies the frontend (and is the only thing that
+  restarts `serve`, without which the cache headers stay as they were);
+  `scripts/deploy-sp-function.sh --all` applies the edge side.
