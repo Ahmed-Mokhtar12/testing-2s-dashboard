@@ -34,7 +34,7 @@ step 2 waits. Guard test holds all three reads open for 15 s and asserts step 1 
 Mutation-proved live: the same test failed on chromium and mobile-chrome when only
 the source changes were absent, and passes on both with them.
 
-## Phase 1.4 — cache the Graph app token ✅ `f1a327c`
+## Phase 1.4 — cache the Graph app token ✅ `23a8d0d`
 
 Every sp-* function called `getAppToken()` on every request: a full
 `login.microsoftonline.com` round trip before any Graph call. Tokens are valid
@@ -49,7 +49,7 @@ that shortens a *cold* request as well as a warm one.
 **Not live until the functions are redeployed** —
 `bash scripts/deploy-sp-function.sh --all`.
 
-## Phase 1.2 — cacheable read responses
+## Phase 1.2 — cacheable read responses ✅ decided, not built
 
 **Reframed after checking.** The original plan was `Cache-Control` on the three
 `sp-read-*` responses. That would have done nothing: `supabase.functions.invoke`
@@ -101,7 +101,7 @@ draft's `$comment` keys were rejected by ajv) and
 **Not live until `bash scripts/deploy-frontend.sh` runs** — that script exists
 mainly to enforce the `pm2 restart`, without which the headers silently stay old.
 
-## Phase 2 — read the lists from Postgres, not from Graph ✅ `fce858e`, plus the code commit
+## Phase 2 — read the lists from Postgres, not from Graph ✅ `fce858e`, `c81ab48`, `b0fa4e0`
 
 The real fix for the 3.5 s. `public.sharepoint_mirror` holds one jsonb row per
 dataset; the frontend reads it and only falls back to the edge function when the
@@ -129,7 +129,7 @@ Three decisions that turned out to matter more than the table itself:
 
 **Not live until `bash scripts/deploy-sp-function.sh --all` runs.**
 
-## Phase 3 — the entry bundle
+## Phase 3 — the entry bundle ✅ `c04820e`
 
 The three items here were written as "do these last and only if the re-measure
 still shows them mattering". Measuring changed what the work was.
