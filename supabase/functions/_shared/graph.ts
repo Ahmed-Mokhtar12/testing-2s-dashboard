@@ -1,3 +1,5 @@
+import { TokenCache } from './token-cache.ts';
+
 const TENANT_ID = Deno.env.get('AZURE_TENANT_ID') ?? '';
 const CLIENT_ID = Deno.env.get('AZURE_CLIENT_ID') ?? '';
 const CLIENT_SECRET = Deno.env.get('AZURE_CLIENT_SECRET') ?? '';
@@ -28,7 +30,15 @@ export class GraphError extends Error {
   }
 }
 
+// Shared by every function that imports this module, and per isolate: a warm
+// isolate skips the login.microsoftonline.com round trip entirely. See
+// token-cache.ts for why the expiry arithmetic lives elsewhere.
+const appTokenCache = new TokenCache();
+
 export async function getAppToken(): Promise<string> {
+  const cached = appTokenCache.get(Date.now());
+  if (cached) return cached;
+
   const res = await fetch(
     `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`,
     {
@@ -44,7 +54,9 @@ export async function getAppToken(): Promise<string> {
   );
   if (!res.ok) throw new Error(`Token fetch failed: ${await res.text()}`);
   const body = await res.json();
-  return body.access_token as string;
+  const token = body.access_token as string;
+  appTokenCache.set(token, body.expires_in, Date.now());
+  return token;
 }
 
 let cachedSiteId: string | null = null;
@@ -83,6 +95,15 @@ export async function graphFetch<T = unknown>(
     const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 10;
     await delay(retryAfter * 1000);
     return graphFetch<T>(token, url, init, retryCount + 1);
+  }
+
+  // A 401 means the token in hand is no longer accepted — expired early, client
+  // secret rotated, app permissions changed. Drop it so the next request fetches
+  // a fresh one instead of re-presenting a rejected token until the isolate
+  // recycles. Deliberately no retry: with no cache at all a 401 failed the
+  // request and the following one succeeded, and that is the behaviour preserved.
+  if (res.status === 401) {
+    appTokenCache.clear();
   }
 
   if (!res.ok) {
