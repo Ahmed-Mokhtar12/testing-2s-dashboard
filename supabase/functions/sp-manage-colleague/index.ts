@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
+import { invalidateMirror } from '../_shared/mirror.ts';
 
 // Server-side copy of the admin allowlist. MUST stay in sync with
 // ADMIN_EMAILS in src/lib/hotel-training-constants.ts.
@@ -87,6 +88,12 @@ Deno.serve(async (req) => {
           }),
         },
       );
+      // Every successful write here changes what sp-read-colleagues would return,
+      // so the Postgres mirror must be dropped or the client's post-mutation
+      // invalidateQueries(['colleagues']) would re-read the list from BEFORE this
+      // change — the member the admin just added would not appear, and refreshing
+      // would not help until the mirror aged out.
+      await invalidateMirror('colleagues');
       return json(req, { id: result.id });
     }
 
@@ -100,6 +107,7 @@ Deno.serve(async (req) => {
         `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items/${itemId}/fields`,
         { method: 'PATCH', body: JSON.stringify({ IsActive: false }) },
       );
+      await invalidateMirror('colleagues');
       return json(req, { ok: true });
     }
 
@@ -126,6 +134,7 @@ Deno.serve(async (req) => {
         `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items/${itemId}/fields`,
         { method: 'PATCH', body: JSON.stringify(fields) },
       );
+      await invalidateMirror('colleagues');
       return json(req, { ok: true });
     }
 

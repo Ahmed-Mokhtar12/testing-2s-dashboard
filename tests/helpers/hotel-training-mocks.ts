@@ -220,6 +220,15 @@ export interface CapturedWrite {
   body: unknown;
 }
 
+// One row of public.sharepoint_mirror, shaped as PostgREST returns it for the
+// .eq('key', ...).maybeSingle() the hooks issue. `fetched_at` is relative to the
+// moment the mock is installed rather than a fixed date: a literal would silently
+// age past every TTL and turn "renders from the mirror" into "renders from the
+// edge function", which passes for the wrong reason.
+export function mirrorRow(payload: unknown, ageMs = 0) {
+  return [{ payload, fetched_at: new Date(Date.now() - ageMs).toISOString() }];
+}
+
 export async function mockSupabaseRest(
   page: Page,
   opts: {
@@ -228,10 +237,22 @@ export async function mockSupabaseRest(
     // written. Needed because the interesting property of the partial-write path
     // is which rows reach the database, and that is invisible from the UI.
     onWrite?: (write: CapturedWrite) => void;
+    // What GET /rest/v1/sharepoint_mirror?key=eq.<key> returns, per key. A key
+    // that is absent here answers with [], which supabase-js maybeSingle turns
+    // into data: null — so by default every test keeps exercising the edge-function
+    // path exactly as it did before the mirror existed.
+    mirror?: Partial<Record<'colleagues' | 'trainers' | 'columns', unknown[]>>;
   } = {},
 ) {
   await page.route(`https://${PROJECT_REF}.supabase.co/rest/v1/**`, async (route) => {
     const url = route.request().url();
+
+    if (url.includes('/sharepoint_mirror')) {
+      const key = new URL(url).searchParams.get('key')?.replace(/^eq\./, '') ?? '';
+      const row = opts.mirror?.[key as keyof NonNullable<typeof opts.mirror>];
+      return route.fulfill({ json: row ?? [] });
+    }
+
     const method = route.request().method();
 
     if (opts.onWrite && method !== 'GET' && method !== 'OPTIONS') {

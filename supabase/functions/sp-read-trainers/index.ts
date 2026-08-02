@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
+import { writeMirror } from '../_shared/mirror.ts';
 import { mapUilItemToTrainer, dedupeAndSortTrainers } from './uil-mapper.ts';
 
 interface TrainerRef {
@@ -70,6 +71,10 @@ Deno.serve(async (req) => {
     const siteId = await getSiteId(token);
     const trainers = await fetchTrainersFromUil(token, siteId);
     cache = { data: trainers, fetchedAt: Date.now() };
+    // Only on a real UIL walk, not on the in-memory cache hit above: the mirror
+    // already holds that same payload, and rewriting it would push fetched_at
+    // forward without the data having been re-read from Graph.
+    await writeMirror('trainers', trainers);
     return json(req, trainers);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

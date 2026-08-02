@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
+import { writeMirror } from '../_shared/mirror.ts';
 
 // Graph API v1.0's columnDefinition has NO `typeAsString` property; a
 // column's type is expressed as mutually-exclusive facets on the column
@@ -59,12 +60,14 @@ Deno.serve(async (req) => {
     const locationCol = find('field_5');
     const remarksCol = find('field_7');
 
-    return json(req, {
+    const result = {
       departments: deptCol?.choice?.choices ?? [],
       trainers: trainerCol?.choice?.choices ?? [],
       locationTypeAsString: columnTypeFromFacets(locationCol),
       remarksTypeAsString: columnTypeFromFacets(remarksCol),
-    });
+    };
+    await writeMirror('columns', result);
+    return json(req, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('sp-read-columns error:', message);

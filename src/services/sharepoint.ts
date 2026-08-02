@@ -1,5 +1,33 @@
 import { supabase } from '@/integrations/supabase/client';
+import { isMirrorFresh, type MirrorKey } from '@/lib/sharepoint-mirror';
 import type { TrainerRef } from '@/types/hotel-training';
+
+// Reads a payload out of public.sharepoint_mirror, the Postgres copy that
+// sp-read-* writes on every successful Graph read. PostgREST is always warm, so
+// this is a ~100 ms read where invoking the edge function measured 2.6-3.7 s of
+// mostly cold start (docs/perf/hotel-training-baseline.md).
+//
+// Returns null for every reason a caller cannot use the mirror — absent row,
+// stale row, RLS refusal, network failure, malformed timestamp — so there is
+// exactly one branch to handle and it is the one that already existed: invoke the
+// function. That is why this never throws and never reports a reason. A mirror
+// problem must degrade performance, never correctness.
+export async function readMirror<T>(key: MirrorKey): Promise<T | null> {
+  try {
+    const { data, error } = await supabase
+      .from('sharepoint_mirror')
+      .select('payload, fetched_at')
+      .eq('key', key)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    if (!isMirrorFresh(data.fetched_at, key)) return null;
+
+    return data.payload as T;
+  } catch {
+    return null;
+  }
+}
 
 // supabase.functions.invoke wraps a non-2xx response in a FunctionsHttpError
 // whose `message` is generic. The real reason lives in the response body.

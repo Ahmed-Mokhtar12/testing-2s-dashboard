@@ -4,7 +4,7 @@ import {
   LOCATION_TYPE_AS_STRING,
   REMARKS_TYPE_AS_STRING,
 } from '@/lib/hotel-training-constants';
-import { invokeReadColumns } from '@/services/sharepoint';
+import { invokeReadColumns, readMirror } from '@/services/sharepoint';
 import type { ListColumnsResult } from '@/services/sharepoint';
 
 const STATIC_FALLBACK: ListColumnsResult = {
@@ -17,6 +17,18 @@ export function useListColumns() {
   return useQuery<ListColumnsResult>({
     queryKey: ['listColumns'],
     queryFn: async (): Promise<ListColumnsResult> => {
+      // The Postgres mirror first: same payload, ~100 ms instead of a cold edge
+      // function. Absent or stale falls through to exactly the path below.
+      // Departments are still taken from constants, for the reason stated there.
+      const mirrored = await readMirror<Partial<ListColumnsResult>>('columns');
+      if (mirrored) {
+        return {
+          departments: Object.keys(DEPARTMENT_SECTIONS),
+          locationTypeAsString: mirrored.locationTypeAsString || LOCATION_TYPE_AS_STRING,
+          remarksTypeAsString: mirrored.remarksTypeAsString || REMARKS_TYPE_AS_STRING,
+        };
+      }
+
       try {
         const live = await invokeReadColumns();
         return {

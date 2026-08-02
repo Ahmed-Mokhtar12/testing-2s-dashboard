@@ -7,13 +7,17 @@ import {
   mockSupabaseRest,
   mockTrainersFunction,
   setMockAuthSession,
+  mirrorRow,
   PROJECT_REF,
+  MOCK_COLLEAGUES_FLAT,
   MOCK_COLUMNS_FLAT,
+  MOCK_TRAINERS_FLAT,
   type CapturedWrite,
 } from './helpers/hotel-training-mocks';
 // Relative, not the '@/' alias: no test in this suite uses the alias, and
 // Playwright resolves its own transform rather than Vite's.
 import { MAX_PARTICIPANTS } from '../src/lib/hotel-training-constants';
+import { MIRROR_TTL_MS } from '../src/lib/sharepoint-mirror';
 
 const ADMIN_EMAIL = 'ahmed.mokhtar@2seasonshotels.com';
 const USER_EMAIL = 'user@2seasonshotels.com';
@@ -414,6 +418,85 @@ test.describe('Hotel Training', () => {
       elapsed,
       `form was only usable after ${elapsed} ms; the reads land at ${DELAY_MS} ms, so this did not prove immediacy`,
     ).toBeLessThan(DELAY_MS);
+  });
+
+  // The Postgres mirror (public.sharepoint_mirror). Its whole purpose is to keep
+  // the page off the three cold edge functions, so the assertion that matters is
+  // not "the data appears" — it is "the edge functions were never called".
+  test('a fresh mirror serves the page without invoking any sp-read function', async ({ page }) => {
+    const edgeCalls: string[] = [];
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockSubmitFunction(page);
+    await mockManageColleagueFunction(page);
+    await mockSupabaseRest(page, {
+      mirror: {
+        colleagues: mirrorRow(MOCK_COLLEAGUES_FLAT),
+        trainers: mirrorRow(MOCK_TRAINERS_FLAT),
+        columns: mirrorRow(MOCK_COLUMNS_FLAT),
+      },
+    });
+
+    // Not the usual mock* helpers: these record the call and then hang, so any
+    // hook that falls through to the edge function cannot quietly succeed and
+    // make this test pass for the wrong reason.
+    for (const fn of ['sp-read-colleagues', 'sp-read-columns', 'sp-read-trainers']) {
+      await page.route(`https://${PROJECT_REF}.supabase.co/functions/v1/${fn}`, async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          return route.fulfill({ status: 200, body: 'ok' });
+        }
+        edgeCalls.push(fn);
+        await new Promise((resolve) => setTimeout(resolve, 30_000));
+        return route.fulfill({ json: [] });
+      });
+    }
+
+    await page.goto('/dashboard/hotel-training');
+    await goToParticipants(page, 2, 'Served From The Mirror');
+
+    // ANTI-VACUITY: step 1 renders from placeholderData with no network at all
+    // (see the guard test above), so reaching step 2 proves nothing on its own.
+    // These come only from the colleagues payload, and only the mirror supplied it.
+    await page.getByTestId('participant-select-1').click();
+    await expect(page.getByRole('option', { name: /Alice Smith/ })).toBeVisible({ timeout: 3000 });
+    // Dave Black is isActive: false in the fixture — proof the real payload was
+    // parsed rather than a placeholder list being shown.
+    await expect(page.getByRole('option', { name: /Dave Black/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    expect(edgeCalls, `expected no sp-read-* call, got: ${edgeCalls.join(', ')}`).toEqual([]);
+  });
+
+  test('a stale mirror is ignored and the edge function is called instead', async ({ page }) => {
+    // The other half of the rule. A mirror row older than its TTL must not be
+    // served — otherwise a colleague added directly in SharePoint would stay
+    // invisible indefinitely, which is the failure the TTL exists to bound.
+    const staleAge = MIRROR_TTL_MS.colleagues + 60_000;
+    let colleaguesInvoked = 0;
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockColumnsFunction(page);
+    await mockTrainersFunction(page);
+    await mockSubmitFunction(page);
+    await mockManageColleagueFunction(page);
+    await mockSupabaseRest(page, {
+      mirror: { colleagues: mirrorRow([{ ...MOCK_COLLEAGUES_FLAT[0], colleagueName: 'Stale Person' }], staleAge) },
+    });
+    await page.route(`https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-colleagues`, async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, body: 'ok' });
+      }
+      colleaguesInvoked += 1;
+      return route.fulfill({ json: MOCK_COLLEAGUES_FLAT });
+    });
+
+    await page.goto('/dashboard/hotel-training');
+    await goToParticipants(page, 2, 'Stale Mirror Test');
+    await page.getByTestId('participant-select-1').click();
+
+    // The live list, not the stale row.
+    await expect(page.getByRole('option', { name: /Alice Smith/ })).toBeVisible();
+    await expect(page.getByRole('option', { name: /Stale Person/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    expect(colleaguesInvoked).toBeGreaterThan(0);
   });
 
   test('colleague load failure surfaces an error instead of empty dropdowns', async ({ page }) => {

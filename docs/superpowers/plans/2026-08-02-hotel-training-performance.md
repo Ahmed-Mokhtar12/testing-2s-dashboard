@@ -34,15 +34,20 @@ step 2 waits. Guard test holds all three reads open for 15 s and asserts step 1 
 Mutation-proved live: the same test failed on chromium and mobile-chrome when only
 the source changes were absent, and passes on both with them.
 
-## Phase 1.4 — cache the Graph app token
+## Phase 1.4 — cache the Graph app token ✅ `f1a327c`
 
-Every sp-* function calls `getAppToken()` on every request: a full
+Every sp-* function called `getAppToken()` on every request: a full
 `login.microsoftonline.com` round trip before any Graph call. Tokens are valid
-for ~1 h; nothing re-uses them. Module-level cache keyed on nothing (one app, one
-scope), expiring on `expires_in` minus a safety margin.
+for ~1 h and are identical for every caller. Now a module-level `TokenCache`
+(`_shared/token-cache.ts`, pure so `node --test` can reach it), expiring on
+`expires_in` minus a 5-minute margin, with `graphFetch` clearing it on 401 so a
+rotated client secret is still picked up on the next request.
 
 Helps all six sp-* functions and `training-report`, and it is the only change here
 that shortens a *cold* request as well as a warm one.
+
+**Not live until the functions are redeployed** —
+`bash scripts/deploy-sp-function.sh --all`.
 
 ## Phase 1.2 — cacheable read responses
 
@@ -65,7 +70,7 @@ Two ways to actually get a cache:
 Phase 2 + Phase 3 subsume option 1. Do those; keep this section as the record of
 why the header was not added.
 
-## Phase 1.3 — let the browser keep the assets
+## Phase 1.3 — let the browser keep the assets ✅ `f555ebc`, `ae2ebc2`
 
 nginx does **not** serve the files — it proxies to `serve dist -l 3007 -s` under
 PM2. So the missing `Cache-Control` is `serve`'s default, not an nginx bug (a
@@ -83,22 +88,46 @@ outside the repo — the same drift B3 records for the auth config — and
 `add_header` in a new location silently drops every inherited security header
 from `global_settings`.
 
-Separately: `two-seasons-logo-full.png` is 227 KB at 815×699 for a logo drawn at
-a fraction of that. Recompress in place so no import changes.
+Both logos were also stored at ~815×700 and drawn into boxes no larger than
+56 CSS px. Downscaled to 256 px on the long edge and recompressed in place, so no
+import changed: 227.5 KB → 29.5 KB and 247.7 KB → 25.7 KB.
 
-## Phase 2 — read the lists from Postgres, not from Graph
+Two guards, since both failures are invisible in review:
+`tests/unit/serve-config-valid.test.ts` (an invalid `serve.json` stops `serve`
+booting — it takes the site down rather than degrading caching, and the first
+draft's `$comment` keys were rejected by ajv) and
+`tests/unit/asset-budget.test.ts` (48 KB per file in `src/assets`).
 
-The real fix for the 3.5 s. Mirror the three read results into Postgres and have
-the frontend read the mirror; the edge functions keep talking to Graph but on a
-schedule, off the critical path.
+**Not live until `bash scripts/deploy-frontend.sh` runs** — that script exists
+mainly to enforce the `pm2 restart`, without which the headers silently stay old.
 
-Write-through rather than pg_cron: each `sp-read-*` upserts its result into the
-mirror on every successful Graph read. No new secret, no duplicated Graph logic,
-no scheduler to fail silently, and it degrades to exactly today's behaviour when
-the mirror is empty.
+## Phase 2 — read the lists from Postgres, not from Graph ✅ `fce858e`, plus the code commit
 
-Frontend: read the mirror first; if a row exists, render from it and revalidate
-in the background; if not, fall back to invoking the function and awaiting it.
+The real fix for the 3.5 s. `public.sharepoint_mirror` holds one jsonb row per
+dataset; the frontend reads it and only falls back to the edge function when the
+row is absent or stale.
+
+Write-through rather than pg_cron: each `sp-read-*` upserts its result on every
+successful Graph read. No new secret, no duplicated Graph logic, no scheduler to
+fail silently, and it degrades to exactly today's behaviour when the mirror is
+empty.
+
+Three decisions that turned out to matter more than the table itself:
+
+- **`fetched_at` is stamped by a trigger, not by the writer.** PostgREST's upsert
+  only updates the columns in the request body, so a writer sending
+  `{key, payload}` would freeze `fetched_at` at the first insert — a permanently
+  stale mirror that looks perfectly healthy.
+- **`sp-manage-colleague` deletes the `colleagues` row** after every successful
+  add/edit/deactivate. Without it, the three forms' existing
+  `invalidateQueries(['colleagues'])` would re-read the mirror and show the list
+  from *before* the change: the member just added would not appear, and
+  refreshing would not help until the TTL expired.
+- **The mirror write can never fail a read.** `writeMirror` swallows and logs its
+  own failures, and `readMirror` returns null for every reason at all. A mirror
+  problem degrades performance, never correctness.
+
+**Not live until `bash scripts/deploy-sp-function.sh --all` runs.**
 
 ## Phase 3 — keep what the browser already fetched
 

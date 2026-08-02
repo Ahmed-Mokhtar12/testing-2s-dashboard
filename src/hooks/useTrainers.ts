@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { FALLBACK_TRAINERS } from '@/lib/hotel-training-constants';
-import { invokeReadTrainers } from '@/services/sharepoint';
+import { invokeReadTrainers, readMirror } from '@/services/sharepoint';
 import type { TrainerRef } from '@/types/hotel-training';
 
 // Live SharePoint site User Information List for the trainer picker; falls
@@ -9,6 +9,11 @@ export function useTrainers() {
   return useQuery<TrainerRef[]>({
     queryKey: ['trainers'],
     queryFn: async (): Promise<TrainerRef[]> => {
+      // The Postgres mirror first: same payload, ~100 ms instead of a cold edge
+      // function. Absent or stale falls through to exactly the path below.
+      const mirrored = await readMirror<TrainerRef[]>('trainers');
+      if (mirrored && mirrored.length > 0) return mirrored;
+
       try {
         const live = await invokeReadTrainers();
         return live.length > 0 ? live : FALLBACK_TRAINERS;
