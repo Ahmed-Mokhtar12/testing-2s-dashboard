@@ -318,6 +318,7 @@ export type Database = {
         Row: {
           "Ai Reply": string | null
           created_at: string
+          handled_by: string | null
           human_reply: string | null
           id: number
           is_archived: boolean
@@ -333,6 +334,7 @@ export type Database = {
         Insert: {
           "Ai Reply"?: string | null
           created_at: string
+          handled_by?: string | null
           human_reply?: string | null
           id?: number
           is_archived?: boolean
@@ -348,6 +350,7 @@ export type Database = {
         Update: {
           "Ai Reply"?: string | null
           created_at?: string
+          handled_by?: string | null
           human_reply?: string | null
           id?: number
           is_archived?: boolean
@@ -715,16 +718,20 @@ export type Database = {
       }
       regression_run_history: {
         Row: {
+          baseline_regression_score: number | null
           block_reason: string | null
           created_at: string
           critical_failures: number | null
           detailed_results: Json | null
           deterministic_overrides: number | null
           evaluator_run_id: string | null
+          gate_mode: string | null
           id: number
+          new_failures: number | null
           original_prompt_hash: string | null
           patch_blocked: boolean | null
           patched_prompt_hash: string | null
+          preexisting_failures: number | null
           regression_passed: boolean | null
           regression_score: number | null
           suite_name: string | null
@@ -734,16 +741,20 @@ export type Database = {
           test_cases_total: number | null
         }
         Insert: {
+          baseline_regression_score?: number | null
           block_reason?: string | null
           created_at?: string
           critical_failures?: number | null
           detailed_results?: Json | null
           deterministic_overrides?: number | null
           evaluator_run_id?: string | null
+          gate_mode?: string | null
           id?: number
+          new_failures?: number | null
           original_prompt_hash?: string | null
           patch_blocked?: boolean | null
           patched_prompt_hash?: string | null
+          preexisting_failures?: number | null
           regression_passed?: boolean | null
           regression_score?: number | null
           suite_name?: string | null
@@ -753,16 +764,20 @@ export type Database = {
           test_cases_total?: number | null
         }
         Update: {
+          baseline_regression_score?: number | null
           block_reason?: string | null
           created_at?: string
           critical_failures?: number | null
           detailed_results?: Json | null
           deterministic_overrides?: number | null
           evaluator_run_id?: string | null
+          gate_mode?: string | null
           id?: number
+          new_failures?: number | null
           original_prompt_hash?: string | null
           patch_blocked?: boolean | null
           patched_prompt_hash?: string | null
+          preexisting_failures?: number | null
           regression_passed?: boolean | null
           regression_score?: number | null
           suite_name?: string | null
@@ -824,11 +839,95 @@ export type Database = {
         }
         Relationships: []
       }
+      report_runs: {
+        Row: {
+          attempts: number
+          last_error: string | null
+          occurrence: string
+          period: string
+          recipients: string[] | null
+          report_type: string
+          sent_at: string | null
+          skipped_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          last_error?: string | null
+          occurrence: string
+          period: string
+          recipients?: string[] | null
+          report_type: string
+          sent_at?: string | null
+          skipped_reason?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          last_error?: string | null
+          occurrence?: string
+          period?: string
+          recipients?: string[] | null
+          report_type?: string
+          sent_at?: string | null
+          skipped_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reviews_backup_20260731: {
+        Row: {
+          Author: string | null
+          Date: string | null
+          "Hotel Name": string | null
+          id: number | null
+          Language: string | null
+          "Response Text": string | null
+          Score: number | null
+          Source: string | null
+          Text: string | null
+          Title: string | null
+          URL: string | null
+        }
+        Insert: {
+          Author?: string | null
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number | null
+          Language?: string | null
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
+        }
+        Update: {
+          Author?: string | null
+          Date?: string | null
+          "Hotel Name"?: string | null
+          id?: number | null
+          Language?: string | null
+          "Response Text"?: string | null
+          Score?: number | null
+          Source?: string | null
+          Text?: string | null
+          Title?: string | null
+          URL?: string | null
+        }
+        Relationships: []
+      }
       sera_email_evaluation_history: {
         Row: {
           action_breakdown: Json | null
+          critical_incidents: number | null
           date_range_end: string
           date_range_start: string
+          decline_streak: number | null
+          deterministic_findings: Json | null
           email_agent_prompt_chars: number | null
           email_agent_prompt_hash: string | null
           emails_evaluated: number
@@ -837,19 +936,29 @@ export type Database = {
           evaluator_model: string | null
           executive_summary: string | null
           id: number
+          operational_kpis: Json | null
           overall_score: number
           per_criterion: Json
+          prompt_changed: boolean | null
           raw_evaluator_output: Json | null
+          raw_safety_score: number | null
           recommendations: Json | null
+          safety_cap_applied: boolean | null
+          sampled_count: number | null
           score_delta_from_previous: number | null
           status: string
           strengths: Json | null
           top_weaknesses: Json | null
+          total_in_window: number | null
+          workflow_map_hash: string | null
         }
         Insert: {
           action_breakdown?: Json | null
+          critical_incidents?: number | null
           date_range_end: string
           date_range_start: string
+          decline_streak?: number | null
+          deterministic_findings?: Json | null
           email_agent_prompt_chars?: number | null
           email_agent_prompt_hash?: string | null
           emails_evaluated: number
@@ -858,19 +967,29 @@ export type Database = {
           evaluator_model?: string | null
           executive_summary?: string | null
           id?: number
+          operational_kpis?: Json | null
           overall_score: number
           per_criterion: Json
+          prompt_changed?: boolean | null
           raw_evaluator_output?: Json | null
+          raw_safety_score?: number | null
           recommendations?: Json | null
+          safety_cap_applied?: boolean | null
+          sampled_count?: number | null
           score_delta_from_previous?: number | null
           status: string
           strengths?: Json | null
           top_weaknesses?: Json | null
+          total_in_window?: number | null
+          workflow_map_hash?: string | null
         }
         Update: {
           action_breakdown?: Json | null
+          critical_incidents?: number | null
           date_range_end?: string
           date_range_start?: string
+          decline_streak?: number | null
+          deterministic_findings?: Json | null
           email_agent_prompt_chars?: number | null
           email_agent_prompt_hash?: string | null
           emails_evaluated?: number
@@ -879,14 +998,21 @@ export type Database = {
           evaluator_model?: string | null
           executive_summary?: string | null
           id?: number
+          operational_kpis?: Json | null
           overall_score?: number
           per_criterion?: Json
+          prompt_changed?: boolean | null
           raw_evaluator_output?: Json | null
+          raw_safety_score?: number | null
           recommendations?: Json | null
+          safety_cap_applied?: boolean | null
+          sampled_count?: number | null
           score_delta_from_previous?: number | null
           status?: string
           strengths?: Json | null
           top_weaknesses?: Json | null
+          total_in_window?: number | null
+          workflow_map_hash?: string | null
         }
         Relationships: []
       }
@@ -1013,6 +1139,276 @@ export type Database = {
         }
         Relationships: []
       }
+      sera_email_patch_history: {
+        Row: {
+          applied_changes: Json | null
+          blocked_changes: Json | null
+          blocking_gate: string | null
+          created_at: string
+          dry_run: boolean | null
+          evaluator_workflow_id: string | null
+          id: number
+          new_prompt_full_text: string | null
+          new_prompt_hash: string | null
+          old_prompt_full_text: string | null
+          old_prompt_hash: string | null
+          patch_status: string | null
+          reviewer_output: Json | null
+          skipped_changes: Json | null
+          target_agent_name: string | null
+          target_workflow_backup_json: Json | null
+          target_workflow_id: string | null
+          target_workflow_name: string | null
+          validation_output: Json | null
+        }
+        Insert: {
+          applied_changes?: Json | null
+          blocked_changes?: Json | null
+          blocking_gate?: string | null
+          created_at?: string
+          dry_run?: boolean | null
+          evaluator_workflow_id?: string | null
+          id?: number
+          new_prompt_full_text?: string | null
+          new_prompt_hash?: string | null
+          old_prompt_full_text?: string | null
+          old_prompt_hash?: string | null
+          patch_status?: string | null
+          reviewer_output?: Json | null
+          skipped_changes?: Json | null
+          target_agent_name?: string | null
+          target_workflow_backup_json?: Json | null
+          target_workflow_id?: string | null
+          target_workflow_name?: string | null
+          validation_output?: Json | null
+        }
+        Update: {
+          applied_changes?: Json | null
+          blocked_changes?: Json | null
+          blocking_gate?: string | null
+          created_at?: string
+          dry_run?: boolean | null
+          evaluator_workflow_id?: string | null
+          id?: number
+          new_prompt_full_text?: string | null
+          new_prompt_hash?: string | null
+          old_prompt_full_text?: string | null
+          old_prompt_hash?: string | null
+          patch_status?: string | null
+          reviewer_output?: Json | null
+          skipped_changes?: Json | null
+          target_agent_name?: string | null
+          target_workflow_backup_json?: Json | null
+          target_workflow_id?: string | null
+          target_workflow_name?: string | null
+          validation_output?: Json | null
+        }
+        Relationships: []
+      }
+      sera_email_recommendation_ledger: {
+        Row: {
+          edit_type: string | null
+          first_seen_at: string
+          headline: string | null
+          id: number
+          last_seen_at: string
+          prompt_changed_since_first: boolean
+          prompt_hash_first_seen: string | null
+          prompt_hash_last_seen: string | null
+          rationale: string | null
+          rec_hash: string
+          resolved: boolean
+          resolved_at: string | null
+          score_first_seen: number | null
+          score_last_seen: number | null
+          section: string | null
+          suggested_text: string | null
+          target: string | null
+          times_seen: number
+        }
+        Insert: {
+          edit_type?: string | null
+          first_seen_at?: string
+          headline?: string | null
+          id?: number
+          last_seen_at?: string
+          prompt_changed_since_first?: boolean
+          prompt_hash_first_seen?: string | null
+          prompt_hash_last_seen?: string | null
+          rationale?: string | null
+          rec_hash: string
+          resolved?: boolean
+          resolved_at?: string | null
+          score_first_seen?: number | null
+          score_last_seen?: number | null
+          section?: string | null
+          suggested_text?: string | null
+          target?: string | null
+          times_seen?: number
+        }
+        Update: {
+          edit_type?: string | null
+          first_seen_at?: string
+          headline?: string | null
+          id?: number
+          last_seen_at?: string
+          prompt_changed_since_first?: boolean
+          prompt_hash_first_seen?: string | null
+          prompt_hash_last_seen?: string | null
+          rationale?: string | null
+          rec_hash?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          score_first_seen?: number | null
+          score_last_seen?: number | null
+          section?: string | null
+          suggested_text?: string | null
+          target?: string | null
+          times_seen?: number
+        }
+        Relationships: []
+      }
+      sera_email_regression_cases: {
+        Row: {
+          active: boolean
+          body: string
+          category: string
+          context: string | null
+          created_at: string
+          critical: boolean
+          expected_actions: Json
+          expected_behaviors: Json
+          expected_departments: Json
+          expected_language: string
+          forbidden_behaviors: Json
+          from_email: string
+          from_name: string | null
+          id: number
+          sera_recipient_role: string
+          severity: string
+          subject: string
+          suite_name: string
+          suite_version: number
+          weight: number
+        }
+        Insert: {
+          active?: boolean
+          body: string
+          category: string
+          context?: string | null
+          created_at?: string
+          critical?: boolean
+          expected_actions?: Json
+          expected_behaviors?: Json
+          expected_departments?: Json
+          expected_language?: string
+          forbidden_behaviors?: Json
+          from_email: string
+          from_name?: string | null
+          id?: number
+          sera_recipient_role?: string
+          severity?: string
+          subject: string
+          suite_name?: string
+          suite_version?: number
+          weight?: number
+        }
+        Update: {
+          active?: boolean
+          body?: string
+          category?: string
+          context?: string | null
+          created_at?: string
+          critical?: boolean
+          expected_actions?: Json
+          expected_behaviors?: Json
+          expected_departments?: Json
+          expected_language?: string
+          forbidden_behaviors?: Json
+          from_email?: string
+          from_name?: string | null
+          id?: number
+          sera_recipient_role?: string
+          severity?: string
+          subject?: string
+          suite_name?: string
+          suite_version?: number
+          weight?: number
+        }
+        Relationships: []
+      }
+      sera_email_regression_runs: {
+        Row: {
+          baseline_regression_score: number | null
+          block_reason: string | null
+          created_at: string
+          critical_failures: number | null
+          detailed_results: Json | null
+          deterministic_overrides: number | null
+          evaluator_run_id: string | null
+          gate_mode: string | null
+          id: number
+          new_failures: number | null
+          original_prompt_hash: string | null
+          patch_blocked: boolean | null
+          patched_prompt_hash: string | null
+          preexisting_failures: number | null
+          regression_passed: boolean | null
+          regression_score: number | null
+          suite_name: string | null
+          suite_version: number | null
+          test_cases_failed: number | null
+          test_cases_passed: number | null
+          test_cases_total: number | null
+        }
+        Insert: {
+          baseline_regression_score?: number | null
+          block_reason?: string | null
+          created_at?: string
+          critical_failures?: number | null
+          detailed_results?: Json | null
+          deterministic_overrides?: number | null
+          evaluator_run_id?: string | null
+          gate_mode?: string | null
+          id?: number
+          new_failures?: number | null
+          original_prompt_hash?: string | null
+          patch_blocked?: boolean | null
+          patched_prompt_hash?: string | null
+          preexisting_failures?: number | null
+          regression_passed?: boolean | null
+          regression_score?: number | null
+          suite_name?: string | null
+          suite_version?: number | null
+          test_cases_failed?: number | null
+          test_cases_passed?: number | null
+          test_cases_total?: number | null
+        }
+        Update: {
+          baseline_regression_score?: number | null
+          block_reason?: string | null
+          created_at?: string
+          critical_failures?: number | null
+          detailed_results?: Json | null
+          deterministic_overrides?: number | null
+          evaluator_run_id?: string | null
+          gate_mode?: string | null
+          id?: number
+          new_failures?: number | null
+          original_prompt_hash?: string | null
+          patch_blocked?: boolean | null
+          patched_prompt_hash?: string | null
+          preexisting_failures?: number | null
+          regression_passed?: boolean | null
+          regression_score?: number | null
+          suite_name?: string | null
+          suite_version?: number | null
+          test_cases_failed?: number | null
+          test_cases_passed?: number | null
+          test_cases_total?: number | null
+        }
+        Relationships: []
+      }
       sera_email_threads: {
         Row: {
           context_snapshot: Json | null
@@ -1136,6 +1532,24 @@ export type Database = {
           status?: string
           strengths?: Json | null
           top_weaknesses?: Json | null
+        }
+        Relationships: []
+      }
+      sharepoint_mirror: {
+        Row: {
+          fetched_at: string
+          key: string
+          payload: Json
+        }
+        Insert: {
+          fetched_at?: string
+          key: string
+          payload: Json
+        }
+        Update: {
+          fetched_at?: string
+          key?: string
+          payload?: Json
         }
         Relationships: []
       }
@@ -1327,6 +1741,27 @@ export type Database = {
           payload?: Json
           resolved?: boolean
           training_id?: string
+        }
+        Relationships: []
+      }
+      training_targets: {
+        Row: {
+          department: string
+          monthly_target_hours: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          department: string
+          monthly_target_hours?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          department?: string
+          monthly_target_hours?: number | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -1751,6 +2186,14 @@ export type Database = {
       }
     }
     Functions: {
+      chat_history_derive_handled_by: {
+        Args: {
+          _ai_reply: string
+          _human_reply: string
+          _sender_message: string
+        }
+        Returns: string
+      }
       get_recent_document_context: {
         Args: { limit_count?: number }
         Returns: {
