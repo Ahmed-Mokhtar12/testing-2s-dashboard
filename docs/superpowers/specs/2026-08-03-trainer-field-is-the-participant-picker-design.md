@@ -33,8 +33,8 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 
 | # | Commit | Deploys | SHA | State |
 |---|---|---|---|---|
-| 1 | `docs(spec)` this document | — | (in commit 2) | done |
-| 2 | `fix(report)` duplicate-name normalisation | SQL only | | |
+| 1 | `docs(spec)` this document | — | `77f7c9f` | done |
+| 2 | `fix(report)` normalise all six trainer names | SQL only | (in commit 3) | done |
 | 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | | |
 | 4 | `test` dedicated trainer fixture colleague | — | | |
 | 5 | `refactor` one colleague search rule | — | | |
@@ -128,8 +128,19 @@ TrainerNames = names.join('; ')
 - **No trailing separator**, no leading or trailing whitespace on the whole value and
   none on any individual name.
 - **Selection order preserved** — not alphabetical. The order is what the person chose.
-- Each name is the colleague's **`ColleagueName`** from Colleagues_Master, verbatim.
+- Each name is the colleague's **`ColleagueName`** from Colleagues_Master, with
+  **runs of whitespace collapsed to a single space and the result trimmed** — and
+  otherwise unaltered. `Muhammed Muhammed··Zawahir` (a real row, double space) is
+  written as `Muhammed Muhammed Zawahir`.
 - Case-insensitive dedupe, keeping the **first** spelling encountered.
+
+**Why not truly verbatim.** Colleagues_Master carries its own whitespace dirt — that
+double space, and a position of `" IT Manager"` with a leading space. Verbatim would
+propagate invisible characters into two stores, and the report's dedupe
+(`raw.trim().toLowerCase()`) treats `"A  B"` and `"A B"` as two different trainers. One
+stray edit in SharePoint would then silently split a person in the report. Collapsing is
+the smallest rule that makes the value stable. **The PowerApp must collapse too**, or
+the two writers produce values that differ by an invisible character.
 
 Examples:
 
@@ -280,13 +291,38 @@ The two stores leak **in both directions**, at tiny volume:
 
 ### In scope: the duplicate-name defect
 
-`trainer_names` records **one person under two spellings** — `Ahmed Mokhtar` (session
-20) and `Ahmed Mokhtar Elsayed Elaktaa` (session 25). The report dedupes with
-`raw.trim().toLowerCase()`, which cannot collapse those, so **`distinct_trainers`
-reports 6 where the truth is 5** — confirmed by SQL: 6 distinct raw, 6 distinct
-lowercased. Cause: the old field mixed sources, short `FALLBACK_TRAINERS` names against
-long UIL account names. Sourcing from `ColleagueName` stops it recurring; commit 2
-fixes the existing rows.
+`trainer_names` recorded **one person under two spellings** — `Ahmed Mokhtar` and
+`Ahmed Mokhtar Elsayed Elaktaa`. The report dedupes with `raw.trim().toLowerCase()`,
+which cannot collapse those, so `distinct_trainers` reported 6 where the truth is 5.
+
+**Commit 2 found the problem was five times larger and fixed all of it.** Matching every
+recorded name against the colleagues mirror showed that only ONE of six matched its
+`ColleagueName`:
+
+| recorded | `ColleagueName` | employeeId |
+|---|---|---|
+| Ahmed Mokhtar | Ahmed Mokhtar Elsayed Elaktaa | 101000 |
+| Ahmed Mokhtar Elsayed Elaktaa | (already exact) | 101000 |
+| Aiman Radwan | Aiman **Ibrahim Aly** Radwan | 101195 |
+| Ayham Hammodi | Ayham **Mooner** Hammodi | 102461 |
+| Ayman Ari­kat | Ayman Khalil Darwish **Erikat** | 100074 |
+| Muhammed Zawahir | Muhammed Muhammed·· Zawahir (double space) | 101710 |
+
+So fixing only Ahmed would have left a **second wave**: once the field writes
+`ColleagueName`, the other four start being recorded under different strings than their
+existing rows, and every report spanning the cutover counts each of them twice. All six
+were normalised to the whitespace-collapsed `ColleagueName` — the exact bytes the app
+will write — so pre- and post-cutover values match.
+
+**The mapping was confirmed by inspection, not computed.** `Ayman Arikat` →
+`Ayman Khalil Darwish Erikat` differs in the surname's first letter; a heuristic join
+missed him entirely on the first attempt and nearly recorded him as having no colleague
+row. Algorithmic name matching is what this spec refutes, so six rows were mapped by eye
+and confirmed by the operator, corroborated by department (that session is Revenue;
+100074 is Director of Revenue & Sales).
+
+`report_runs` holds no rows, so **no report has ever been sent** — the inflated count
+never reached a recipient.
 
 ## Known regression, accepted
 
