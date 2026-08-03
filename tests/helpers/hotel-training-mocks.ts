@@ -4,11 +4,43 @@ export const MOCK_SP_SESSION_ID = 'sp-item-001';
 
 // The sp-read-colleagues Edge Function returns already-flattened Colleague
 // objects (not the raw Graph `{ value: [{ fields }] }` shape).
+// The colleague every test picks as the TRAINER, and never as a participant.
+//
+// WHY A DEDICATED ONE. Trainers and participants become mutually exclusive: someone
+// chosen as a trainer disappears from every participant dropdown. Three tests fill
+// three participant rows, and before this there were exactly three active colleagues
+// (Alice, Bob, Carol — Dave is inactive), so the trainer would have consumed one and
+// those tests would have become unsatisfiable. A fifth entry, fourth active, keeps
+// their assertions untouched — which matters most for the partial-write test's
+// `toEqual([1, 3])`, since any fix that shrank a 3-row test to 2 would have destroyed
+// what it proves.
+//
+// The name and id collide with NOTHING already here: no shared substring with
+// Alice/Bob/Carol/Dave or the 2001-2015 and 3000+ ranges, so a
+// `getByRole('option', { name: /Tariq/ })` can never match another row and
+// `'9001'.includes(search)` can never match another id.
+//
+// DECLARED BEFORE MOCK_COLLEAGUES_FLAT, not after. A `const` referenced inside an
+// array literal declared above it is a temporal-dead-zone ReferenceError at module
+// load, because the literal is evaluated then and not at call time — the same
+// "cannot access before initialization" class as the chunk-ordering incident in
+// docs/testing-lessons.md §10.
+export const TRAINER_COLLEAGUE = {
+  id: 'col-trainer',
+  employeeId: '9001',
+  colleagueName: 'Tariq Rashed',
+  position: 'Training Manager',
+  section: 'Human Resources',
+  department: 'Human Resources',
+  isActive: true,
+};
+
 export const MOCK_COLLEAGUES_FLAT = [
   { id: 'col-1', employeeId: '1001', colleagueName: 'Alice Smith', position: 'Supervisor', section: 'Reception Hotel', department: 'Front Office', isActive: true },
   { id: 'col-2', employeeId: '1002', colleagueName: 'Bob Jones', position: 'Manager', section: 'Engineering', department: 'Engineering', isActive: true },
   { id: 'col-3', employeeId: '1003', colleagueName: 'Carol White', position: 'Coordinator', section: 'Finance', department: 'Finance', isActive: true },
   { id: 'col-4', employeeId: '1004', colleagueName: 'Dave Black', position: 'Staff', section: 'Security', department: 'Security', isActive: false },
+  TRAINER_COLLEAGUE,
 ];
 
 // A larger, all-active colleague roster used ONLY by full-viewport.spec.ts's
@@ -87,6 +119,12 @@ export function makeManyColleagues(activeNeeded: number) {
   // rows never depend on which of the shared MOCK_COLLEAGUES_FLAT entries happen
   // to be active (Dave Black is not); subtracting the named count would put
   // those shared entries back inside the slice and reintroduce that coupling.
+  //
+  // NO +1 FOR THE TRAINER, deliberately. TRAINER_COLLEAGUE sits at the HEAD, inside
+  // MOCK_COLLEAGUES_FLAT, so the tail slice is still exactly the generated fillers and
+  // the invariant above is unchanged. Adding 1 here would push the trainer INTO the
+  // generated block and force callers to index against this generator's internals —
+  // reintroducing the coupling the paragraph above exists to prevent.
   return [...MOCK_COLLEAGUES_FLAT, ...NAMED_EXTRA_COLLEAGUES, ...fillerColleagues(activeNeeded)];
 }
 

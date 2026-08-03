@@ -35,8 +35,8 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 |---|---|---|---|---|
 | 1 | `docs(spec)` this document | — | `77f7c9f` | done |
 | 2 | `fix(report)` normalise all six trainer names | SQL only | `6d0fd21` | done |
-| 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | (in commit 4) | done, NOT deployed |
-| 4 | `test` dedicated trainer fixture colleague | — | | |
+| 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | `63e15a8` | done, NOT deployed |
+| 4 | `test` dedicated trainer fixture colleague | — | (in commit 5) | done |
 | 5 | `refactor` one colleague search rule | — | | |
 | 6 | `revert` the escape hatch | delete sp-search-directory | | |
 | 7 | `feat(hotel-training)` the field itself | **frontend** — operator present | | |
