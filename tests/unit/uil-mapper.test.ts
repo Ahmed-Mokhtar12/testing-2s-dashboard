@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapUilItemToTrainer, dedupeAndSortTrainers } from '../../supabase/functions/sp-read-trainers/uil-mapper.ts';
+import { mapUilItemToTrainer, dedupeAndSortTrainers } from '../../supabase/functions/_shared/uil-mapper.ts';
 
 test('maps a UIL item with Title + EMail to a trainer entry with lowercased mail', () => {
   const entry = mapUilItemToTrainer('7', { Title: 'Ahmed Mokhtar', EMail: 'Ahmed.Mokhtar@2SeasonsHotels.com' });

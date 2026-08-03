@@ -1,51 +1,57 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
+import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { writeMirror } from '../_shared/mirror.ts';
-import { mapUilItemToTrainer, dedupeAndSortTrainers } from './uil-mapper.ts';
+import {
+  DIRECTORY_SELECT,
+  mergeTrainerSources,
+  toTrainerEntries,
+  type DirectoryUser,
+  type TrainerEntry,
+} from '../_shared/directory.ts';
+import { fetchTrainersFromUil } from '../_shared/uil.ts';
 
-interface TrainerRef {
-  displayName: string;
-  email: string;
-}
-
-// The site's User Information List (UIL) changes rarely; warm isolates skip
-// the multi-page walk entirely and serve straight from this cache.
+// The staff list served to the trainer picker: the tenant directory filtered to
+// people who look like staff, UNION every user already in the SharePoint site's
+// User Information List (UIL).
 //
-// Sourced from the UIL rather than the whole tenant directory: the dropdown
-// must equal the set sp-submit-training can actually resolve trainers
-// against (it addresses the same UIL_LIST_ID — see that function). Listing
-// the full Graph /users directory let people pick shared/role accounts or
-// colleagues who never visited the SharePoint site, which then failed at
-// submit with "Trainer(s) not found on the SharePoint site."
+// THIS DELIBERATELY REVERSES 4b1079b, which moved the dropdown from the directory
+// to the UIL. That commit gave two reasons and both are now answered:
+//
+//   "the dropdown offered shared/role accounts"      -> the staff filter drops them
+//                                                       (isLikelyStaff in _shared/directory.ts)
+//   "and colleagues who never visited the site ...   -> they are still offered, but
+//    failed at submit with Trainer(s) not found"        marked inSite: false, and the
+//                                                       picker refuses to select them
+//                                                       instead of failing at submit
+//
+// The UNION is the load-bearing part. A person already in the site whose directory
+// record has neither a job title nor a department would be dropped by the filter,
+// yet they are recordable TODAY — so they are restored here and appear in the
+// ordinary list. Without the union they would need the wider search to be found at
+// all, which would be absurd for someone already usable.
+//
+// See docs/superpowers/specs/2026-08-03-trainer-directory-escape-hatch-design.md.
 const CACHE_TTL_MS = 15 * 60 * 1000;
-let cache: { data: TrainerRef[]; fetchedAt: number } | null = null;
+let cache: { data: TrainerEntry[]; fetchedAt: number } | null = null;
 
-async function fetchTrainersFromUil(token: string, siteId: string): Promise<TrainerRef[]> {
-  const mapped: Array<ReturnType<typeof mapUilItemToTrainer>> = [];
-
-  // Deliberately no $select on fields: UIL internal field names vary by
-  // tenant and $select on a missing field can error, so fetch the full field
-  // set and read defensively in uil-mapper (mirrors sp-submit-training).
-  let url: string | null =
-    `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.uil}/items?$top=500&$expand=fields`;
+// Every enabled directory user, paged to exhaustion. $top=999 is Graph's maximum
+// for /users; a tenant larger than one page still works via @odata.nextLink.
+async function fetchDirectory(token: string): Promise<DirectoryUser[]> {
+  const users: DirectoryUser[] = [];
+  let url: string | null = `${GRAPH_BASE}/users?$select=${DIRECTORY_SELECT}&$top=999`;
 
   while (url) {
     const data = await graphFetch<{
-      value: Array<{ id: string; fields: Record<string, unknown> }>;
+      value: DirectoryUser[];
       '@odata.nextLink'?: string;
     }>(token, url);
-
-    for (const item of data.value) {
-      mapped.push(mapUilItemToTrainer(item.id, item.fields));
-    }
-
+    users.push(...data.value);
     url = data['@odata.nextLink'] ?? null;
   }
 
-  const persons = mapped.filter((t): t is NonNullable<typeof t> => t !== null);
-  return dedupeAndSortTrainers(persons).map((t) => ({ displayName: t.displayName, email: t.mail }));
+  return users;
 }
 
 Deno.serve(async (req) => {
@@ -69,7 +75,33 @@ Deno.serve(async (req) => {
 
     const token = await getAppToken();
     const siteId = await getSiteId(token);
-    const trainers = await fetchTrainersFromUil(token, siteId);
+
+    // Both walks, in parallel: they are independent and the UIL is one page while
+    // the directory is one or two, so serialising them would add a round trip to
+    // the slowest call on the page for nothing.
+    //
+    // THE DIRECTORY READ IS ALLOWED TO FAIL. It is the new half of this function,
+    // and it needs a Graph permission (User.Read.All) that the UIL read does not.
+    // If it ever breaks — permission revoked, tenant throttling — an empty
+    // directory merges to exactly the UIL, which is precisely this function's
+    // behaviour before today. Degrading to the old list beats 500-ing a page that
+    // was working an hour ago; the reason lands in the logs.
+    const [directoryResult, siteTrainers] = await Promise.all([
+      fetchDirectory(token).catch((err: unknown) => {
+        console.error(
+          'sp-read-trainers: directory read failed, falling back to the site list only:',
+          err instanceof Error ? err.message : String(err),
+        );
+        return [] as DirectoryUser[];
+      }),
+      fetchTrainersFromUil(token, siteId),
+    ]);
+    const directoryUsers = directoryResult;
+
+    const trainers = mergeTrainerSources(
+      toTrainerEntries(directoryUsers, { staffOnly: true }),
+      siteTrainers,
+    );
     cache = { data: trainers, fetchedAt: Date.now() };
     // Only on a real UIL walk, not on the in-memory cache hit above: the mirror
     // already holds that same payload, and rewriting it would push fetched_at
