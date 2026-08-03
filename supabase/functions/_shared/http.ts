@@ -1,6 +1,7 @@
 const ALLOWED_ORIGINS = [
   'https://testing-2s-dashboard.digitlab.ai',
   'http://localhost:8080',
+  'https://2s-dashboard.digitlab.ai',
 ];
 
 export function corsHeaders(req: Request): Record<string, string> {

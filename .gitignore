@@ -27,3 +27,6 @@ dist-ssr
 supabase/.temp/
 test-results/
 dist-test
+dist-new
+dist.bak-*
+dist.old-*
