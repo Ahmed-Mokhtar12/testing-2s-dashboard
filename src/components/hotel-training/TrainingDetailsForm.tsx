@@ -212,6 +212,18 @@ export function TrainingDetailsForm({
     );
   }, [trainerQuery]);
 
+  // Directory matches that are not already offered in the staff list above. A search
+  // for someone in sub-case A (in the site, filtered out by the staff heuristic) comes
+  // back with results that are ALL already listed, and rendering nothing for that is
+  // indistinguishable from a search that failed.
+  const widerNew = React.useMemo(
+    () =>
+      wider.results.filter(
+        (person) => !trainerOptions.some((option) => option.email === person.email),
+      ),
+    [wider.results, trainerOptions],
+  );
+
   const runDirectorySearch = React.useCallback(async () => {
     const query = trainerQuery.trim();
     if (query.length < MIN_SEARCH_LENGTH) return;
@@ -465,17 +477,11 @@ export function TrainingDetailsForm({
                   )}
                 </CommandGroup>
 
-                {/* The escape hatch. EXPLICIT — a click, never a keystroke — so no
-                    Graph call per character and a service account can never appear by
-                    accident. AUTO-SURFACED at MIN_SEARCH_LENGTH so it is found exactly
-                    when needed instead of being a feature to remember. */}
-                {trainerQuery.trim().length >= MIN_SEARCH_LENGTH && (
+                {/* RESULTS ONLY. The offer, the progress and every explanation are
+                    pinned below CommandList instead — see the note on that block. */}
+                {widerNew.length > 0 && (
                   <CommandGroup heading="From the full Microsoft directory">
-                    {wider.results.map((person) => {
-                      const alreadyListed = trainerOptions.some(
-                        (option) => option.email === person.email,
-                      );
-                      if (alreadyListed) return null;
+                    {widerNew.map((person) => {
                       const selected = selectedTrainers.some(
                         (current) => current.email === person.email,
                       );
@@ -521,37 +527,72 @@ export function TrainingDetailsForm({
                       );
                     })}
 
-                    {wider.state === 'idle' && (
-                      <CommandItem
-                        value={`__search__${trainerQuery}`}
-                        onSelect={() => void runDirectorySearch()}
-                      >
-                        <Search className="mr-2 h-4 w-4" />
-                        Search the full Microsoft directory for “{trainerQuery.trim()}”
-                      </CommandItem>
-                    )}
-                    {wider.state === 'searching' && (
-                      <p className="flex items-center px-2 py-3 text-sm text-muted-foreground">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Searching the Microsoft directory…
-                      </p>
-                    )}
-                    {wider.state === 'done' && wider.results.length === 0 && (
-                      <p className="px-2 py-3 text-sm text-muted-foreground">
-                        No Microsoft account matches “{wider.query}”. Search matches whole words
-                        from their start, so try a first or last name rather than part of one.
-                        Someone with no mailbox cannot be recorded as a trainer at all — the
-                        SharePoint column needs a real account.
-                      </p>
-                    )}
-                    {wider.state === 'failed' && (
-                      <p className="px-2 py-3 text-sm text-destructive">
-                        Could not search the directory: {wider.error}
-                      </p>
-                    )}
                   </CommandGroup>
                 )}
               </CommandList>
+
+              {/* PINNED, and deliberately OUTSIDE CommandList.
+                  CommandList is a 300px scroll box. While this lived inside it, the
+                  escape hatch rendered below however many staff matched the query — so
+                  for any query matching more than about eight people it was off-screen,
+                  reachable only by scrolling inside the popover. The one hint that
+                  typing reached further was a line under the field, which this popover
+                  covers when open. The feature was built, deployed, working, and
+                  undiscoverable; that is what this block fixes. It is not decoration.
+                  Regression-tested with a staff list long enough to overflow, asserting
+                  the offer is still in the viewport. */}
+              <div className="border-t p-1">
+                {trainerQuery.trim().length < MIN_SEARCH_LENGTH ? (
+                  // Shown before anything is typed: the only thing on screen that says
+                  // this field reaches past the list at all.
+                  <p className="px-2 py-2 text-xs text-muted-foreground">
+                    Not in the list? Type at least {MIN_SEARCH_LENGTH} letters to search the full
+                    Microsoft directory.
+                  </p>
+                ) : wider.state === 'searching' ? (
+                  <p className="flex items-center px-2 py-2 text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Searching the Microsoft directory…
+                  </p>
+                ) : wider.state === 'failed' ? (
+                  <p className="px-2 py-2 text-sm text-destructive">
+                    Could not search the directory: {wider.error}
+                  </p>
+                ) : wider.state === 'idle' ? (
+                  // EXPLICIT — a click, never a keystroke — so there is no Graph call per
+                  // character and a service account can never appear by accident. A plain
+                  // button, not a CommandItem: it is an action, not one of the options,
+                  // and cmdk items cannot live outside CommandList.
+                  <button
+                    type="button"
+                    onClick={() => void runDirectorySearch()}
+                    className="flex w-full items-center rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none"
+                  >
+                    <Search className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      Search the full Microsoft directory for “{trainerQuery.trim()}”
+                    </span>
+                  </button>
+                ) : widerNew.length > 0 ? (
+                  <p className="px-2 py-2 text-xs text-muted-foreground">
+                    {widerNew.length} match{widerNew.length === 1 ? '' : 'es'} from the Microsoft
+                    directory, listed above.
+                  </p>
+                ) : wider.results.length > 0 ? (
+                  // Sub-case A: found, and already selectable in the list above. Saying so
+                  // is the difference between "already there" and "the search is broken".
+                  <p className="px-2 py-2 text-xs text-muted-foreground">
+                    Everyone matching “{wider.query}” is already in the trainer list above.
+                  </p>
+                ) : (
+                  <p className="px-2 py-2 text-sm text-muted-foreground">
+                    No Microsoft account matches “{wider.query}”. Search matches whole words from
+                    their start, so try a first or last name rather than part of one. Someone with
+                    no mailbox cannot be recorded as a trainer at all — the SharePoint column needs
+                    a real account.
+                  </p>
+                )}
+              </div>
             </Command>
           </PopoverContent>
         </Popover>

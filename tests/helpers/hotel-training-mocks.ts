@@ -110,7 +110,10 @@ export const MOCK_TRAINERS_FLAT = [
 
 export async function mockTrainersFunction(
   page: Page,
-  opts: { failure?: boolean } = {},
+  // `entries` overrides the list entirely. Needed for the layout case: the escape
+  // hatch used to render below the matching staff inside a 300px scroll box, so
+  // proving it stays reachable needs more staff than that box can hold.
+  opts: { failure?: boolean; entries?: Array<{ displayName: string; email: string }> } = {},
 ) {
   await page.route(
     `https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-trainers`,
@@ -121,7 +124,7 @@ export async function mockTrainersFunction(
       if (opts.failure) {
         return route.fulfill({ status: 500, json: { error: 'Graph request failed.' } });
       }
-      return route.fulfill({ json: MOCK_TRAINERS_FLAT });
+      return route.fulfill({ json: opts.entries ?? MOCK_TRAINERS_FLAT });
     },
   );
 }

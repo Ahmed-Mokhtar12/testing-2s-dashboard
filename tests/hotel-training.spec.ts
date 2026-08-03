@@ -504,11 +504,16 @@ test.describe('Hotel Training', () => {
   // The trainer picker's escape hatch. What matters is not that the wider search
   // works — it is that the picker never invites someone to fill a 100-participant
   // form for a trainer SharePoint will refuse at the last click.
-  async function openTrainerPicker(page: Page, opts: Parameters<typeof mockSearchDirectoryFunction>[1] = {}) {
+  async function openTrainerPicker(
+    page: Page,
+    opts: Parameters<typeof mockSearchDirectoryFunction>[1] & {
+      trainers?: Array<{ displayName: string; email: string }>;
+    } = {},
+  ) {
     await setMockAuthSession(page, USER_EMAIL);
     await mockColleaguesFunction(page);
     await mockColumnsFunction(page);
-    await mockTrainersFunction(page);
+    await mockTrainersFunction(page, opts.trainers ? { entries: opts.trainers } : {});
     await mockSubmitFunction(page);
     await mockManageColleagueFunction(page);
     await mockSupabaseRest(page);
@@ -522,7 +527,7 @@ test.describe('Hotel Training', () => {
     const searched: string[] = [];
     await openTrainerPicker(page, { onQuery: (q) => searched.push(q) });
 
-    const offer = page.getByRole('option', { name: /Search the full Microsoft directory/ });
+    const offer = page.getByRole('button', { name: /Search the full Microsoft directory/ });
     await expect(offer).toHaveCount(0, { timeout: 3000 });
 
     await page.getByPlaceholder('Search trainers...').fill('m');
@@ -534,6 +539,63 @@ test.describe('Hotel Training', () => {
     // ANTI-VACUITY: the offer being visible proves nothing if it fires on its own.
     // Nothing may have been searched until the row is actually clicked.
     expect(searched, 'the directory must not be searched by typing alone').toEqual([]);
+  });
+
+  // THE DEFECT THIS SUITE MISSED. Every test above opens the picker with three
+  // mock trainers, so the escape hatch was always on screen — while in production,
+  // against a real staff list, any query matching more than about eight people
+  // pushed it out of the 300px scroll box. It shipped working and unreachable.
+  test('the directory offer stays on screen when many staff match the query', async ({ page }) => {
+    // Thirty matching names: far more than CommandList's max-h-[300px] can show.
+    const crowd = Array.from({ length: 30 }, (_, index) => ({
+      displayName: `Mohammed Staff-${String(index).padStart(2, '0')}`,
+      email: `mohammed.staff${index}@2seasonshotels.com`,
+    }));
+    await openTrainerPicker(page, { trainers: crowd });
+
+    await page.getByPlaceholder('Search trainers...').fill('moh');
+    await expect(page.getByRole('option', { name: /Mohammed Staff-00/ })).toBeVisible();
+
+    const offer = page.getByRole('button', { name: /Search the full Microsoft directory/ });
+    // toBeVisible is NOT enough: an element scrolled out of an overflow container
+    // still has a box and still passes it. toBeInViewport is clipped by ancestor
+    // overflow, which is exactly the failure being guarded.
+    await expect(offer).toBeInViewport();
+    // And structurally, so the reason survives a future restyle: the offer must not
+    // live inside the scrolling list at all.
+    await expect(page.locator('[cmdk-list]').getByRole('button', {
+      name: /Search the full Microsoft directory/,
+    })).toHaveCount(0);
+  });
+
+  test('the picker says it reaches the directory before anything is typed', async ({ page }) => {
+    // The only thing on screen that tells someone this field is more than a filter.
+    // The hint that used to carry this sits under the field, which the popover covers.
+    await openTrainerPicker(page);
+    await expect(
+      page.getByText(/Not in the list\? Type at least 2 letters/),
+    ).toBeInViewport();
+  });
+
+  test('a match that is already in the trainer list says so, rather than looking broken', async ({ page }) => {
+    // Sub-case A: in the site's UIL, so already selectable above. An empty result
+    // area here is indistinguishable from a search that silently failed.
+    await openTrainerPicker(page, {
+      results: [
+        {
+          displayName: 'Ahmed Mokhtar Elsayed Elaktaa',
+          email: 'ahmed.mokhtar@2seasonshotels.com',
+          inSite: true,
+        },
+      ],
+    });
+
+    await page.getByPlaceholder('Search trainers...').fill('ahmed');
+    await page.getByRole('button', { name: /Search the full Microsoft directory/ }).click();
+
+    await expect(page.getByText(/already in the trainer list above/)).toBeVisible();
+    // Not duplicated into the directory group.
+    await expect(page.getByRole('option', { name: /Ahmed Mokhtar/ })).toHaveCount(1);
   });
 
   test('a directory person already on the site can be picked and reaches the payload', async ({ page }) => {
@@ -552,7 +614,7 @@ test.describe('Hotel Training', () => {
     });
 
     await page.getByPlaceholder('Search trainers...').fill('moh');
-    await page.getByRole('option', { name: /Search the full Microsoft directory/ }).click();
+    await page.getByRole('button', { name: /Search the full Microsoft directory/ }).click();
 
     // The click sent the typed text, not a stale value.
     await expect.poll(() => searched).toEqual(['moh']);
@@ -574,7 +636,7 @@ test.describe('Hotel Training', () => {
     });
 
     await page.getByPlaceholder('Search trainers...').fill('moh');
-    await page.getByRole('option', { name: /Search the full Microsoft directory/ }).click();
+    await page.getByRole('button', { name: /Search the full Microsoft directory/ }).click();
 
     const entry = page.getByRole('option', { name: /Mohammed Rashid/ });
     await expect(entry).toBeVisible();
@@ -603,7 +665,7 @@ test.describe('Hotel Training', () => {
     await openTrainerPicker(page, { results: [] });
 
     await page.getByPlaceholder('Search trainers...').fill('zzzz');
-    await page.getByRole('option', { name: /Search the full Microsoft directory/ }).click();
+    await page.getByRole('button', { name: /Search the full Microsoft directory/ }).click();
 
     // Names what was searched, and warns about tokenisation — Graph matches whole
     // words from their start, so "hammad" will not find "Mohammad". Without that
