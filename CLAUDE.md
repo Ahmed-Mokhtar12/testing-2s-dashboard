@@ -81,6 +81,20 @@ as `testing-2s-dashboard`. Consequences worth knowing before deploying by hand:
 - The script verifies against the public URL after restarting and exits non-zero
   unless the freshly built asset is actually being served with the declared
   headers.
+- **It overlays `dist`, it does not replace it.** The app is code-split, so a page
+  that was already open imports lazy chunks by hashed filename; replacing `dist`
+  deleted them and gave anyone mid-session a dead panel — "Failed to fetch
+  dynamically imported module" — the first time they opened a route they had not
+  visited. The live tree is therefore (previous tree) ∪ (new build). `dist/assets`
+  legitimately holds files from several builds; that is not stale garbage, and
+  `RETAIN_DAYS` (default 7) is what eventually removes them. Retention is safe only
+  because those names are content hashes.
+- Running the script is a deploy, so its logic is exercised by
+  `bash scripts/rehearse-deploy-frontend.sh [mutation]` — the real script against a
+  sandbox with `npm`/`pm2`/`curl` shimmed, refusing to run unless it has verifiably
+  replaced the constants pointing at the live site.
+  `tests/unit/deploy-frontend-overlay.test.ts` runs it five ways in `npm run
+  test:unit`, three of them mutations proving the deploy's own checks can fail.
 
 Several edge modes are gated on a real **admin user JWT** (`getCallerUser` then
 `has_role`). A service-role key has no user and fails the first check, so these

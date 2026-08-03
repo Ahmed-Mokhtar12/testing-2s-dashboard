@@ -28,5 +28,10 @@ supabase/.temp/
 test-results/
 dist-test
 dist-new
+# What deploy-frontend.sh actually names its staging tree. It is removed on a
+# successful deploy, so this only matters when one fails part-way — which is
+# exactly when nobody wants 4 MB of untracked files in git status.
+dist-staging
 dist.bak-*
 dist.old-*
+dist.failed-*
