@@ -11,6 +11,8 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ColleagueOptionLabel } from './ColleagueOptionLabel';
+import { filterColleagues } from '@/lib/colleague-search';
 import type { Colleague, ParticipantRow as ParticipantRowType } from '@/types/hotel-training';
 
 interface Props {
@@ -24,14 +26,10 @@ export function ParticipantRow({ row, allColleagues, selectedEmployeeIds, onChan
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  const available = allColleagues.filter((colleague) => {
-    const isCurrentSelection = colleague.employeeId === row.colleague?.employeeId;
-    const matchesSearch =
-      search === '' ||
-      colleague.colleagueName.toLowerCase().includes(search.toLowerCase()) ||
-      colleague.employeeId.includes(search);
-
-    return colleague.isActive && (isCurrentSelection || !selectedEmployeeIds.has(colleague.employeeId)) && matchesSearch;
+  // `keep` is this row's own selection, so a filled row still shows what it holds.
+  const available = filterColleagues(allColleagues, search, {
+    exclude: selectedEmployeeIds,
+    keep: row.colleague ? new Set([row.colleague.employeeId]) : undefined,
   });
 
   return (
@@ -71,8 +69,7 @@ export function ParticipantRow({ row, allColleagues, selectedEmployeeIds, onChan
                         setSearch('');
                       }}
                     >
-                      <span className="font-medium">{colleague.colleagueName}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">ID: {colleague.employeeId}</span>
+                      <ColleagueOptionLabel colleague={colleague} />
                     </CommandItem>
                   ))}
                 </CommandGroup>
