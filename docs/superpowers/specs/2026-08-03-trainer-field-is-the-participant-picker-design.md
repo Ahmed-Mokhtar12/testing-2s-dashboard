@@ -37,8 +37,8 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 | 2 | `fix(report)` normalise all six trainer names | SQL only | `6d0fd21` | done |
 | 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | `63e15a8` | done, NOT deployed |
 | 4 | `test` dedicated trainer fixture colleague | — | `4ee0045` | done |
-| 5 | `refactor` one colleague search rule | — | (in commit 6) | done |
-| 6 | `revert` the escape hatch | delete sp-search-directory | | |
+| 5 | `refactor` one colleague search rule | — | `9436dc0` | done |
+| 6 | `revert` the escape hatch | delete sp-search-directory | (in commit 7) | done, platform delete OWED |
 | 7 | `feat(hotel-training)` the field itself | **frontend** — operator present | | |
 | 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | |
 
@@ -163,6 +163,20 @@ code would catch a divergence.
 **Length.** The column is `text`, so 255 characters. The write refuses beyond that
 rather than letting SharePoint truncate silently, and names the trainer count and the
 limit. A `MAX_TRAINER_COUNT` guard bounds a hostile body independently.
+
+## What commit 6 could NOT remove, and why
+
+The plan had commit 6 delete `_shared/directory.ts` alongside `sp-search-directory`
+while explicitly keeping `_shared/uil.ts`, `_shared/sharepoint-rest.ts` and
+`sp-read-trainers`. Those three **import** `directory.ts` — `uil.ts` takes
+`TrainerEntry`, `sharepoint-rest.ts` takes `membershipClaim`, and `sp-read-trainers`
+takes most of it. So that pairing was impossible; the plan was wrong, not the code.
+
+Deferred to commit 8, where the legacy submit path goes and all four die together:
+`_shared/directory.ts` + its test, `_shared/uil.ts`, `_shared/uil-mapper.ts`,
+`_shared/sharepoint-rest.ts`, `sp-read-trainers`. Until then `directory.ts` keeps a
+now-unused `MIN_SEARCH_LENGTH` and a comment naming the deleted function — dead but
+harmless, and removing it early would have meant touching the still-live path.
 
 ## The Person column and the historical rows
 

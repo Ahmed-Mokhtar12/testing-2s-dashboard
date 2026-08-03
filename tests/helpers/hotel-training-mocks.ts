@@ -2,8 +2,6 @@ import type { Page } from '@playwright/test';
 
 export const MOCK_SP_SESSION_ID = 'sp-item-001';
 
-// The sp-read-colleagues Edge Function returns already-flattened Colleague
-// objects (not the raw Graph `{ value: [{ fields }] }` shape).
 // The colleague every test picks as the TRAINER, and never as a participant.
 //
 // WHY A DEDICATED ONE. Trainers and participants become mutually exclusive: someone
@@ -35,6 +33,8 @@ export const TRAINER_COLLEAGUE = {
   isActive: true,
 };
 
+// The sp-read-colleagues Edge Function returns already-flattened Colleague
+// objects (not the raw Graph `{ value: [{ fields }] }` shape).
 export const MOCK_COLLEAGUES_FLAT = [
   { id: 'col-1', employeeId: '1001', colleagueName: 'Alice Smith', position: 'Supervisor', section: 'Reception Hotel', department: 'Front Office', isActive: true },
   { id: 'col-2', employeeId: '1002', colleagueName: 'Bob Jones', position: 'Manager', section: 'Engineering', department: 'Engineering', isActive: true },
@@ -341,40 +341,5 @@ export async function setMockAuthSession(page: Page, email = 'user@2seasonshotel
       window.localStorage.setItem(authKey, JSON.stringify(session));
     },
     { authKey: AUTH_KEY, session: fakeSession },
-  );
-}
-
-// sp-search-directory: the trainer picker's escape hatch. `results` is what the
-// function would return for any query — tests assert on which of them the UI offers
-// and which it refuses, not on Graph's matching, which is mocked away here.
-//
-// `onQuery` records what was actually searched, so a test can prove the click sent
-// the typed text rather than something stale.
-export async function mockSearchDirectoryFunction(
-  page: Page,
-  opts: {
-    results?: Array<{ displayName: string; email: string; inSite: boolean; jobTitle?: string }>;
-    failure?: boolean;
-    onQuery?: (query: string) => void;
-  } = {},
-) {
-  await page.route(
-    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-search-directory`,
-    async (route) => {
-      if (route.request().method() === 'OPTIONS') {
-        return route.fulfill({ status: 200, body: 'ok' });
-      }
-      let query = '';
-      try {
-        query = String((route.request().postDataJSON() as { q?: unknown })?.q ?? '');
-      } catch {
-        query = '';
-      }
-      opts.onQuery?.(query);
-      if (opts.failure) {
-        return route.fulfill({ status: 500, json: { error: 'Graph is unavailable.' } });
-      }
-      return route.fulfill({ json: { query, results: opts.results ?? [] } });
-    },
   );
 }

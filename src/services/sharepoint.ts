@@ -72,27 +72,6 @@ export async function invokeReadTrainers(): Promise<TrainerRef[]> {
   return data as TrainerRef[];
 }
 
-// The trainer picker's escape hatch: search the whole Microsoft directory, past the
-// staff filter sp-read-trainers applies. Deliberately a separate endpoint from the
-// trainer list — see the note at the top of supabase/functions/sp-search-directory.
-//
-// Each result carries `inSite`, decided by the server against the SharePoint site's
-// User Information List. false means the person is real but cannot be recorded yet,
-// which the picker must say before the form is filled in rather than at submit.
-export async function invokeSearchDirectory(query: string): Promise<TrainerRef[]> {
-  const { data, error } = await supabase.functions.invoke('sp-search-directory', {
-    body: { q: query },
-  });
-  if (error) {
-    throw new Error(await extractInvokeError(error));
-  }
-  const results = (data as { results?: unknown })?.results;
-  if (!Array.isArray(results)) {
-    throw new Error('Unexpected response shape from sp-search-directory.');
-  }
-  return results as TrainerRef[];
-}
-
 export interface TrainingSessionPayload {
   title: string;
   department: string;

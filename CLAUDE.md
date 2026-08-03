@@ -58,7 +58,7 @@ SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh <fn>|--all
 ```
 
 `deploy-sp-function.sh` covers `sp-read-colleagues`, `sp-read-columns`,
-`sp-read-trainers`, `sp-manage-colleague` and `sp-search-directory` — one script,
+`sp-read-trainers` and `sp-manage-colleague` — one script,
 because these are identical to deploy and five copies would drift. It refuses a name
 outside that list rather than creating a new function on the platform.
 

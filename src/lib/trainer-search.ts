@@ -1,22 +1,5 @@
 import type { TrainerRef } from '@/types/hotel-training';
 
-// Minimum characters before the wider-directory search is offered.
-//
-// DECLARED TWICE, in two runtimes, and it must not drift:
-//
-//   src/lib/trainer-search.ts                      MIN_SEARCH_LENGTH  (offers the search)
-//   supabase/functions/_shared/directory.ts        MIN_SEARCH_LENGTH  (refuses the search)
-//
-// They cannot share a module: the edge tree is Deno, both tsconfigs exclude it, and
-// importing across the boundary would break the git archive the deploy scripts build.
-// So the drift is made detectable instead of pretended away —
-// tests/unit/search-length-agrees.test.ts fails the build if they disagree.
-//
-// What that prevents, concretely: a UI that offers "Search the full Microsoft
-// directory" at 2 characters while the function rejects anything under 3. The user
-// clicks and gets an error for typing what the form invited them to type.
-export const MIN_SEARCH_LENGTH = 2;
-
 // The local filter over the already-loaded trainer list.
 //
 // Hand-rolled rather than left to cmdk's built-in filter because the picker now shows

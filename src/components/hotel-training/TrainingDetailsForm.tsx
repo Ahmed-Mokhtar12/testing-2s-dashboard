@@ -3,9 +3,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Check, ChevronDown, Loader2, Search, X } from 'lucide-react';
+import { CalendarIcon, Check, ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -28,8 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { DURATION_OPTIONS, MAX_PARTICIPANTS } from '@/lib/hotel-training-constants';
-import { filterTrainersByQuery, MIN_SEARCH_LENGTH } from '@/lib/trainer-search';
-import { invokeSearchDirectory } from '@/services/sharepoint';
+import { filterTrainersByQuery } from '@/lib/trainer-search';
 import { cn } from '@/lib/utils';
 import type { TrainerRef, TrainingDetailsValues } from '@/types/hotel-training';
 
@@ -183,67 +181,10 @@ export function TrainingDetailsForm({
   const selectedTrainers = watch('trainers') ?? [];
   const [trainerOpen, setTrainerOpen] = React.useState(false);
   const [trainerQuery, setTrainerQuery] = React.useState('');
-  // The person the user tried to pick who cannot be recorded yet. Held here rather
-  // than shown as a toast so the explanation stays on screen while they act on it.
-  const [blockedTrainer, setBlockedTrainer] = React.useState<TrainerRef | null>(null);
-
-  // The wider directory search. A four-state machine rather than booleans, because
-  // "no results yet" and "searched, found nothing" need different copy and the pair
-  // of booleans that would encode them can express neither cleanly nor exclusively.
-  const [wider, setWider] = React.useState<{
-    state: 'idle' | 'searching' | 'done' | 'failed';
-    query: string;
-    results: TrainerRef[];
-    error?: string;
-  }>({ state: 'idle', query: '', results: [] });
-
   const visibleStaff = React.useMemo(
     () => filterTrainersByQuery(trainerOptions, trainerQuery),
     [trainerOptions, trainerQuery],
   );
-
-  // Typing invalidates a previous search: results for "moh" must not sit under the
-  // heading while the box says "moha". Back to idle re-offers the search row.
-  React.useEffect(() => {
-    setWider((current) =>
-      current.query === trainerQuery.trim()
-        ? current
-        : { state: 'idle', query: '', results: [] },
-    );
-  }, [trainerQuery]);
-
-  // Directory matches that are not already offered in the staff list above. A search
-  // for someone in sub-case A (in the site, filtered out by the staff heuristic) comes
-  // back with results that are ALL already listed, and rendering nothing for that is
-  // indistinguishable from a search that failed.
-  const widerNew = React.useMemo(
-    () =>
-      wider.results.filter(
-        (person) => !trainerOptions.some((option) => option.email === person.email),
-      ),
-    [wider.results, trainerOptions],
-  );
-
-  const runDirectorySearch = React.useCallback(async () => {
-    const query = trainerQuery.trim();
-    if (query.length < MIN_SEARCH_LENGTH) return;
-    setWider({ state: 'searching', query, results: [] });
-    try {
-      const results = await invokeSearchDirectory(query);
-      // Guard against a stale response: if the user kept typing while this was in
-      // flight, the answer is for a query they no longer have on screen.
-      setWider((current) =>
-        current.query === query ? { state: 'done', query, results } : current,
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setWider((current) =>
-        current.query === query
-          ? { state: 'failed', query, results: [], error: message }
-          : current,
-      );
-    }
-  }, [trainerQuery]);
 
   const onSubmit = (values: FormValues) => {
     if (values.date < new Date(new Date().setHours(0, 0, 0, 0))) {
@@ -440,10 +381,8 @@ export function TrainingDetailsForm({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            {/* shouldFilter={false} for the local list too, so one filter governs both
-                groups. cmdk's built-in filter cannot see the wider results (they are
-                fetched, not rendered up-front), and having it hide staff entries while
-                leaving directory entries visible reads as a bug. */}
+            {/* shouldFilter={false}: filterTrainersByQuery is the single filter, so
+                cmdk's built-in one cannot disagree with it about what matches. */}
             <Command shouldFilter={false}>
               <CommandInput
                 placeholder="Search trainers..."
@@ -476,147 +415,11 @@ export function TrainingDetailsForm({
                     </p>
                   )}
                 </CommandGroup>
-
-                {/* RESULTS ONLY. The offer, the progress and every explanation are
-                    pinned below CommandList instead — see the note on that block. */}
-                {widerNew.length > 0 && (
-                  <CommandGroup heading="From the full Microsoft directory">
-                    {widerNew.map((person) => {
-                      const selected = selectedTrainers.some(
-                        (current) => current.email === person.email,
-                      );
-                      // inSite === false is the ONLY blocking value. undefined means
-                      // "no information" — see the note on TrainerRef.inSite.
-                      const blocked = person.inSite === false;
-                      return (
-                        <CommandItem
-                          key={person.email}
-                          value={`${person.displayName} ${person.email}`}
-                          // NOT cmdk's `disabled`. A disabled CommandItem never fires
-                          // onSelect, so the explanation below could never appear —
-                          // blocking and explaining would be mutually exclusive, and
-                          // the user would get a greyed row with no reason. Caught by
-                          // the e2e test for this case. The item stays activatable and
-                          // REFUSES, which is what makes the reason reachable.
-                          onSelect={() => {
-                            if (blocked) {
-                              setBlockedTrainer(person);
-                              return;
-                            }
-                            const next = selected
-                              ? selectedTrainers.filter((current) => current.email !== person.email)
-                              : [...selectedTrainers, person];
-                            setValue('trainers', next, { shouldValidate: true });
-                          }}
-                        >
-                          <Check className={cn('mr-2 h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                          <span className={cn(blocked && 'text-muted-foreground')}>
-                            {person.displayName}
-                          </span>
-                          {person.jobTitle && (
-                            <span className="ml-2 truncate text-xs text-muted-foreground">
-                              {person.jobTitle}
-                            </span>
-                          )}
-                          {blocked && (
-                            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                              not on the site yet
-                            </span>
-                          )}
-                        </CommandItem>
-                      );
-                    })}
-
-                  </CommandGroup>
-                )}
               </CommandList>
-
-              {/* PINNED, and deliberately OUTSIDE CommandList.
-                  CommandList is a 300px scroll box. While this lived inside it, the
-                  escape hatch rendered below however many staff matched the query — so
-                  for any query matching more than about eight people it was off-screen,
-                  reachable only by scrolling inside the popover. The one hint that
-                  typing reached further was a line under the field, which this popover
-                  covers when open. The feature was built, deployed, working, and
-                  undiscoverable; that is what this block fixes. It is not decoration.
-                  Regression-tested with a staff list long enough to overflow, asserting
-                  the offer is still in the viewport. */}
-              <div className="border-t p-1">
-                {trainerQuery.trim().length < MIN_SEARCH_LENGTH ? (
-                  // Shown before anything is typed: the only thing on screen that says
-                  // this field reaches past the list at all.
-                  <p className="px-2 py-2 text-xs text-muted-foreground">
-                    Not in the list? Type at least {MIN_SEARCH_LENGTH} letters to search the full
-                    Microsoft directory.
-                  </p>
-                ) : wider.state === 'searching' ? (
-                  <p className="flex items-center px-2 py-2 text-sm text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Searching the Microsoft directory…
-                  </p>
-                ) : wider.state === 'failed' ? (
-                  <p className="px-2 py-2 text-sm text-destructive">
-                    Could not search the directory: {wider.error}
-                  </p>
-                ) : wider.state === 'idle' ? (
-                  // EXPLICIT — a click, never a keystroke — so there is no Graph call per
-                  // character and a service account can never appear by accident. A plain
-                  // button, not a CommandItem: it is an action, not one of the options,
-                  // and cmdk items cannot live outside CommandList.
-                  <button
-                    type="button"
-                    onClick={() => void runDirectorySearch()}
-                    className="flex w-full items-center rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none"
-                  >
-                    <Search className="mr-2 h-4 w-4 shrink-0" />
-                    <span className="truncate">
-                      Search the full Microsoft directory for “{trainerQuery.trim()}”
-                    </span>
-                  </button>
-                ) : widerNew.length > 0 ? (
-                  <p className="px-2 py-2 text-xs text-muted-foreground">
-                    {widerNew.length} match{widerNew.length === 1 ? '' : 'es'} from the Microsoft
-                    directory, listed above.
-                  </p>
-                ) : wider.results.length > 0 ? (
-                  // Sub-case A: found, and already selectable in the list above. Saying so
-                  // is the difference between "already there" and "the search is broken".
-                  <p className="px-2 py-2 text-xs text-muted-foreground">
-                    Everyone matching “{wider.query}” is already in the trainer list above.
-                  </p>
-                ) : (
-                  <p className="px-2 py-2 text-sm text-muted-foreground">
-                    No Microsoft account matches “{wider.query}”. Search matches whole words from
-                    their start, so try a first or last name rather than part of one. Someone with
-                    no mailbox cannot be recorded as a trainer at all — the SharePoint column needs
-                    a real account.
-                  </p>
-                )}
-              </div>
             </Command>
           </PopoverContent>
         </Popover>
         {errors.trainers && <p className="text-sm text-destructive">{errors.trainers.message}</p>}
-        {blockedTrainer && (
-          <Alert variant="destructive">
-            <AlertDescription className="space-y-1">
-              <p>
-                <strong>{blockedTrainer.displayName} can’t be recorded yet.</strong> They have never
-                opened the Training Record SharePoint site, so SharePoint has no id to file the
-                training against.
-              </p>
-              <p>
-                Either ask them to open the site once, or record one training for them in the
-                Monthly_Training PowerApp — both take a minute, and they will appear in the trainer
-                list here within 15 minutes.
-              </p>
-            </AlertDescription>
-          </Alert>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Trainer not listed? Type at least {MIN_SEARCH_LENGTH} characters and search the full
-          Microsoft directory.
-        </p>
       </div>
 
       <div className="space-y-1.5">
