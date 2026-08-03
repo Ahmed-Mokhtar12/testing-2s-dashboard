@@ -2,6 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS, SP_SITE_HOST, SP_SITE_PATH } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
 import { ensureSiteUser } from '../_shared/sharepoint-rest.ts';
+import {
+  mapColleagueTrainerRow,
+  normalizeTrainerEmployeeIds,
+  resolveTrainerIdsByEmployeeId,
+  type ColleagueTrainerRow,
+} from '../_shared/colleague-trainers.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { writeParticipantsInBatches, type BatchResponse } from './participant-batch.ts';
 
@@ -25,6 +31,13 @@ interface SubmitBody {
   location: string | number | null;
   remarks: string | number | null;
   trainingDate: string;
+  // The current shape: employee ids from Colleagues_Master, resolved to LookupIds
+  // HERE rather than sent by the client. A client-supplied LookupId is unvalidated
+  // input going straight into a Person column — it would let any authenticated
+  // caller file a training against an arbitrary site user — and a draft saved days
+  // ago would carry an id that may since have changed.
+  trainerEmployeeIds?: Array<string | number>;
+  // deprecated: clients not yet redeployed. Resolves by email against the UIL.
   trainers?: TrainerRef[];
   // deprecated: legacy clients — remove after client rollout
   trainerNames?: string[];
@@ -182,7 +195,47 @@ function normalizeTrainers(body: SubmitBody): TrainerRef[] | null {
   return null;
 }
 
-function badRequest(body: SubmitBody, trainers: TrainerRef[] | null): string | null {
+// One page covers the list (336 rows as of 2026-08-03), but paginate anyway.
+//
+// NO $select ON fields, for the same reason the UIL scan below has none: a $select
+// naming a field that does not exist ERRORS rather than returning null, and this is
+// the read a submission cannot proceed without. The probe confirmed
+// ColleagueAccountLookupId today; if the column is ever renamed, reading the full
+// field set degrades to "has no linked account" — a refusal naming the person — and
+// not a 500 for every submission.
+// Named rather than inline at the call site. With the response type written inline,
+// `url` is assigned from `data['@odata.nextLink']` inside the same loop that produces
+// `data`, and Deno's checker reports TS7022 — 'data' implicitly has type 'any'
+// because it is referenced indirectly in its own initializer. An explicit annotation
+// breaks that cycle. (The UIL scan above has the same shape and the same error; it is
+// left alone here because it belongs to the legacy path this eventually deletes, and
+// it is already on the B2 list.)
+interface GraphItemsPage {
+  value: Array<{ id: string; fields: Record<string, unknown> }>;
+  '@odata.nextLink'?: string;
+}
+
+async function fetchColleagueTrainerRows(
+  token: string,
+  siteId: string,
+): Promise<ColleagueTrainerRow[]> {
+  const rows: ColleagueTrainerRow[] = [];
+  let url: string | null =
+    `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items?$top=500&$expand=fields`;
+
+  while (url) {
+    const data: GraphItemsPage = await graphFetch<GraphItemsPage>(token, url);
+    for (const item of data.value) {
+      const row = mapColleagueTrainerRow(item.fields);
+      if (row) rows.push(row);
+    }
+    url = data['@odata.nextLink'] ?? null;
+  }
+
+  return rows;
+}
+
+function badRequest(body: SubmitBody, haveTrainers: boolean): string | null {
   if (!body.trainingId || !/^TRN-\d{14}$/.test(body.trainingId)) return 'Invalid trainingId.';
   if (!body.title?.trim()) return 'Title is required.';
   if (!body.department?.trim()) return 'Department is required.';
@@ -190,7 +243,7 @@ function badRequest(body: SubmitBody, trainers: TrainerRef[] | null): string | n
   if (!Number.isInteger(body.totalParticipants) || body.totalParticipants < 1 || body.totalParticipants > MAX_PARTICIPANTS) {
     return `Total participants must be between 1 and ${MAX_PARTICIPANTS}.`;
   }
-  if (!trainers) return 'At least one valid trainer is required.';
+  if (!haveTrainers) return 'At least one valid trainer is required.';
   if (!body.trainingDate || Number.isNaN(Date.parse(body.trainingDate))) return 'Invalid training date.';
   if (!Array.isArray(body.participants) || body.participants.length === 0) return 'At least one participant is required.';
   if (body.participants.length !== body.totalParticipants) {
@@ -235,13 +288,21 @@ Deno.serve(async (req) => {
   // main try/catch below — any future regression that reintroduces a throw
   // here must still degrade to a clean 400, not an unhandled crash with no
   // CORS headers.
-  let trainers: TrainerRef[] | null;
-  try {
-    trainers = normalizeTrainers(body);
-  } catch {
-    trainers = null;
+  // Precedence, not a merge: a client that sends employee ids gets the colleague
+  // path and the legacy fields are ignored entirely. Merging the two would mean one
+  // submission resolving some trainers by id and others by email, with no way to
+  // tell from the request which rule produced which LookupId.
+  const trainerEmployeeIds = normalizeTrainerEmployeeIds(body.trainerEmployeeIds);
+
+  let trainers: TrainerRef[] | null = null;
+  if (!trainerEmployeeIds) {
+    try {
+      trainers = normalizeTrainers(body);
+    } catch {
+      trainers = null;
+    }
   }
-  const invalid = badRequest(body, trainers);
+  const invalid = badRequest(body, Boolean(trainerEmployeeIds) || Boolean(trainers));
   if (invalid) {
     return json(req, { error: invalid }, 400);
   }
@@ -250,52 +311,80 @@ Deno.serve(async (req) => {
     const token = await getAppToken();
     const siteId = await getSiteId(token);
 
-    const { ids: trainerIds, unresolved } = await resolveTrainerLookupIds(
-      token,
-      siteId,
-      trainers as TrainerRef[],
-    );
+    let trainerIds: number[];
 
-    // Anyone the UIL could not resolve gets one attempt at being materialised as a
-    // site user, which is the only way to obtain the LookupId a Person column write
-    // needs. See _shared/sharepoint-rest.ts for why this cannot go through Graph.
-    //
-    // DEGRADES TO THE EXACT PRE-EXISTING BEHAVIOUR. Until the SharePoint application
-    // permission is consented, every attempt returns 'unavailable' and the 400 below
-    // is byte-for-byte the message this function has always returned. Nothing
-    // regresses while waiting, and the feature switches on the day consent lands
-    // with no code change and no frontend redeploy.
-    const stillUnresolved: string[] = [];
-    for (const name of unresolved) {
-      const trainer = (trainers as TrainerRef[]).find((t) => t.displayName === name);
-      if (!trainer) {
-        stillUnresolved.push(name);
-        continue;
-      }
-
-      const ensured = await ensureSiteUser(SP_SITE_HOST, SP_SITE_PATH, trainer.email);
-      if (ensured.status === 'ok') {
-        lookupIdCache.set(trainer.email, ensured.lookupId);
-        trainerIds.push(ensured.lookupId);
-        console.log(`sp-submit-training: ensured "${name}" as site user ${ensured.lookupId}`);
-        continue;
-      }
-
-      stillUnresolved.push(name);
-      // Domain only, never the full address — same rule as the breadcrumb in
-      // resolveTrainerLookupIds.
-      console.error(
-        `sp-submit-training: ensureuser ${ensured.status} for a @${trainer.email.slice(trainer.email.lastIndexOf('@') + 1)} ` +
-          `trainer: ${ensured.reason}`,
+    if (trainerEmployeeIds) {
+      // The colleague path. Every id either yields a LookupId read straight out of
+      // ColleagueAccount, or a refusal naming the person and the reason. No name and
+      // no address is compared at any point.
+      const rows = await fetchColleagueTrainerRows(token, siteId);
+      const resolved = resolveTrainerIdsByEmployeeId(rows, trainerEmployeeIds);
+      console.log(
+        `sp-submit-training: colleague rows=${rows.length}, ` +
+          `trainers resolved=${resolved.ids.length}, refused=${resolved.refusals.length}`,
       );
-    }
 
-    if (stillUnresolved.length > 0) {
-      return json(req, {
-        error: `Trainer(s) not found on the SharePoint site: ${stillUnresolved.join(', ')}. ` +
-          'A trainer must open the Training Record SharePoint site at least once before they ' +
-          'can be recorded. Your draft is saved — ask them to visit the site, then submit again.',
-      }, 400);
+      if (resolved.refusals.length > 0) {
+        // Every refusal at once, not the first: a user who picked three unlinked
+        // trainers should not have to submit three times to learn that.
+        return json(req, {
+          error: `Trainer(s) cannot be recorded: ${resolved.refusals.join('; ')}. ` +
+            'Trainers come from the colleague list and need a linked account set in ' +
+            'ColleagueAccount on their Colleagues_Master row. Your draft is saved.',
+        }, 400);
+      }
+
+      trainerIds = resolved.ids;
+    } else {
+      const { ids, unresolved } = await resolveTrainerLookupIds(
+        token,
+        siteId,
+        trainers as TrainerRef[],
+      );
+
+      // Anyone the UIL could not resolve gets one attempt at being materialised as a
+      // site user, which is the only way to obtain the LookupId a Person column write
+      // needs. See _shared/sharepoint-rest.ts for why this cannot go through Graph.
+      //
+      // DEGRADES TO THE EXACT PRE-EXISTING BEHAVIOUR. Until the SharePoint application
+      // permission is consented, every attempt returns 'unavailable' and the 400 below
+      // is byte-for-byte the message this function has always returned. Nothing
+      // regresses while waiting, and the feature switches on the day consent lands
+      // with no code change and no frontend redeploy.
+      const stillUnresolved: string[] = [];
+      for (const name of unresolved) {
+        const trainer = (trainers as TrainerRef[]).find((t) => t.displayName === name);
+        if (!trainer) {
+          stillUnresolved.push(name);
+          continue;
+        }
+
+        const ensured = await ensureSiteUser(SP_SITE_HOST, SP_SITE_PATH, trainer.email);
+        if (ensured.status === 'ok') {
+          lookupIdCache.set(trainer.email, ensured.lookupId);
+          ids.push(ensured.lookupId);
+          console.log(`sp-submit-training: ensured "${name}" as site user ${ensured.lookupId}`);
+          continue;
+        }
+
+        stillUnresolved.push(name);
+        // Domain only, never the full address — same rule as the breadcrumb in
+        // resolveTrainerLookupIds.
+        console.error(
+          `sp-submit-training: ensureuser ${ensured.status} for a @${trainer.email.slice(trainer.email.lastIndexOf('@') + 1)} ` +
+            `trainer: ${ensured.reason}`,
+        );
+      }
+
+      if (stillUnresolved.length > 0) {
+        return json(req, {
+          error: `Trainer(s) not found on the SharePoint site: ${stillUnresolved.join(', ')}. ` +
+            'A trainer must open the Training Record SharePoint site at least once before they ' +
+            'can be recorded. Your draft is saved — ask them to visit the site, then submit again.',
+        }, 400);
+      }
+
+      trainerIds = ids;
     }
 
     const session = await graphFetch<{ id: string }>(
