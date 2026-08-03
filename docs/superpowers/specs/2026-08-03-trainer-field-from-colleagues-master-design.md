@@ -1,6 +1,22 @@
 # Trainer field sourced from Colleagues_Master
 
-**Date:** 2026-08-03 · **Status:** design, awaiting review · **Supersedes:**
+> **SUPERSEDED by
+> [`2026-08-03-trainer-field-is-the-participant-picker-design.md`](2026-08-03-trainer-field-is-the-participant-picker-design.md).**
+>
+> **What was wrong:** this document makes a populated `ColleagueAccount` the
+> "load-bearing rule" for who can be a trainer. That permanently excludes most staff —
+> 17 of 335 active colleagues are linked, and most of the rest never will be. Having a
+> Microsoft account is not a qualification for delivering training. The trainer field
+> is now plain text on a new `TrainerNames` column, and **any active colleague can be a
+> trainer**.
+>
+> **Kept, and the reason this file is not deleted:** the "Amir Monir" / "Amir Gerges
+> Daoud" finding and the short-UPN finding, which are the evidence that name matching
+> and deriving a login from an address are both unusable in this tenant. Anyone tempted
+> to revive either should read those sections first. Commits `574c1be`, `4ae1a5f` and
+> `c3469f9` implement the withdrawn gate; `c3469f9` is reverted in full.
+
+**Date:** 2026-08-03 · **Status:** SUPERSEDED · **Supersedes:**
 `2026-08-03-trainer-directory-escape-hatch-design.md`
 
 The trainer field becomes the same picker the participant rows use, over the same

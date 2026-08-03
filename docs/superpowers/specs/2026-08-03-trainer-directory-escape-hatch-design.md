@@ -1,5 +1,20 @@
 # Trainer picker: staff list + full-directory escape hatch
 
+> **SUPERSEDED and WITHDRAWN** — see
+> [`2026-08-03-trainer-field-is-the-participant-picker-design.md`](2026-08-03-trainer-field-is-the-participant-picker-design.md).
+>
+> This was built (`904779f`..`aa16231`) and deployed on 2026-08-03, then withdrawn
+> unbuilt-upon. It solved the wrong problem: it gave the picker *reach* into the
+> Microsoft directory, when the actual requirement was that **any colleague** can be a
+> trainer — including the majority who have no account for a directory to contain. The
+> trainer field is now plain text sourced from Colleagues_Master.
+>
+> Its one good idea was kept: explain why a person cannot be recorded *before* the form
+> is filled, never at submit.
+>
+> The code is removed in commit 6 of the superseding spec: `sp-search-directory`,
+> `_shared/directory.ts`, `_shared/sharepoint-rest.ts`, and the picker's directory UI.
+
 Design agreed 2026-08-03. Supersedes the data-source decision in `4b1079b`, whose
 commit message names both reasons the dropdown moved to the User Information List
 (UIL). This addresses both.
