@@ -38,7 +38,7 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 | 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | `63e15a8` | done, NOT deployed |
 | 4 | `test` dedicated trainer fixture colleague | — | `4ee0045` | done |
 | 5 | `refactor` one colleague search rule | — | `9436dc0` | done |
-| 6 | `revert` the escape hatch | delete sp-search-directory | `c357ef2` | done, platform delete OWED |
+| 6 | `revert` the escape hatch | delete sp-search-directory | `c357ef2` | done; platform delete DONE 2026-08-03 |
 | 7 | `feat(hotel-training)` the field itself | **frontend** — operator present | | |
 | 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | |
 
@@ -197,10 +197,23 @@ touching the path that is still live.
 - **Freeze** — the app stops writing it entirely. Explicitly **not** "written when the
   trainer happens to have an account": a session with one account-holder and one
   housekeeper would then show one trainer out of two, which is worse than blank.
-- **Backfill** — five rows, typed by hand in the list, in the format above. No script,
-  no dry-run, no idempotency logic. This is also why `_shared/uil.ts` and
-  `uil-mapper.ts` need not survive commit 8: they were only being kept alive to map
-  LookupIds to display names for a backfill that no longer needs code.
+- **Backfill** — **four rows** (`sharepoint_id` 22, 23, 25, 26), typed by hand in the
+  list, in the format above. No script, no dry-run, no idempotency logic. This is also
+  why `_shared/uil.ts` and `uil-mapper.ts` need not survive commit 8: they were only
+  being kept alive to map LookupIds to display names for a backfill that no longer needs
+  code. Five until "Housekeeping" was deleted; it is now every row on the list.
+
+**Backfill AFTER the frontend deploy and after the first new-path submission, not
+before.** The order looks arbitrary — the four rows are historical and the deploy only
+affects new ones — but it decides what the hand-typing is checked against. There is no
+parser and no test that reads `TrainerNames`, so the *only* verification this format
+ever gets is a human eye comparing one value to another. Backfilling last means the
+comparison is against a machine-written row that exists: type the four to match it,
+byte for byte, and any divergence in separator or whitespace is visible in the list view
+with both kinds of row on screen together. Backfilling first inverts it — the values get
+compared against a sentence in this document, and if the writer and the typist disagree
+about `"; "` the four rows are already wrong and have to be retyped. It also keeps the
+deploy window free of unrelated data entry.
 
 ## Design decisions
 
@@ -265,13 +278,23 @@ where a removed trainer announces nothing. **Clear, never splice** —
 `participants.length` must stay equal to `totalParticipants`. Surfaced as a persistent
 dismissible Alert, not a toast, cleared by `applyStep1`.
 
-## One check before the frontend deploy
+## One check before the frontend deploy — ANSWERED, and it is clear
 
 **Does the PowerApp, a Power Automate flow, or a SharePoint view/formatting rule depend
 on `TrainerName_x002e_` being populated on NEW rows?** If any does, new rows look blank
-there. This is volume-independent and outside this repo, so it must be answered before
+there. This is volume-independent and outside this repo, so it had to be answered before
 commit 7's frontend deploy — the first moment such a row exists. Commit 3 changes
 nothing observable in SharePoint.
+
+**Checked by the operator, 2026-08-03: nothing depends on it.** No Power Automate flow
+reads it, no SharePoint view or filter uses it, and the PowerApp does not surface it on
+any screen. An empty Person column on new rows breaks nothing. **T-C is closed** and
+commit 7 is unblocked.
+
+This is the answer that makes "freeze the column" safe rather than merely tolerable. Had
+any consumer existed, the choice would have been between a half-populated Person column
+(one trainer of two, when only one has an account) and a visibly broken downstream view
+— and both are worse than blank.
 
 For the PowerApp specifically, if it remains a submission path it needs two changes:
 write `TrainerNames` per the format contract above, and source its trainer list from
@@ -294,22 +317,40 @@ entire explanation. **Items 1–19 and 24 are deleted test data.**
 
 | Source | Count |
 |---|---|
-| Monthly_Training items, total | **5** |
-| — `Created By` = "SharePoint App" | 4 — **ours.** `sp-submit-training` authenticates app-only, so its rows are attributed to the app rather than a person (`sharepoint_id` 22, 23, 25, 26) |
-| — `Created By` = operator's account | 1 ("Housekeeping") |
+| Monthly_Training items, total | **4** |
+| — `Created By` = "SharePoint App" | 4 — **all of them, ours.** `sp-submit-training` authenticates app-only, so its rows are attributed to the app rather than a person (`sharepoint_id` 22, 23, 25, 26) |
+| — `Created By` = operator's account | **0** |
 | `training_sessions` rows | 6, one submitter, all `synced`, `training_sync_queue` empty |
 
-"SharePoint App" was never a second writer. **No fleet of PowerApp sessions exists.**
+"SharePoint App" was never a second writer. **No fleet of PowerApp sessions exists,
+and no row on this list was written by any door but ours.**
+
+The count was 5 when first measured. The fifth, "Housekeeping", was created through the
+SharePoint UI by the operator and **deleted on 2026-08-03** once identified as a probe
+rather than a session: it carried 13+ trainers against `Total Participants = 2`, a shape
+no submission path can produce. So the one item not attributable to
+`sp-submit-training` was not a rival writer either — it was us, holding a different tool.
 
 ### The real finding, parked
 
-The two stores leak **in both directions**, at tiny volume:
+The two stores leak in **one** direction, at tiny volume:
 
 - `sharepoint_id` **20 ("aa") and 21 ("rrr")** are in Postgres but no longer in the
-  list — so the report counts sessions that do not exist in SharePoint, and
+  list — so the report counts two sessions that do not exist in SharePoint, and
   `sharepoint_id` is not a reliable key.
-- **"Housekeeping"** is in the list but not in Postgres — so one session is invisible to
-  the report and to Sera.
+- **Every list item is in Postgres.** There is no session that the report and Sera
+  cannot see. This is set arithmetic over the two measured sets — `{22, 23, 25, 26}` in
+  the list against `{20, 21, 22, 23, 25, 26}` in `training_sessions` — not a fresh join,
+  and it holds only while `sharepoint_id` means what it appears to mean. Re-measure both
+  sides before acting on it.
+
+An earlier draft of this section called the leak bidirectional on the strength of
+"Housekeeping" being in the list and not in Postgres. With that row identified as a
+hand-made probe and deleted, the second direction is gone — and the direction that
+remains is the *less* damaging one. The report can over-count; it cannot go blind. That
+asymmetry matters to whoever picks this up: the fix is a reconciliation pass that can
+mark a Postgres row as orphaned, not a SharePoint-side enumeration to discover sessions
+nobody knew about.
 
 **Not investigated here, by decision.** Taken after the trainer field ships.
 
