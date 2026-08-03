@@ -34,12 +34,30 @@ Why nothing else worked, recorded so it is not revisited:
 
 ## EMail vs UPN in this tenant, and what it affects
 
-Confirmed: the account email and the login claim differ.
+Confirmed on all three (Colleagues_Master items 932, 1000, 1004; nothing else in
+the list touched). The account email and the login alias differ, consistently:
 
 | Person | `EMail` | login claim |
 |---|---|---|
 | Ahmed | `ahmed.mokhtar@2seasonshotels.com` | `i:0#.f\|membership\|ahmedm@2seasonshotels.com` |
+| Amir | `Amir.Monir@…` | `…\|amirm@…` |
 | Xarmaigne | `xarmaigne.narciso@…` | `…\|xarmaignen@…` |
+
+The tenant uses a **short UPN for sign-in with a separate SMTP address**:
+`firstname.surname` for mail, `firstname` + surname's first initial for the login.
+
+**The pattern being consistent does not make it usable, and this is worth stating
+plainly because it looks like it should be.** The transform is not injective:
+`ahmed.mokhtar` and `ahmed.mansour` both yield `ahmedm`. Across 335 active
+colleagues, collisions are likely rather than hypothetical, and the failure is a
+claim that resolves to a *different real person* — silent, and worse than an
+error. Deriving a login from an address stays out of the design.
+
+Item 1000 is also the strongest single argument for the whole approach: searching
+`amir.monir@` returned display name **"Amir Monir"** on a Colleagues_Master row
+named **"Amir Gerges Daoud"**, corroborated by job title (Assistant Human
+Resources Manager vs Assistant HR Manager) and department. Name matching would
+never have found him, in either direction.
 
 **Reading `ColleagueAccountLookupId` sidesteps it entirely — correct as expected.**
 The stored value of a Person column *is* the UIL item id. No address is compared,
@@ -62,6 +80,28 @@ What it affects elsewhere:
   withdrawn with the escape hatch; the finding is recorded here because it is the
   second independent reason not to revive it, and because B3 should not assume the
   claim form is derivable if the consent ever lands.
+
+### Address case: already safe, and about to be irrelevant
+
+Amir's address is stored mixed-case (`Amir.Monir@`) while the other two are
+lowercase. Audited every place the resolution path compares an address, and all of
+them lowercase at the boundary:
+
+| Site | What it lowercases |
+|---|---|
+| `sp-submit-training:79` (`extractIdentityKeys`) | every UIL identity value indexed |
+| `sp-submit-training:159` (`normalizeTrainers`) | the client-supplied trainer email |
+| `sp-submit-training:177` | the legacy `trainerNames` → email mapping |
+| `uil-mapper.ts:27` (`extractEmail`) | the address put on each trainer option |
+| `uil-mapper.ts:76` (`dedupeAndSortTrainers`) | the dedupe key |
+| `auth.ts:17,31` | the caller's own email |
+
+So `Amir.Monir@` resolves correctly **today**, and would have even before this
+change. No fix needed.
+
+Under this design it stops mattering: the submit path compares **no addresses at
+all** — an employee id maps to a LookupId, both of them ids. The mixed case
+survives only as a display detail.
 
 ## Design
 
@@ -131,12 +171,22 @@ to the participant lists immediately.
 ### Drafts and backward compatibility
 
 - **Existing SharePoint records are untouched.** The submit path only creates.
-- **Saved drafts** hold `TrainerRef {displayName, email}`. On load, each is mapped
-  to a colleague by matching `email` against `ColleagueAccount`'s address — the one
-  place an email comparison is legitimate, because both sides come from the same
-  account object rather than from independently maintained text. Anything
-  unmappable is **dropped with a visible notice**, never silently. Precedent:
-  `migrateLegacyTrainerDraft` already does this for the pre-`TrainerRef` shape.
+- **Saved drafts** hold `TrainerRef {displayName, email}`. Every legacy trainer
+  selection is **dropped on load, with a visible notice naming who was removed**
+  and asking the user to re-pick.
+
+  *This corrects the first draft of this spec, which said drafts would be mapped by
+  matching the draft's email against `ColleagueAccount`'s address. That mapping is
+  not available: reading a Person column yields a **LookupId**, not an address.
+  Getting an address for it means going back to the UIL — the read this design
+  retires — so the "cheap migration" would have been a reason to keep the retiring
+  dependency alive. A reliable bridge does exist (email → UIL id → colleague, both
+  hops id-based) and it is still not worth it: the cost of dropping is re-picking
+  from a three-item list in a half-filled form, and the cost of keeping it is the
+  machinery this design exists to delete.*
+
+  Precedent for dropping visibly rather than silently: `migrateLegacyTrainerDraft`
+  already handles the pre-`TrainerRef` shape this way.
 - **A draft holding one person as both** trainer and participant is reconciled on
   load — the trainer selection wins, the participant row is cleared, and the user
   is told. It must not be left in a state the form will reject at Next.
