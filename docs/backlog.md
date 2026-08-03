@@ -212,6 +212,51 @@ the send-idempotency contract.
 
 ---
 
+## B7 — nothing would notice TrainerNames drifting from trainer_names
+
+**Logged:** 2026-08-03 · **Raised by:** Ahmed, while agreeing the format contract for
+the new `TrainerNames` column.
+
+**The gap.** Trainers are written to two places: `training_sessions.trainer_names` in
+Postgres, and the `TrainerNames` text column on Monthly_Training. **Nothing in this
+system reads `TrainerNames` back.** So a divergence — the PowerApp joining with a
+comma, a hand-typed backfill row with a double space, a session written to one store
+and not the other — would sit there indefinitely, because no code path compares them.
+The format contract in
+`docs/superpowers/specs/2026-08-03-trainer-field-is-the-participant-picker-design.md`
+is agreed precisely because no test can enforce it.
+
+**Why the monthly report is the right place.** `training-report` already reads every
+session in the period from `training_sessions`, and each row carries `sharepoint_id`.
+So it can fetch those items' `TrainerNames` and compare against `trainer_names` — a set
+comparison per session, no new infrastructure, no new schedule.
+
+**What "done" looks like.**
+
+- A **data-quality note beside the existing sync-mismatch line** in the report, not a
+  separate alarm. The report already reports `mismatchCount` for
+  `sync_status !== 'synced'` and count disagreements; this is the same shape.
+- **Degrades to "comparison skipped" on a Graph hiccup**, never fails the send. The
+  report's job is to go out; a diagnostic that can block it is worse than no
+  diagnostic. `report-aggregator.ts` takes plain rows today, so the comparison belongs
+  outside it or behind an optional argument.
+- Names the specific divergence — which session, which store held what — because
+  "1 mismatch" is not actionable.
+
+**THE CAVEAT THAT MUST NOT BE LOST.** This check **only sees sessions Postgres already
+knows about**, because that is what the report iterates. A session recorded in
+SharePoint and never written to Postgres is invisible to it. So it is *not* coverage of
+the store-to-store leak — the separate finding that `sharepoint_id` 20 and 21 exist in
+Postgres but not the list, while "Housekeeping" exists in the list but not Postgres.
+Whoever picks this up must not mistake one for the other: this catches **content**
+drift on rows both stores hold, and says nothing about rows only one store holds.
+Detecting the latter needs a SharePoint-side enumeration, which is a different task.
+
+**Not built, by decision** — logged rather than implemented so the trainer field ships
+first.
+
+---
+
 ## B6 — a script needing a dashboard JWT should try the password grant first
 
 **Logged:** 2026-08-03 · **Raised by:** Ahmed, after getting the probe's JWT flow

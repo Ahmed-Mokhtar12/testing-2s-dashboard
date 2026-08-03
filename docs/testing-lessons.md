@@ -395,3 +395,45 @@ Three cheap defences, in order of value:
 named properties, so an empty run fails. The ad-hoc harness did not, because it was
 ad hoc. **An ad-hoc verification harness needs the baseline assertion more than a
 committed one does, not less**, precisely because nobody will look at it twice.
+
+---
+
+## 12. A heuristic's misses look exactly like genuine absences
+
+**2026-08-03.** Mapping six recorded trainer names in `training_sessions` onto their
+`ColleagueName` in Colleagues_Master, I wrote a fuzzy SQL join — exact match, or
+first-token plus second-token `LIKE`. It resolved five and returned `NULL` for the
+sixth, `Ayman Arikat`.
+
+I was one sentence from reporting that **a person who has actually delivered training
+has no colleague record** — which would have been a real finding with real
+consequences: it is precisely the case that cannot be recorded once trainers come from
+Colleagues_Master, so it would have gone into the spec as a known regression.
+
+It was wrong. He is `Ayman Khalil Darwish Erikat`. The surname differs by **one
+letter** — Ari­kat / Erikat — so no token-prefix rule could match it, and the correct
+row was sitting in the same 336-row payload the whole time.
+
+**The trap is that a fuzzy matcher's output conflates two different facts.** "No match"
+means either *not present in the data* or *my rule failed to find it*, and nothing in
+the result distinguishes them. The first is a finding; the second is a bug in the
+query. Both render as `NULL`.
+
+What caught it was refusing to treat `NULL` as an answer and running a **second probe
+with a different failure mode** — `ilike '%ayman%'` and `ilike '%arikat%'` over the
+whole payload, which found him on the first pattern immediately. One substring search
+per direction, ten seconds.
+
+**The rule.** When a heuristic match reports "not found", that is a **hypothesis**, not
+a result. Before writing it down as a fact, probe again with a rule that fails
+differently — a substring where the first was token-based, a different field, a wider
+net. If the second probe agrees, the absence is real.
+
+**And the corollary this repo already depends on.** This is the concrete reason the
+trainer field keys on `employeeId` rather than names, and why the mapping of those six
+rows was confirmed by eye rather than computed. The same class of near-miss appears
+twice more in the same tenant: `Amir Monir` is `Amir Gerges Daoud`, and the sign-in
+alias transform (`ahmed.mokhtar` → `ahmedm`) is consistent but not injective, so
+`ahmed.mansour` collides onto the same value. A name matcher here does not merely fail
+— it succeeds against the wrong person. See
+`docs/superpowers/specs/2026-08-03-trainer-field-is-the-participant-picker-design.md`.
