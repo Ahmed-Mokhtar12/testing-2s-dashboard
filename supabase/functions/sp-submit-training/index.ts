@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS } from '../_shared/graph.ts';
+import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_IDS, SP_SITE_HOST, SP_SITE_PATH } from '../_shared/graph.ts';
 import { corsHeaders, json } from '../_shared/http.ts';
+import { ensureSiteUser } from '../_shared/sharepoint-rest.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { writeParticipantsInBatches, type BatchResponse } from './participant-batch.ts';
 
@@ -254,9 +255,44 @@ Deno.serve(async (req) => {
       siteId,
       trainers as TrainerRef[],
     );
-    if (unresolved.length > 0) {
+
+    // Anyone the UIL could not resolve gets one attempt at being materialised as a
+    // site user, which is the only way to obtain the LookupId a Person column write
+    // needs. See _shared/sharepoint-rest.ts for why this cannot go through Graph.
+    //
+    // DEGRADES TO THE EXACT PRE-EXISTING BEHAVIOUR. Until the SharePoint application
+    // permission is consented, every attempt returns 'unavailable' and the 400 below
+    // is byte-for-byte the message this function has always returned. Nothing
+    // regresses while waiting, and the feature switches on the day consent lands
+    // with no code change and no frontend redeploy.
+    const stillUnresolved: string[] = [];
+    for (const name of unresolved) {
+      const trainer = (trainers as TrainerRef[]).find((t) => t.displayName === name);
+      if (!trainer) {
+        stillUnresolved.push(name);
+        continue;
+      }
+
+      const ensured = await ensureSiteUser(SP_SITE_HOST, SP_SITE_PATH, trainer.email);
+      if (ensured.status === 'ok') {
+        lookupIdCache.set(trainer.email, ensured.lookupId);
+        trainerIds.push(ensured.lookupId);
+        console.log(`sp-submit-training: ensured "${name}" as site user ${ensured.lookupId}`);
+        continue;
+      }
+
+      stillUnresolved.push(name);
+      // Domain only, never the full address — same rule as the breadcrumb in
+      // resolveTrainerLookupIds.
+      console.error(
+        `sp-submit-training: ensureuser ${ensured.status} for a @${trainer.email.slice(trainer.email.lastIndexOf('@') + 1)} ` +
+          `trainer: ${ensured.reason}`,
+      );
+    }
+
+    if (stillUnresolved.length > 0) {
       return json(req, {
-        error: `Trainer(s) not found on the SharePoint site: ${unresolved.join(', ')}. ` +
+        error: `Trainer(s) not found on the SharePoint site: ${stillUnresolved.join(', ')}. ` +
           'A trainer must open the Training Record SharePoint site at least once before they ' +
           'can be recorded. Your draft is saved — ask them to visit the site, then submit again.',
       }, 400);
