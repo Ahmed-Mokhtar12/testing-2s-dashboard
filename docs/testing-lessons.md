@@ -357,3 +357,41 @@ path is a deploy in disguise.
 Here it was three things — bundling, minification, and static file serving — and
 the suite's coverage of all three was zero while reading as comprehensive. A
 green suite bounds the failures it can observe, not the failures that exist.
+
+---
+
+## 11. A harness that runs nothing reports the same silence as a harness that passes
+
+**2026-08-03.** A mutation harness for `_shared/colleague-trainers.ts` ran four
+mutations and reported all four "caught". It had caught nothing. The command was:
+
+```
+node --test "$F.test.ts"       # F=supabase/functions/_shared/colleague-trainers.ts
+```
+
+which resolves to `colleague-trainers.ts.test.ts` — a file that does not exist.
+`node --test` exited non-zero with no test output, the `grep -E "^ℹ (pass|fail)"`
+matched nothing, and the harness printed an empty result for each mutation.
+
+**What made it survivable.** The output was *empty*, not green. Emptiness was read
+as a result in its own right and chased. Had the harness compared against an
+expected count, or reported "no failures found", every mutation would have been
+recorded as caught and the commit message would have said so.
+
+**Why this belongs here rather than in a commit message.** It is the same shape as
+§4 and §10: a check that cannot observe the thing it claims to check. The failure
+mode is not "the test is wrong" but "the test was never run", and the two look
+identical from the outside — both produce no failures.
+
+Three cheap defences, in order of value:
+
+1. **Run the harness unmutated first and assert the baseline.** A pass count that
+   is zero, or absent, is a broken harness — not a clean run. This is the one that
+   would have caught it immediately, and it is one extra line.
+2. **Assert the file exists before starting.** `test -f "$T" || exit 1`.
+3. **Never derive a test path from a source path by concatenation.** Name it.
+
+`scripts/rehearse-deploy-frontend.sh` already does (1) — its clean run asserts nine
+named properties, so an empty run fails. The ad-hoc harness did not, because it was
+ad hoc. **An ad-hoc verification harness needs the baseline assertion more than a
+committed one does, not less**, precisely because nobody will look at it twice.

@@ -212,6 +212,38 @@ the send-idempotency contract.
 
 ---
 
+## B6 — a script needing a dashboard JWT should try the password grant first
+
+**Logged:** 2026-08-03 · **Raised by:** Ahmed, after getting the probe's JWT flow
+wrong twice — pasted into the browser console once, and into the shell prompt
+instead of into `read` once.
+
+`scripts/probe-colleague-columns.sh` asked for a JWT the hard way: open DevTools,
+read `localStorage`, copy the token, then `read -rs PROBE_JWT; export PROBE_JWT`.
+The security reasoning is sound and is not in question — a token pasted as
+`PROBE_JWT=<token> bash ...` lands in world-readable `/proc/<pid>/cmdline`, and
+`read -rs` keeps it out of both argv and the shell history.
+
+**The mistake was choosing generality nobody asked for.** The browser route works
+for every account including the three Azure-only ones (`info@`, `teleopr@`,
+`2srewards@`, which have no password at all). But the operator running these
+scripts has a Supabase password, so the password grant that
+`scripts/send-training-report-test.sh` already implements would have worked — and
+that script *also* falls back to the browser instructions when the grant fails. The
+probe reimplemented only the fallback.
+
+**What "done" looks like.** Any future script needing a user JWT tries the password
+grant first and falls back to the browser instructions, matching
+`send-training-report-test.sh`. The obvious form is a shared
+`scripts/lib/get-admin-jwt.sh` sourced by all of them.
+
+**Deliberately NOT extracted now**, at Ahmed's decision: converting the three
+existing admin-gated scripts is a bigger change than it sounds, and it touches the
+paths that send real email. This entry exists so the next script written does not
+repeat the choice.
+
+---
+
 ## B2 — nothing type-checks supabase/functions (QUEUED TASK, not just a note)
 
 **Logged:** 2026-08-01 · **Found while** verifying the weekly-cadence change
