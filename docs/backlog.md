@@ -142,6 +142,18 @@ that are load-bearing, and a manual script that diffs the live config against it
 - signup disabled
 - email provider enabled (the password fallback depends on it, and it is the only
   fallback the three azure-only mailboxes do *not* have)
+- **Azure app registration permissions**, added 2026-08-03. The Graph app holds
+  Graph application permissions only. `sp-read-trainers` now reads the tenant
+  directory (`User.Read.All` or equivalent — proven to work, since an earlier version
+  of that function listed `/users` in production), and `sp-submit-training` needs a
+  **SharePoint** application permission it does not have: `Sites.Manage.All`, or
+  `Sites.FullControl.All` if Manage proves insufficient, with tenant admin consent.
+  Without it `_api/web/ensureuser` is unreachable and a trainer who has never opened
+  the site cannot be recorded. Both are dashboard settings with the same shape as the
+  Tenant URL: load-bearing, invisible to every gate, and discoverable only when
+  somebody tries. The expectation to commit is the permission list itself, and the
+  check is one client-credentials request per audience — `graph.microsoft.com` and
+  `2seasonshotels.sharepoint.com` — asserting a token comes back for each.
 
 Read the live values from `GET /v1/projects/{ref}/config/auth` with a management
 token, print a diff, exit non-zero on any drift. Same operator-run shape as

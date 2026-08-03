@@ -58,9 +58,9 @@ SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh <fn>|--all
 ```
 
 `deploy-sp-function.sh` covers `sp-read-colleagues`, `sp-read-columns`,
-`sp-read-trainers` and `sp-manage-colleague` — one script, because these four are
-identical to deploy and four copies would drift. It refuses a name outside that
-list rather than creating a new function on the platform.
+`sp-read-trainers`, `sp-manage-colleague` and `sp-search-directory` — one script,
+because these are identical to deploy and five copies would drift. It refuses a name
+outside that list rather than creating a new function on the platform.
 
 The token stays in the operator's own shell. The MCP `deploy_edge_function` tool
 requires every file's contents inline, which for a multi-file function means
@@ -132,6 +132,18 @@ instant — they diverge in the 20:00–23:59 UTC window. `report-schedule.ts` u
 - Signup is disabled, and that is deliberate. It does **not** block linking a new
   provider to an existing user: same-email automatic linking does not create a
   user, so it never consults `disable_signup`.
+- The Graph app registration holds **Graph** application permissions only. Writing a
+  Person column for someone who has never opened the Training Record site needs
+  SharePoint's `_api/web/ensureuser`, and `_api` rejects Graph tokens — it needs a
+  token whose audience is `https://2seasonshotels.sharepoint.com`, which requires a
+  **SharePoint** application permission (`Sites.Manage.All`, escalating to
+  `Sites.FullControl.All` only if Manage proves insufficient) plus tenant admin
+  consent. **Not granted as of 2026-08-03.** Until it is,
+  `_shared/sharepoint-rest.ts` reports `unavailable` and `sp-submit-training` returns
+  the same 400 it always has; nothing regresses and nothing needs redeploying when
+  consent lands. Probe whether it is in place with one token request for
+  `https://2seasonshotels.sharepoint.com/.default` — a token at all means some
+  SharePoint permission exists.
 - None of this is in version control. See `docs/backlog.md` B3.
 
 ## Commits

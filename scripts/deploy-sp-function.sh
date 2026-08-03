@@ -36,7 +36,7 @@ REPO=/home/digitlab-testing-2s-dashboard/htdocs/testing-2s-dashboard.digitlab.ai
 PROJECT=yczcebfaqerlwfalrbjn
 REF="${DEPLOY_REF:-HEAD}"
 
-ALL_FUNCTIONS=(sp-read-colleagues sp-read-columns sp-read-trainers sp-manage-colleague)
+ALL_FUNCTIONS=(sp-read-colleagues sp-read-columns sp-read-trainers sp-manage-colleague sp-search-directory)
 
 usage() {
   echo "Usage: SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh <function|--all>" >&2
@@ -75,9 +75,25 @@ fi
 # into json.load prints a traceback and buries the actual cause ("your token is
 # wrong") underneath it.
 api() {
-  local body
-  body=$(curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  # HTTP status is captured separately from the body, because 404 and 401 must be
+  # told apart. A NEW function has no version yet — that is not an error, it is
+  # version 0 — whereas a bad token must still be fatal. `curl -sf` collapses both
+  # into "failed", which made this script unable to create a function at all: the
+  # first sp-search-directory deploy died on its own pre-flight check.
+  local response status body
+  response=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
     "https://api.supabase.com/v1/projects/$PROJECT/functions/$1") || return 1
+  status=$(printf '%s' "$response" | tail -n1)
+  body=$(printf '%s' "$response" | sed '$d')
+
+  if [ "$status" = "404" ]; then
+    echo "0"
+    return 0
+  fi
+  if [ "$status" != "200" ]; then
+    return 1
+  fi
+
   printf '%s' "$body" | python3 -c 'import json,sys
 try:
     print(json.load(sys.stdin)["version"])
@@ -179,3 +195,9 @@ echo "     the page is reading Postgres instead."
 echo "  4. Add a member in Manage Members, then re-run the query above. The"
 echo "     'colleagues' row must be GONE — sp-manage-colleague invalidates it so"
 echo "     the new member is not hidden behind a stale mirror."
+echo "  5. Open the trainer picker, type three letters of someone NOT in the list,"
+echo "     and click 'Search the full Microsoft directory'. Results prove"
+echo "     sp-search-directory works and that Graph accepted the search with"
+echo "     ConsistencyLevel: eventual. Anyone marked 'not on the site yet' is"
+echo "     CORRECT and expected until the SharePoint consent lands — recording them"
+echo "     needs sp-submit-training redeployed, which is deliberately not in this set."
