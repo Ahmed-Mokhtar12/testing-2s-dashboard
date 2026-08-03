@@ -8,6 +8,11 @@ import {
   resolveTrainerIdsByEmployeeId,
   type ColleagueTrainerRow,
 } from '../_shared/colleague-trainers.ts';
+import {
+  formatTrainerNames,
+  normalizeTrainerNames,
+  trainerNamesTooLong,
+} from '../_shared/trainer-names.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { writeParticipantsInBatches, type BatchResponse } from './participant-batch.ts';
 
@@ -31,11 +36,12 @@ interface SubmitBody {
   location: string | number | null;
   remarks: string | number | null;
   trainingDate: string;
-  // The current shape: employee ids from Colleagues_Master, resolved to LookupIds
-  // HERE rather than sent by the client. A client-supplied LookupId is unvalidated
-  // input going straight into a Person column — it would let any authenticated
-  // caller file a training against an arbitrary site user — and a draft saved days
-  // ago would carry an id that may since have changed.
+  // The current shape: colleague names as plain text, written to the TrainerNames
+  // column. Any active colleague can be a trainer and most have no Microsoft account,
+  // so there is nothing to resolve — see _shared/trainer-names.ts.
+  trainerColleagueNames?: unknown;
+  // deprecated: the ColleagueAccount/LookupId attempt. Withdrawn because it made a
+  // Microsoft account a qualification for training.
   trainerEmployeeIds?: Array<string | number>;
   // deprecated: clients not yet redeployed. Resolves by email against the UIL.
   trainers?: TrainerRef[];
@@ -292,28 +298,54 @@ Deno.serve(async (req) => {
   // path and the legacy fields are ignored entirely. Merging the two would mean one
   // submission resolving some trainers by id and others by email, with no way to
   // tell from the request which rule produced which LookupId.
-  const trainerEmployeeIds = normalizeTrainerEmployeeIds(body.trainerEmployeeIds);
+  const trainerColleagueNames = normalizeTrainerNames(body.trainerColleagueNames);
+  const trainerEmployeeIds = trainerColleagueNames
+    ? null
+    : normalizeTrainerEmployeeIds(body.trainerEmployeeIds);
 
   let trainers: TrainerRef[] | null = null;
-  if (!trainerEmployeeIds) {
+  if (!trainerColleagueNames && !trainerEmployeeIds) {
     try {
       trainers = normalizeTrainers(body);
     } catch {
       trainers = null;
     }
   }
-  const invalid = badRequest(body, Boolean(trainerEmployeeIds) || Boolean(trainers));
+  const invalid = badRequest(
+    body,
+    Boolean(trainerColleagueNames) || Boolean(trainerEmployeeIds) || Boolean(trainers),
+  );
   if (invalid) {
     return json(req, { error: invalid }, 400);
+  }
+
+  // Checked here rather than inside normalizeTrainerNames: "too long to store" must
+  // produce a 400 naming the limit, not a fall-through to the legacy path and a
+  // misleading "no valid trainer".
+  if (trainerColleagueNames) {
+    const tooLong = trainerNamesTooLong(trainerColleagueNames);
+    if (tooLong) return json(req, { error: tooLong }, 400);
   }
 
   try {
     const token = await getAppToken();
     const siteId = await getSiteId(token);
 
-    let trainerIds: number[];
+    // The fields this submission contributes to the Monthly_Training item. Three
+    // mutually exclusive shapes, in precedence order — never merged, so a reader of a
+    // request can always tell which rule produced the stored value.
+    let trainerFields: Record<string, unknown>;
 
-    if (trainerEmployeeIds) {
+    if (trainerColleagueNames) {
+      // The current path: plain text, no Graph read, nothing to resolve. Deliberately
+      // writes NOTHING to TrainerName_x002e_ — that column is frozen. Writing it "when
+      // the trainer happens to have an account" would show one trainer of two on a
+      // session with one account-holder and one colleague without, which is worse than
+      // leaving it blank.
+      const value = formatTrainerNames(trainerColleagueNames);
+      console.log(`sp-submit-training: TrainerNames=${trainerColleagueNames.length} name(s), ${value.length} chars`);
+      trainerFields = { TrainerNames: value };
+    } else if (trainerEmployeeIds) {
       // The colleague path. Every id either yields a LookupId read straight out of
       // ColleagueAccount, or a refusal naming the person and the reason. No name and
       // no address is compared at any point.
@@ -334,7 +366,10 @@ Deno.serve(async (req) => {
         }, 400);
       }
 
-      trainerIds = resolved.ids;
+      trainerFields = {
+        'TrainerName_x002e_LookupId@odata.type': 'Collection(Edm.Int32)',
+        TrainerName_x002e_LookupId: resolved.ids,
+      };
     } else {
       const { ids, unresolved } = await resolveTrainerLookupIds(
         token,
@@ -384,7 +419,10 @@ Deno.serve(async (req) => {
         }, 400);
       }
 
-      trainerIds = ids;
+      trainerFields = {
+        'TrainerName_x002e_LookupId@odata.type': 'Collection(Edm.Int32)',
+        TrainerName_x002e_LookupId: ids,
+      };
     }
 
     const session = await graphFetch<{ id: string }>(
@@ -401,8 +439,7 @@ Deno.serve(async (req) => {
             field_6: body.totalParticipants,
             field_7: body.remarks ?? null,
             field_8: body.trainingDate,
-            'TrainerName_x002e_LookupId@odata.type': 'Collection(Edm.Int32)',
-            TrainerName_x002e_LookupId: trainerIds,
+            ...trainerFields,
           },
         }),
       },
