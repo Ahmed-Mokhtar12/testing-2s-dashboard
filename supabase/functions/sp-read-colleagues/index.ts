@@ -3,6 +3,7 @@ import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_ID
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { writeMirror } from '../_shared/mirror.ts';
+import { parseAccountLookupId } from '../_shared/colleague-trainers.ts';
 
 interface Colleague {
   id: string;
@@ -12,6 +13,12 @@ interface Colleague {
   section: string;
   department: string;
   isActive: boolean;
+  // Whether ColleagueAccount is set — i.e. whether this colleague can be recorded
+  // as a trainer. A BOOLEAN, deliberately, not the LookupId: the id stays on the
+  // server so a client can never send one, and sp-submit-training re-reads it from
+  // the colleague's row at submit time. See
+  // docs/superpowers/specs/2026-08-03-trainer-field-from-colleagues-master-design.md.
+  hasAccount: boolean;
 }
 
 // SharePoint Yes/No columns normally return a JSON boolean, but be defensive:
@@ -26,19 +33,48 @@ function parseActive(raw: unknown): boolean {
   return false;
 }
 
+// The narrow field list keeps this read small — it runs on page load, and the list
+// carries 31 columns of which 7 are wanted.
+const FIELD_SELECT =
+  'EmployeeID,ColleagueName,Position,Section,Department,IsActive,ColleagueAccountLookupId';
+
+interface GraphItemsPage {
+  value: Array<{ id: string; fields: Record<string, unknown> }>;
+  '@odata.nextLink'?: string;
+}
+
 async function fetchColleagues(token: string): Promise<Colleague[]> {
   const siteId = await getSiteId(token);
   const results: Colleague[] = [];
 
-  let url: string | null =
-    `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items` +
-    '?$top=500&$expand=fields($select=EmployeeID,ColleagueName,Position,Section,Department,IsActive)';
+  const base = `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items?$top=500`;
+  const narrowUrl = `${base}&$expand=fields($select=${FIELD_SELECT})`;
+
+  // A $select naming a field that does not exist ERRORS rather than returning null,
+  // and this read gates the whole page. ColleagueAccountLookupId was confirmed by
+  // probe on 2026-08-03, but a later rename would take the page down for everyone —
+  // so the FIRST request, and only the first, falls back to the full field set. Then
+  // hasAccount reads false everywhere and the trainer picker explains itself: a bad
+  // day rather than a broken page. Scoped to the first request because that is where
+  // a naming error surfaces; a later page failing is a real error and must propagate.
+  let url: string | null = narrowUrl;
+  let pagesRead = 0;
 
   while (url) {
-    const data = await graphFetch<{
-      value: Array<{ id: string; fields: Record<string, unknown> }>;
-      '@odata.nextLink'?: string;
-    }>(token, url);
+    let data: GraphItemsPage;
+    try {
+      data = await graphFetch<GraphItemsPage>(token, url);
+    } catch (err) {
+      if (pagesRead > 0 || url !== narrowUrl) throw err;
+      console.error(
+        'sp-read-colleagues: the narrow $select was rejected, retrying with the full ' +
+          'field set. ColleagueAccountLookupId may have been renamed: ' +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      url = `${base}&$expand=fields`;
+      continue;
+    }
+    pagesRead += 1;
 
     for (const item of data.value) {
       const f = item.fields;
@@ -56,6 +92,9 @@ async function fetchColleagues(token: string): Promise<Colleague[]> {
         section: String(f.Section ?? ''),
         department,
         isActive: parseActive(f.IsActive),
+        // Reuses the submit path's parser, so "linked" cannot mean one thing to the
+        // picker and another to the write that has to honour it.
+        hasAccount: parseAccountLookupId(f.ColleagueAccountLookupId) !== null,
       });
     }
 
