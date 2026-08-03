@@ -136,36 +136,16 @@ export const MOCK_COLUMNS_FLAT = {
   remarksTypeAsString: 'Text',
 };
 
-// The sp-read-trainers Edge Function returns the whole enabled directory as
-// TrainerRef objects, sorted by displayName. Directory entries carry full
-// display names (unlike the short-name fallback constants), and include a
-// person who exists only in the directory.
-export const MOCK_TRAINERS_FLAT = [
-  { displayName: 'Ahmed Mokhtar Elsayed Elaktaa', email: 'ahmed.mokhtar@2seasonshotels.com' },
-  { displayName: 'Amir Monir Aziz', email: 'amir.monir@2seasonshotels.com' },
-  { displayName: 'Sara Directory-Only', email: 'sara.new@2seasonshotels.com' },
-];
-
-export async function mockTrainersFunction(
-  page: Page,
-  // `entries` overrides the list entirely. Needed for the layout case: the escape
-  // hatch used to render below the matching staff inside a 300px scroll box, so
-  // proving it stays reachable needs more staff than that box can hold.
-  opts: { failure?: boolean; entries?: Array<{ displayName: string; email: string }> } = {},
-) {
-  await page.route(
-    `https://${PROJECT_REF}.supabase.co/functions/v1/sp-read-trainers`,
-    async (route) => {
-      if (route.request().method() === 'OPTIONS') {
-        return route.fulfill({ status: 200, body: 'ok' });
-      }
-      if (opts.failure) {
-        return route.fulfill({ status: 500, json: { error: 'Graph request failed.' } });
-      }
-      return route.fulfill({ json: opts.entries ?? MOCK_TRAINERS_FLAT });
-    },
-  );
-}
+// MOCK_TRAINERS_FLAT and mockTrainersFunction are gone. They served sp-read-trainers,
+// the SharePoint User Information List behind the old trainer dropdown; the picker now
+// reads the colleagues payload, so nothing in the app calls that function and a route
+// for it would only make an accidental call invisible.
+//
+// Removed here rather than with sp-read-trainers itself in commit 8, because commit 7 is
+// what orphans them and an unused fixture invites someone to wire it back up. The
+// FUNCTION is still deployed — deleting a mock is not undeploying anything.
+//
+// The trainer every test picks is TRAINER_COLLEAGUE at the top of this file.
 
 export async function mockColumnsFunction(page: Page) {
   await page.route(
@@ -282,7 +262,10 @@ export async function mockSupabaseRest(
     // that is absent here answers with [], which supabase-js maybeSingle turns
     // into data: null — so by default every test keeps exercising the edge-function
     // path exactly as it did before the mirror existed.
-    mirror?: Partial<Record<'colleagues' | 'trainers' | 'columns', unknown[]>>;
+    //
+    // 'trainers' is gone from the union: the frontend no longer reads that key, so a
+    // test that seeded it would be describing a payload nothing consumes.
+    mirror?: Partial<Record<'colleagues' | 'columns', unknown[]>>;
   } = {},
 ) {
   await page.route(`https://${PROJECT_REF}.supabase.co/rest/v1/**`, async (route) => {

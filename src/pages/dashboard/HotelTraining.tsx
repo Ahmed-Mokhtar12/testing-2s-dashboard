@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Check, Circle, CircleDot } from 'lucide-react';
@@ -14,15 +14,14 @@ import { AdminPanel } from '@/components/hotel-training/AdminPanel';
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
 import { useListColumns } from '@/hooks/useListColumns';
-import { useTrainers } from '@/hooks/useTrainers';
 import { useTrainingSubmit } from '@/hooks/useTrainingSubmit';
-import { ADMIN_EMAILS, DRAFT_KEY, FALLBACK_TRAINERS } from '@/lib/hotel-training-constants';
+import { reconcileDraft } from '@/lib/hotel-training-draft';
+import { ADMIN_EMAILS, DRAFT_KEY } from '@/lib/hotel-training-constants';
 import type {
   Colleague,
   HotelTrainingDraft,
   ParticipantRow,
   SuccessState,
-  TrainerRef,
   TrainingDetailsValues,
   WizardStep,
 } from '@/types/hotel-training';
@@ -39,35 +38,6 @@ function makeEmptyRows(count: number): ParticipantRow[] {
   return Array.from({ length: count }, (_, index) => ({ rowNo: index + 1, colleague: null }));
 }
 
-// Drafts saved before the TrainerRef migration stored plain name strings
-// under the retired trainer field. Detect that field structurally (a
-// trainer-prefixed key holding a string array — the identifier itself is
-// retired, and a repo-wide grep for it proves no live code path remains),
-// map the names through FALLBACK_TRAINERS (the only names ever selectable),
-// drop unmatched names, and delete the legacy key.
-function migrateLegacyTrainerDraft(
-  details: Partial<TrainingDetailsValues> & Record<string, unknown>,
-): Partial<TrainingDetailsValues> {
-  if (Array.isArray(details.trainers)) return details;
-
-  const legacyKey = Object.keys(details).find(
-    (key) =>
-      key !== 'trainers' &&
-      key.startsWith('trainer') &&
-      Array.isArray(details[key]) &&
-      (details[key] as unknown[]).every((entry) => typeof entry === 'string'),
-  );
-  if (!legacyKey) return details;
-
-  const legacyNames = details[legacyKey] as string[];
-  delete details[legacyKey];
-  details.trainers = legacyNames
-    .map((name) => FALLBACK_TRAINERS.find((trainer) => trainer.displayName === name))
-    .filter((trainer): trainer is TrainerRef => trainer !== undefined);
-  return details;
-}
-
-
 export default function HotelTraining() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -79,17 +49,24 @@ export default function HotelTraining() {
     isError: colleaguesFailed,
     error: colleaguesError,
   } = useColleagues();
-  // No isLoading destructured for these two: both supply placeholderData, so
-  // there is no state in which the page needs to know they are in flight.
+  // No isLoading destructured: useListColumns supplies placeholderData, so there is no
+  // state in which the page needs to know it is in flight. useColleagues cannot — a
+  // placeholder colleague list is a list of people who do not exist — and now that the
+  // trainer field reads it, step 1 genuinely waits on it. See "Known regression,
+  // accepted" in the spec.
   const { data: columns } = useListColumns();
-  const { data: trainers = [] } = useTrainers();
   const { mutate: submitTraining, isPending } = useTrainingSubmit();
+
+  // One status rather than two booleans, because the trainer picker has to SAY which of
+  // the three it is: an empty option list used to be impossible there.
+  const colleaguesStatus = colleaguesFailed ? 'error' : colleaguesLoading ? 'loading' : 'ready';
 
   const [step, setStep] = useState<WizardStep>(1);
   const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValues | null>(null);
   const [draftTrainingDetails, setDraftTrainingDetails] = useState<Partial<TrainingDetailsValues> | null>(null);
   const [restoredDraftDetails, setRestoredDraftDetails] = useState<Partial<TrainingDetailsValues> | null>(null);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [draftNotices, setDraftNotices] = useState<string[]>([]);
   const [successState, setSuccessState] = useState<SuccessState>(null);
   const [draftDate, setDraftDate] = useState<string | null>(null);
   const [detailsFormVersion, setDetailsFormVersion] = useState(0);
@@ -152,17 +129,21 @@ export default function HotelTraining() {
       const raw = localStorage.getItem(draftKeyStr);
       if (!raw) return;
 
-      const draft = JSON.parse(raw) as HotelTrainingDraft;
-      const restoredDetails = draft.trainingDetails
-        ? migrateLegacyTrainerDraft({
-            ...draft.trainingDetails,
-            date: draft.trainingDetails.date ? new Date(draft.trainingDetails.date) : undefined,
-          })
+      // reconcileDraft validates the trainers and the participant rows against each
+      // other and reports what it changed; date revival stays here, so that function
+      // can be pure and take no clock.
+      const reconciled = reconcileDraft(JSON.parse(raw));
+      const restoredDetails = reconciled.details
+        ? {
+            ...reconciled.details,
+            date: reconciled.details.date ? new Date(reconciled.details.date) : undefined,
+          }
         : null;
 
       setRestoredDraftDetails(restoredDetails);
       setDraftTrainingDetails(restoredDetails);
-      setParticipants(draft.participants ?? []);
+      setParticipants(reconciled.participants);
+      setDraftNotices(reconciled.notices);
       setStep(1);
       setDraftDate(null);
     } catch {
@@ -180,6 +161,27 @@ export default function HotelTraining() {
     setDraftDate(null);
   }, [draftKeyStr]);
 
+  // MUTUAL EXCLUSION, derived on both sides rather than stored.
+  //
+  // The trainer side reads `participants`. The participant side reads
+  // trainingDetails.trainers — the COMMITTED value, deliberately never
+  // draftTrainingDetails: that mirror is per-keystroke and explicitly reversible (the
+  // reduce-confirm Cancel path throws it away), so a half-typed trainer edit that the
+  // user then abandons must not have emptied a filled participant row on the way.
+  //
+  // Keyed on employeeId throughout. Names are not unique in Colleagues_Master — a
+  // re-hired colleague holds two rows — and matching people by name is the unreliable
+  // join this whole change exists to refute.
+  const committedTrainers = trainingDetails?.trainers ?? [];
+  const participantEmployeeIds = useMemo(
+    () => new Set(
+      participants
+        .filter((row) => row.colleague)
+        .map((row) => row.colleague!.employeeId),
+    ),
+    [participants],
+  );
+
   const handleParticipantChange = (index: number, colleague: Colleague | null) => {
     setParticipants((previous) => {
       const next = [...previous];
@@ -192,6 +194,9 @@ export default function HotelTraining() {
     setTrainingDetails(values);
     setDraftTrainingDetails(values);
     setRestoredDraftDetails(null);
+    // Leaving step 1 with the details accepted is what makes the reconciliation notices
+    // stale: whatever they asked for has either been done or deliberately not.
+    setDraftNotices([]);
 
     if (newCount > previousCount) {
       setParticipants((previous) => [
@@ -304,6 +309,7 @@ export default function HotelTraining() {
               setRestoredDraftDetails(null);
               setDetailsFormVersion((version) => version + 1);
               setParticipants([]);
+              setDraftNotices([]);
             }}
           >
             Register New Training
@@ -331,7 +337,19 @@ export default function HotelTraining() {
   // filling in step 1.
 
   const registerTrainingContent = (
-    <div className="mx-auto w-full max-w-2xl space-y-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+    // pb-24 on small screens: the Sera chat button is `fixed bottom-6 right-6` and
+    // 3.5rem tall (RightChatPanel.tsx), so it occupies the bottom 5rem of the viewport
+    // at every scroll position. Below lg the document itself scrolls, so the LAST
+    // control of whichever step is on screen — "Next: Review", "Confirm & Submit" —
+    // ends up underneath it once the content is tall enough to scroll at all, and is
+    // simply not clickable.
+    //
+    // FOUND BY A TEST FAILING FOR THE RIGHT REASON, and it predates this change: three
+    // participant rows used to fit, four would not have. Naming the trainers in the
+    // step 2 intro added two lines and moved the threshold to three, which is what
+    // surfaced it. lg keeps pb-0 — there the wizard is its own scroll container inside
+    // a locked shell, and the 100-row layout test pins that behaviour.
+    <div className="mx-auto w-full max-w-2xl space-y-6 pb-24 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pb-0 lg:pr-1">
       {draftDate && (
         <Alert>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
@@ -344,6 +362,26 @@ export default function HotelTraining() {
                 Discard
               </Button>
             </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* A persistent, dismissible Alert rather than a toast. A toast that says "your
+          saved trainer was dropped, pick again" is gone in four seconds, and the person
+          it is addressed to is by definition restoring work they left — they may not be
+          looking. Dismissal is theirs; applyStep1 also clears these once step 1 is
+          accepted. */}
+      {draftNotices.length > 0 && (
+        <Alert>
+          <AlertDescription className="flex flex-wrap items-start justify-between gap-2">
+            <span className="flex-1 space-y-1">
+              {draftNotices.map((notice) => (
+                <span key={notice} className="block">{notice}</span>
+              ))}
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={() => setDraftNotices([])}>
+              Dismiss
+            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -409,7 +447,9 @@ export default function HotelTraining() {
           key={detailsFormVersion}
           defaultValues={trainingDetails ?? restoredDraftDetails}
           departments={columns?.departments ?? []}
-          trainerOptions={trainers}
+          allColleagues={colleagues}
+          colleaguesStatus={colleaguesStatus}
+          unavailableEmployeeIds={participantEmployeeIds}
           locationTypeAsString={columns?.locationTypeAsString ?? 'Text'}
           remarksTypeAsString={columns?.remarksTypeAsString ?? 'Text'}
           onDraftChange={setDraftTrainingDetails}
@@ -433,6 +473,7 @@ export default function HotelTraining() {
             <ParticipantsStep
               participants={participants}
               allColleagues={colleagues}
+              trainers={committedTrainers}
               onBack={() => setStep(1)}
               onNext={() => setStep(3)}
               onChange={handleParticipantChange}

@@ -7,7 +7,12 @@
 // was fetched and nothing else, so changing a TTL is a frontend deploy rather than
 // a migration.
 
-export type MirrorKey = 'colleagues' | 'trainers' | 'columns';
+// 'trainers' was a third key, serving the SharePoint User Information List to the old
+// trainer dropdown. Nothing on the frontend reads it now — the trainer picker reads the
+// colleagues payload. The database CHECK constraint still ALLOWS 'trainers' and
+// sp-read-trainers still writes it until commit 8 removes that function; this type is
+// the set of keys this app reads, which is now a strict subset.
+export type MirrorKey = 'colleagues' | 'columns';
 
 // How long a mirrored payload is served before the client goes back to the edge
 // function. These are chosen from how each dataset actually changes, not from a
@@ -18,9 +23,6 @@ export type MirrorKey = 'colleagues' | 'trainers' | 'columns';
 //   write — so this TTL only bounds how long a change made DIRECTLY in SharePoint
 //   stays invisible. 15 minutes is short enough that "I added them in SharePoint
 //   and the form doesn't show them" resolves itself before anyone reports it.
-// - trainers: the site's User Information List only gains a row when someone
-//   visits the SharePoint site for the first time. sp-read-trainers already
-//   caches this for 15 minutes in memory.
 // - columns: only changes when the SharePoint list schema does, which is a
 //   deliberate act by an admin.
 //
@@ -29,7 +31,6 @@ export type MirrorKey = 'colleagues' | 'trainers' | 'columns';
 // (docs/perf/hotel-training-baseline.md).
 export const MIRROR_TTL_MS: Record<MirrorKey, number> = {
   colleagues: 15 * 60 * 1000,
-  trainers: 60 * 60 * 1000,
   columns: 60 * 60 * 1000,
 };
 

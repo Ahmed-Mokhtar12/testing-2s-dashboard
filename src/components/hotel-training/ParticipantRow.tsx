@@ -18,17 +18,22 @@ import type { Colleague, ParticipantRow as ParticipantRowType } from '@/types/ho
 interface Props {
   row: ParticipantRowType;
   allColleagues: Colleague[];
-  selectedEmployeeIds: Set<string>;
+  /**
+   * Every employee id this row may not choose: the ones other rows hold AND the
+   * session's trainers. Was `selectedEmployeeIds` — renamed because it is no longer
+   * only "selected", and a row silently ignoring half the set is the failure mode.
+   */
+  unavailableEmployeeIds: ReadonlySet<string>;
   onChange: (colleague: Colleague | null) => void;
 }
 
-export function ParticipantRow({ row, allColleagues, selectedEmployeeIds, onChange }: Props) {
+export function ParticipantRow({ row, allColleagues, unavailableEmployeeIds, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
   // `keep` is this row's own selection, so a filled row still shows what it holds.
   const available = filterColleagues(allColleagues, search, {
-    exclude: selectedEmployeeIds,
+    exclude: unavailableEmployeeIds,
     keep: row.colleague ? new Set([row.colleague.employeeId]) : undefined,
   });
 

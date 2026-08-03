@@ -3,18 +3,10 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Check, ChevronDown, X } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import {
-  Command,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,10 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { TrainerPicker, type ColleaguesStatus } from './TrainerPicker';
 import { DURATION_OPTIONS, MAX_PARTICIPANTS } from '@/lib/hotel-training-constants';
-import { filterTrainersByQuery } from '@/lib/trainer-search';
 import { cn } from '@/lib/utils';
-import type { TrainerRef, TrainingDetailsValues } from '@/types/hotel-training';
+import type { Colleague, TrainingDetailsValues } from '@/types/hotel-training';
 
 const DURATION_MINUTES = DURATION_OPTIONS.map((duration) => duration.minutes) as [number, ...number[]];
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
@@ -41,7 +33,11 @@ type FormValues = TrainingDetailsValues;
 interface Props {
   defaultValues?: Partial<TrainingDetailsValues> | null;
   departments: string[];
-  trainerOptions: TrainerRef[];
+  /** Colleagues_Master, the one source for both this field and the participant rows. */
+  allColleagues: Colleague[];
+  colleaguesStatus: ColleaguesStatus;
+  /** Employee ids already taken by a participant row, so they are not offered here. */
+  unavailableEmployeeIds: ReadonlySet<string>;
   locationTypeAsString?: ColumnType;
   remarksTypeAsString?: ColumnType;
   onNext: (values: TrainingDetailsValues) => void;
@@ -99,11 +95,20 @@ function createSchema(locationTypeAsString?: ColumnType, remarksTypeAsString?: C
       .min(0)
       .max(55)
       .refine((value) => value % 5 === 0, 'Minutes must be in 5-min increments'),
+    // The full Colleague shape, not a subset. Declaring only the two fields the wire
+    // needs would let a half-built object through the resolver and into
+    // TrainingDetailsValues.trainers, which is typed Colleague[] — and a restored
+    // draft is exactly where a half-built object comes from.
     trainers: z
       .array(
         z.object({
-          displayName: z.string().min(1),
-          email: z.string().min(1),
+          id: z.string(),
+          employeeId: z.string().min(1),
+          colleagueName: z.string().min(1),
+          position: z.string(),
+          section: z.string(),
+          department: z.string(),
+          isActive: z.boolean(),
         }),
       )
       .min(1, 'At least one trainer is required'),
@@ -117,7 +122,9 @@ function toNumberOrUndefined(value: string) {
 export function TrainingDetailsForm({
   defaultValues,
   departments,
-  trainerOptions,
+  allColleagues,
+  colleaguesStatus,
+  unavailableEmployeeIds,
   locationTypeAsString = 'Text',
   remarksTypeAsString = 'Text',
   onNext,
@@ -134,7 +141,6 @@ export function TrainingDetailsForm({
     control,
     handleSubmit,
     register,
-    setValue,
     watch,
     reset,
     formState: { errors },
@@ -177,14 +183,6 @@ export function TrainingDetailsForm({
 
     return () => subscription.unsubscribe();
   }, [onDraftChange, watch]);
-
-  const selectedTrainers = watch('trainers') ?? [];
-  const [trainerOpen, setTrainerOpen] = React.useState(false);
-  const [trainerQuery, setTrainerQuery] = React.useState('');
-  const visibleStaff = React.useMemo(
-    () => filterTrainersByQuery(trainerOptions, trainerQuery),
-    [trainerOptions, trainerQuery],
-  );
 
   const onSubmit = (values: FormValues) => {
     if (values.date < new Date(new Date().setHours(0, 0, 0, 0))) {
@@ -351,74 +349,19 @@ export function TrainingDetailsForm({
         <Label>
           Trainer Name <span className="text-destructive">*</span>
         </Label>
-        <Popover open={trainerOpen} onOpenChange={setTrainerOpen}>
-          <PopoverTrigger asChild>
-            <Button type="button" variant="outline" role="combobox" className="h-auto min-h-9 w-full justify-between gap-1 whitespace-normal">
-              <span className="flex flex-wrap gap-1">
-                {selectedTrainers.length > 0 ? (
-                  selectedTrainers.map((trainer) => (
-                    <Badge
-                      key={trainer.email}
-                      variant="secondary"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setValue(
-                          'trainers',
-                          selectedTrainers.filter((selected) => selected.email !== trainer.email),
-                          { shouldValidate: true },
-                        );
-                      }}
-                    >
-                      {trainer.displayName}
-                      <X className="ml-1 h-3 w-3" />
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground font-normal">Select trainers...</span>
-                )}
-              </span>
-              <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            {/* shouldFilter={false}: filterTrainersByQuery is the single filter, so
-                cmdk's built-in one cannot disagree with it about what matches. */}
-            <Command shouldFilter={false}>
-              <CommandInput
-                placeholder="Search trainers..."
-                value={trainerQuery}
-                onValueChange={setTrainerQuery}
-              />
-              <CommandList>
-                <CommandGroup heading="Trainer list">
-                  {visibleStaff.map((trainer) => {
-                    const selected = selectedTrainers.some((current) => current.email === trainer.email);
-                    return (
-                      <CommandItem
-                        key={trainer.email}
-                        value={`${trainer.displayName} ${trainer.email}`}
-                        onSelect={() => {
-                          const next = selected
-                            ? selectedTrainers.filter((current) => current.email !== trainer.email)
-                            : [...selectedTrainers, trainer];
-                          setValue('trainers', next, { shouldValidate: true });
-                        }}
-                      >
-                        <Check className={cn('mr-2 h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                        {trainer.displayName}
-                      </CommandItem>
-                    );
-                  })}
-                  {visibleStaff.length === 0 && (
-                    <p className="px-2 py-3 text-sm text-muted-foreground">
-                      No one in the trainer list matches “{trainerQuery}”.
-                    </p>
-                  )}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        <Controller
+          name="trainers"
+          control={control}
+          render={({ field }) => (
+            <TrainerPicker
+              value={field.value ?? []}
+              allColleagues={allColleagues}
+              status={colleaguesStatus}
+              unavailableEmployeeIds={unavailableEmployeeIds}
+              onChange={field.onChange}
+            />
+          )}
+        />
         {errors.trainers && <p className="text-sm text-destructive">{errors.trainers.message}</p>}
       </div>
 

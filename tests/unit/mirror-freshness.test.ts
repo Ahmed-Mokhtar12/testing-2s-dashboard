@@ -17,16 +17,18 @@ import {
 const NOW = 1_700_000_000_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 
-const KEYS: MirrorKey[] = ['colleagues', 'trainers', 'columns'];
+// 'trainers' was a third key until the trainer field became the participant picker.
+// The database CHECK constraint still allows it and sp-read-trainers still writes it,
+// so this list is the keys THIS APP READS — which must be a subset of what the table
+// accepts, never a superset: a key the table refuses would write nothing and read
+// nothing, silently (supabase/migrations/20260802230000_sharepoint_mirror.sql).
+const KEYS: MirrorKey[] = ['colleagues', 'columns'];
 
 test('every mirror key has a positive TTL', () => {
   // Every "not fresh past the TTL" assertion below is vacuous at TTL 0.
   for (const key of KEYS) {
     assert.ok(MIRROR_TTL_MS[key] > 0, `${key} has no TTL`);
   }
-  // The keys are the ones the database CHECK constraint allows
-  // (supabase/migrations/20260802230000_sharepoint_mirror.sql). A key here that
-  // the table refuses would write nothing and read nothing, silently.
   assert.deepEqual(Object.keys(MIRROR_TTL_MS).sort(), [...KEYS].sort());
 });
 
@@ -44,14 +46,15 @@ test('a payload inside its TTL is fresh, and one past it is not', () => {
 });
 
 test('the TTLs are not all the same value by accident', () => {
-  // colleagues is deliberately shorter than the other two: it is the one dataset
-  // that changes without an admin touching the SharePoint schema. If a future
-  // edit flattens these to one number, that reasoning is gone and this fails.
+  // colleagues is deliberately the shorter one: it is the dataset that changes
+  // without an admin touching the SharePoint schema — someone is added through the
+  // Manage Members tab, or directly in the list. columns only changes when the list
+  // schema does, which is a deliberate act. If a future edit flattens these to one
+  // number, that reasoning is gone and this fails.
   assert.ok(
-    MIRROR_TTL_MS.colleagues < MIRROR_TTL_MS.trainers,
-    'colleagues must expire sooner than trainers — it changes far more often',
+    MIRROR_TTL_MS.colleagues < MIRROR_TTL_MS.columns,
+    'colleagues must expire sooner than columns — it changes far more often',
   );
-  assert.ok(MIRROR_TTL_MS.colleagues < MIRROR_TTL_MS.columns);
 });
 
 test('anything unreadable is treated as not fresh, never as fresh', () => {
@@ -67,7 +70,7 @@ test('a fetched_at in the future is rejected rather than trusted', () => {
   // two disagree, and treating it as fresh would silently extend the TTL by the
   // skew for as long as the skew lasted.
   assert.equal(isMirrorFresh(iso(NOW + 1000), 'colleagues', NOW), false);
-  assert.equal(isMirrorFresh(iso(NOW + 24 * 60 * 60 * 1000), 'trainers', NOW), false);
+  assert.equal(isMirrorFresh(iso(NOW + 24 * 60 * 60 * 1000), 'columns', NOW), false);
 });
 
 test('the default `now` is the real clock, not a frozen constant', () => {

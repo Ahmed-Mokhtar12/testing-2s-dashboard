@@ -13,25 +13,6 @@ export interface ParticipantRow {
   colleague: Colleague | null;
 }
 
-// A person from the company directory who can be recorded as a trainer.
-// The lowercased email is the stable identity key end-to-end.
-export interface TrainerRef {
-  displayName: string;
-  email: string;
-  // Whether this person exists in the SharePoint site's User Information List, and
-  // so whether a training can be filed against them TODAY. false does not mean "not
-  // a real person" — it means SharePoint has no id to record them under yet.
-  //
-  // OPTIONAL on purpose. Trainers saved in a localStorage draft before this field
-  // existed, and the FALLBACK_TRAINERS constant, both omit it; treating undefined as
-  // "no information" rather than "not in the site" keeps those working without a
-  // migration. Only values that came from a wider directory search are ever false.
-  inSite?: boolean;
-  // Directory job title, shown beside a wider-search result to tell two people with
-  // the same name apart. Never present on entries sourced from the site list.
-  jobTitle?: string;
-}
-
 export interface TrainingDetailsValues {
   title: string;
   department: string;
@@ -42,7 +23,15 @@ export interface TrainingDetailsValues {
   date: Date;
   hour: number;
   minute: number;
-  trainers: TrainerRef[];
+  // The SAME type a participant row holds, and that is the requirement rather than a
+  // convenience: the trainer field is the participant picker. Plain text is the wire
+  // and Postgres shape only (src/lib/trainer-names.ts); in memory and in drafts a
+  // trainer is a colleague, so exclusion can key on `employeeId` instead of on a name.
+  //
+  // TrainerRef — displayName + email + inSite + jobTitle — was deleted here. It
+  // modelled a person who might not be resolvable in SharePoint, which was only ever a
+  // property of the Person column this no longer writes.
+  trainers: Colleague[];
 }
 
 export type WizardStep = 1 | 2 | 3;

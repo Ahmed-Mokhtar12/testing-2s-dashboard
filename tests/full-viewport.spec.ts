@@ -4,9 +4,8 @@ import {
   mockSupabaseRest,
   mockColleaguesFunction,
   mockColumnsFunction,
-  mockTrainersFunction,
   makeManyColleagues,
-  MOCK_TRAINERS_FLAT,
+  TRAINER_COLLEAGUE,
 } from './helpers/hotel-training-mocks';
 import { MAX_PARTICIPANTS } from '../src/lib/hotel-training-constants';
 
@@ -34,7 +33,6 @@ async function openPage(page: Page, route: string) {
   await mockSupabaseRest(page);
   await mockColleaguesFunction(page);
   await mockColumnsFunction(page);
-  await mockTrainersFunction(page);
   await page.goto(route);
   // Routes are lazy-loaded behind a <Suspense> boundary (see App.tsx) whose
   // fallback (RouteFallback) renders a spinner div with NO <main> element.
@@ -193,7 +191,6 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
     const roster = makeManyColleagues(MAX_PARTICIPANTS);
     await mockColleaguesFunction(page, { list: roster });
     await mockColumnsFunction(page);
-    await mockTrainersFunction(page);
 
     // The last MAX_PARTICIPANTS ACTIVE colleagues, which makeManyColleagues
     // guarantees are all generated filler. Taken from the tail rather than the
@@ -222,7 +219,13 @@ test.describe('full-viewport layout — Hotel Training max participants (desktop
             date: '2026-07-15T00:00:00.000Z',
             hour: 9,
             minute: 0,
-            trainers: [MOCK_TRAINERS_FLAT[0]],
+            // A COLLEAGUE, not the retired displayName/email shape: reconcileDraft
+            // drops anything else, and a dropped trainer would leave zod blocking
+            // "Next: Add Participants" so step 2 — the layout this test measures —
+            // would never render. TRAINER_COLLEAGUE sits at the HEAD of the roster
+            // while seededRows is taken from the TAIL, so it is never also a
+            // participant and the mutual-exclusion rule does not shrink the 100 rows.
+            trainers: [TRAINER_COLLEAGUE],
           },
           participants: seededRows,
           step: 2,

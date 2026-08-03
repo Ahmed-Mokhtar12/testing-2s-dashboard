@@ -1,6 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
 import { isMirrorFresh, type MirrorKey } from '@/lib/sharepoint-mirror';
-import type { TrainerRef } from '@/types/hotel-training';
 
 // Reads a payload out of public.sharepoint_mirror, the Postgres copy that
 // sp-read-* writes on every successful Graph read. PostgREST is always warm, so
@@ -58,19 +57,11 @@ export interface ListColumnsResult {
   remarksTypeAsString: string;
 }
 
-// The SharePoint site's User Information List (people who have visited the
-// site, and are therefore resolvable at submit time), sorted by displayName,
-// emails lowercased — served by the sp-read-trainers Edge Function.
-export async function invokeReadTrainers(): Promise<TrainerRef[]> {
-  const { data, error } = await supabase.functions.invoke('sp-read-trainers');
-  if (error) {
-    throw new Error(await extractInvokeError(error));
-  }
-  if (!Array.isArray(data)) {
-    throw new Error('Unexpected response shape from sp-read-trainers.');
-  }
-  return data as TrainerRef[];
-}
+// invokeReadTrainers read the SharePoint site's User Information List for the old
+// trainer dropdown. Deleted with that dropdown: the picker reads Colleagues_Master,
+// which invokeReadColleagues already serves. The sp-read-trainers FUNCTION is still
+// deployed and callable until commit 8 removes it — deleting a caller is not
+// undeploying a function.
 
 export interface TrainingSessionPayload {
   title: string;
@@ -80,7 +71,19 @@ export interface TrainingSessionPayload {
   location?: number | string | null;
   remarks?: number | string | null;
   trainingDate: string;
-  trainers: TrainerRef[];
+  // Plain `ColleagueName` text, cleaned by src/lib/trainer-names.ts. The edge function
+  // writes these to the SharePoint `TrainerNames` text column.
+  //
+  // NOT `trainerNames`, which the edge function still accepts with incompatible
+  // semantics — it 400s anything that is not a key of its TRAINER_EMAILS map. Reusing
+  // that name would route a legacy client's trainers into the new column, which is
+  // exactly what accepting both shapes exists to prevent. Precedence in the function is
+  // trainerColleagueNames -> trainerEmployeeIds -> legacy, never a merge.
+  //
+  // The legacy `trainers: TrainerRef[]` field is gone from this type but still accepted
+  // by the deployed function, so a browser tab holding the previous bundle keeps
+  // working until commit 8.
+  trainerColleagueNames: string[];
 }
 
 export interface ParticipantPayload {

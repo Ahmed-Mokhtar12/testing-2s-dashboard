@@ -39,8 +39,10 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 | 4 | `test` dedicated trainer fixture colleague | — | `4ee0045` | done |
 | 5 | `refactor` one colleague search rule | — | `9436dc0` | done |
 | 6 | `revert` the escape hatch | delete sp-search-directory | `c357ef2` | done; platform delete DONE 2026-08-03 |
-| 7 | `feat(hotel-training)` the field itself | **frontend** — operator present | | |
+| 7 | `feat(hotel-training)` the field itself | **frontend** — operator present | `0a4fdc2` is row 6.5 | done, NOT deployed |
 | 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | |
+
+Between 6 and 7: `0a4fdc2`, a docs-only commit correcting §1 and recording the §2a answer.
 
 Commits 1–6 are safe to land in any order relative to the PowerApp decision; see
 §"One check before the frontend deploy".
@@ -184,7 +186,12 @@ Deferred to commit 8, where the legacy submit path goes and all of them die toge
 
 **So commit 8 is larger than the plan says**, by roughly five modules and 16 unit
 tests, and its report must say so plainly rather than let the diff size surprise a
-reviewer. Until then `directory.ts` keeps a now-unused `MIN_SEARCH_LENGTH` and a comment
+reviewer.
+
+Two items went the OTHER way, from commit 8 into commit 7: the `MOCK_TRAINERS_FLAT`
+fixture and the `mockTrainersFunction` route helper. Commit 7 is what orphans them —
+nothing in the app calls `sp-read-trainers` once the picker reads colleagues — and an
+unused mock is an invitation to wire it back up. The deployed function is untouched. Until then `directory.ts` keeps a now-unused `MIN_SEARCH_LENGTH` and a comment
 naming the deleted function — dead but harmless, and removing it early would have meant
 touching the path that is still live.
 

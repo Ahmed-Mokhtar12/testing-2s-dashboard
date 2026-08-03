@@ -1,5 +1,3 @@
-import type { TrainerRef } from '@/types/hotel-training';
-
 export const MONTHLY_TRAINING_LIST_ID = 'aa8fe143-854d-4646-a423-89bc44bb217d';
 export const PARTICIPANTS_LIST_ID = '73f67c6d-f327-4c14-aa68-2b718afcd132';
 export const COLLEAGUES_LIST_ID = '8bdc10b9-01c8-4310-8a16-48eb83020d7e';
@@ -49,13 +47,18 @@ export const DEPARTMENT_SECTIONS: Record<string, string[]> = {
   'Security': ['Security'],
 };
 
-// Known trainers used when the live directory fetch fails (or returns empty)
-// and to migrate legacy drafts that stored trainer names as plain strings.
-export const FALLBACK_TRAINERS: TrainerRef[] = [
-  { displayName: 'Ahmed Mokhtar', email: 'ahmed.mokhtar@2seasonshotels.com' },
-  { displayName: 'Amir Monir', email: 'amir.monir@2seasonshotels.com' },
-  { displayName: 'Xarmaigne Narciso', email: 'xarmaigne.narciso@2seasonshotels.com' },
-];
+// FALLBACK_TRAINERS was three hardcoded names, used when the directory read failed
+// and to migrate drafts that stored trainer names as plain strings. Both jobs are
+// gone: any of the ~335 active colleagues can be a trainer, so a three-name fallback
+// is not a degraded list, it is a wrong one — it would offer three people while
+// hiding everyone who can actually be recorded, and the two colleagues among them
+// are named differently in Colleagues_Master ("Amir Monir" is "Amir Gerges Daoud"),
+// so a submission built from it would write names the report cannot join.
+//
+// The consequence is recorded and accepted: step 1 can no longer be completed with
+// no network. See "Known regression, accepted" in the spec, and the cold-start test
+// in tests/hotel-training.spec.ts, which now asserts the trainer popover says
+// "Loading colleagues..." rather than offering people who might not exist.
 
 // Offline fallbacks for the Location/Remarks column types, used only when the
 // sp-read-columns call fails (the live types are read from Graph column

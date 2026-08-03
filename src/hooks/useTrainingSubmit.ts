@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeSubmitTraining, type ParticipantPayload } from '@/services/sharepoint';
+import { toTrainerNames } from '@/lib/trainer-names';
 import type { TrainingDetailsValues, ParticipantRow } from '@/types/hotel-training';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -40,6 +41,15 @@ export function useTrainingSubmit() {
       const isoDate = date.toISOString();
       const trainingId = generateTrainingId();
 
+      // COMPUTED ONCE, USED FOR BOTH DESTINATIONS. This is the whole reason the client
+      // sends names rather than having the edge function resolve them: SharePoint's
+      // TrainerNames column is written by the function from this request, while
+      // training_sessions.trainer_names is written by the block below — from the client.
+      // Two independent resolutions would disagree in exactly the case server-side
+      // resolution exists to prevent, and the monthly report reads the client's copy.
+      // One fact, one writer, one local.
+      const trainerNames = toTrainerNames(trainingDetails.trainers);
+
       const rows: ParticipantPayload[] = completed.map((participant, index) => {
         const colleague = participant.colleague;
         if (!colleague) {
@@ -66,7 +76,7 @@ export function useTrainingSubmit() {
         location: trainingDetails.location ?? null,
         remarks: trainingDetails.remarks ?? null,
         trainingDate: isoDate,
-        trainers: trainingDetails.trainers,
+        trainerColleagueNames: trainerNames,
         participants: rows,
       });
 
@@ -123,7 +133,7 @@ export function useTrainingSubmit() {
           location: trainingDetails.location != null ? String(trainingDetails.location) : null,
           remarks: trainingDetails.remarks != null ? String(trainingDetails.remarks) : null,
           training_date: isoDate,
-          trainer_names: trainingDetails.trainers.map((trainer) => trainer.displayName),
+          trainer_names: trainerNames,
           // The DECLARED count, deliberately — NOT landedRows.length. This is
           // what makes the gap detectable: report-aggregator.ts flags a session
           // when sync_status !== 'synced' OR total_participants !== the number of

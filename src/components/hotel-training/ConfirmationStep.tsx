@@ -56,8 +56,8 @@ export function ConfirmationStep({
           <span className="text-muted-foreground">Trainers</span>
           <span className="flex flex-wrap gap-1">
             {trainingDetails.trainers.map((trainer) => (
-              <Badge key={trainer.email} variant="secondary">
-                {trainer.displayName}
+              <Badge key={trainer.employeeId} variant="secondary">
+                {trainer.colleagueName}
               </Badge>
             ))}
           </span>
