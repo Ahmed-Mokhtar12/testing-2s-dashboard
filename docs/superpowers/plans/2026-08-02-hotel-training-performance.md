@@ -205,11 +205,52 @@ so it can. See `docs/testing-lessons.md` §10.
   no longer a wait to hide, and it would mean restructuring three hooks to expose
   their query options plus a special case in `AppSidebar` for one route.
 
-## Environment note
+## Environment note — IDENTIFIED: a second agent session in the same tree
 
-Something outside the repo runs a `dist` swap (`dist-new/` → `dist.bak-<ts>/`)
-and leaves `reset: moving to HEAD` in the HEAD reflog; the working tree goes clean
-and then comes back. No script in `scripts/`, no root crontab entry and no
-`refs/stash` accounts for it. It cost this work one confused hour across two
-sessions. It cannot touch committed work, so the mitigation is to commit each
-phase as soon as its gates pass rather than batching.
+An earlier version of this section said the cause was unidentified. It is not.
+
+**A concurrent Claude Code session was working in this directory.** Session
+`2414b5e1-74bf-4fcb-bc9c-2b9cce611cef`, whose project root is the *production*
+dashboard `/home/digitlab-2s-dashboard/htdocs/2s-dashboard.digitlab.ai`, was
+`cd`-ing into this testing directory to compare the live `dist` against a fresh
+build. Its transcript is at
+`/root/.claude/projects/-home-digitlab-2s-dashboard-htdocs-2s-dashboard-digitlab-ai/`.
+
+Its method, which is sound in isolation and is the whole explanation:
+
+| Dubai time | What it ran |
+|---|---|
+| 22:37 | `git stash push` (after fingerprinting `git diff \| sha256sum` to verify the restore) |
+| 22:38 | `git pull --ff-only origin main`, then typecheck / lint / `npx playwright test` |
+| 22:47 | `npm run build -- --outDir dist-new` |
+| 22:50 | `diff -rq dist dist-new`, `rm -rf dist-new`, **`git stash pop`** |
+| 22:53 | `git stash push -u -m "claude: WIP parked for in-place rebuild"` |
+| 22:58:57 | `mv dist dist.bak-$(date +%Y%m%d-%H%M%S) && mv dist-new dist` |
+
+It was **`git stash`, not `git reset --hard`**. That resolves every loose end:
+
+- `git stash push` performs a `reset --hard` internally, which is what writes
+  `reset: moving to HEAD` to the HEAD reflog and touches `.git/ORIG_HEAD`. Both
+  reflog entries (22:38:05 and 22:54:12) line up with a stash push.
+- The working tree going clean and then coming back was push → pop. Nothing was
+  ever destroyed; the fear that it had been was wrong.
+- `refs/stash` was absent when checked because `git stash pop` deletes the entry,
+  and popping the only entry removes the ref **and** its reflog file.
+- The `dist.bak-20260802-225857` directory had `mtime` from Aug 1 22:15 and
+  `ctime` 22:58:57 — the signature of a rename, not a build.
+
+Ruled out along the way, each with evidence: PM2 (`watch: false`, no
+`cron_restart`, no `post_update`, `restarts: 0` across 3 days of uptime), root's
+crontab (one entry, `clp-update` at 03:00), `/etc/cron.d`, every systemd timer,
+`/usr/local/sbin/digitlab-{backup,verify,prune,alert}.sh` (the backup only tars
+`htdocs`; none of the four mention git), and the journal for 22:30–23:05, which
+contains nothing but `phpsessionclean` and hypervisor probes.
+
+**The real lesson is not about this box.** Two agent sessions sharing one working
+tree is the hazard, and stashing is what makes it destructive-looking: the second
+session's guard was "abort if the tree is dirty", which is the correct guard for a
+tree only it touches. The mitigation that worked was committing each phase as its
+gates passed — a stash push cannot take committed work, and a pop cannot lose it.
+
+That session was **still running** when this was investigated the following
+morning, so the hazard is live rather than historical.
