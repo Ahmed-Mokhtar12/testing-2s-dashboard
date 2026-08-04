@@ -671,19 +671,57 @@ earlier that day (23 requests, 21 of them assets) looks like.
 regeneration, and regeneration is triggered by an action — renewing a certificate — that
 nobody associates with the document root.
 
-**Fixed for this site on 2026-08-04** by setting CloudPanel's Root Directory to
-`2s-dashboard.digitlab.ai/dist`, so `{{root}}` renders correctly and regeneration
-reproduces the working config. See `docs/testing-lessons.md` §14.
+**RECOVERY, for whoever hits this next.** The full command is in `CLAUDE.md` under Deploys.
+Restore the server-level `root` (two-space indent — the acme block's `root` is indented four
+and must not change), `nginx -t && systemctl reload nginx`, then confirm `/` references
+`/assets/index-` and not `/src/main.tsx`. Takes about ten seconds once you know.
 
-**What is still open, and is why this stays logged.** The *class* is not closed.
+**THE PERMANENT FIX — still to apply, in CloudPanel's UI.** Not the Root Directory setting:
+that field also generates the SSL config, its effect beyond the vhost is undocumented, and
+Delete Site sits on the same screen. Use the **Vhost tab** on the site's page instead, which
+edits the same per-site template regeneration renders from. Add one line to `location /`:
 
-- Testing survives regeneration for a reason that is luck-adjacent: its `proxy_pass` is in
-  CloudPanel's **stored template**, so it is reproduced. Its vhost has not been regenerated
-  since 3 June — that is not evidence of safety, only of nothing having triggered it.
-- Any **future** hand-edit to either vhost re-opens exactly this hole, silently, with the
-  revert deferred to an unrelated action weeks later.
-- CloudPanel deletes the `.bak` it makes one second after making it, so there is no
-  on-disk record of what was replaced.
+```nginx
+  location / {
+    root /home/digitlab-2s-dashboard/htdocs/2s-dashboard.digitlab.ai/dist;   # <- ADD
+    try_files $uri $uri/ /index.html;
+  }
+```
+
+A location-level `root` overrides the server-level one, so `{{root}}` stays untouched and
+whatever CloudPanel renders there stops mattering. The acme block keeps its own root, so
+renewals are unaffected — and unlike replacing `{{root}}`, this cannot fall foul of a
+validator that requires the placeholder.
+
+**Why the template is the durable place, established by evidence rather than assumption.**
+
+- The template is **per-site**: a CLOB on the site's own row, containing that site's domain.
+  The 31 named templates in the global `vhost_template` table (Generic, Nodejs, WordPress…)
+  are used only when a site is *created*. Editing this one cannot affect `digitlab.ai`,
+  `supabase`, `n8n` or testing.
+- Regeneration **renders from it**. The file CloudPanel wrote at 18:05:35 is byte-identical
+  to the stored template with placeholders substituted, the single difference being
+  `{{settings}}` rendering empty.
+- Production **already depends on this surviving**. Its site `type` is `nodejs`, but its
+  stored template serves static files with `try_files $uri $uri/ /index.html`, where the
+  stock Nodejs template proxies to `{{app_port}}`. That customisation came through the
+  regeneration intact. The *only* line that reverted was `{{root}}` — because that one is
+  not in the template, it is generated from the `root_directory` column.
+- The UI route is safe by construction: `SitesController` carries `handleVhostUpdate`,
+  `updateNginxVhostWithRollback` and `InvalidVhostException`, so an edit that produces an
+  invalid nginx config is rolled back rather than left live.
+
+Correcting an earlier reading in this file's own history: testing was described as surviving
+because its `proxy_pass` lives in the stored template. True, but duller than it sounded —
+testing's template is simply the **stock** Nodejs template, unmodified. Production's is the
+one that was customised, and it is the real proof that per-site template edits persist.
+
+**What is still open.** `clpctl` has no command for either the Root Directory or the per-site
+template — the full command list is site add/delete, cert install, db, user, and *global*
+vhost-template operations. So this cannot be scripted or checked in; it exists only in
+CloudPanel's database. A future hand-edit to a vhost *file* re-opens the same hole silently,
+and CloudPanel deletes the `.bak` it makes one second after making it, so there is no
+on-disk record of what was replaced.
 
 **What "done" looks like.** A check that fails loudly when a served document root stops
 matching the built tree — cheapest honest version is a cron`curl` of `/` on both sites

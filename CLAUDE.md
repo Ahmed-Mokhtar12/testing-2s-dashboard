@@ -96,6 +96,34 @@ as `testing-2s-dashboard`. Consequences worth knowing before deploying by hand:
   `tests/unit/deploy-frontend-overlay.test.ts` runs it five ways in `npm run
   test:unit`, three of them mutations proving the deploy's own checks can fail.
 
+### Production is a different machine shape, and `deploy-frontend.sh` does NOT apply
+
+`2s-dashboard.digitlab.ai` lives in a separate checkout
+(`/home/digitlab-2s-dashboard/htdocs/2s-dashboard.digitlab.ai`) with its own git remotes,
+and **nginx serves its `dist/` straight from disk** — no PM2, no `serve`, so `serve.json` is
+inert there. `deploy-frontend.sh` is hardcoded to testing (`REPO`, `PUBLIC_URL`, `PM2_APP`);
+running it from the production checkout deploys the *wrong site*. Deploy production by hand:
+`npx vite build --outDir dist-new --emptyOutDir` (never bare `npm run build`), overlay
+`dist-new` onto `dist` excluding `index.html`, then swap `index.html` by atomic rename.
+Promotions use `git read-tree -u --reset testing/main` — the histories are unrelated — and
+`supabase/functions/process-document` must be hand-restored afterwards.
+
+**PRODUCTION WHITE-SCREENED AFTER AN SSL RENEWAL? Recover with this.** CloudPanel
+regenerates the vhost during `lets-encrypt:install:certificate` and reverts `root` from
+`dist` to the site root, which serves the Vite *source* `index.html` for `/` and every
+`/assets/*`. It happened on 2026-08-04 and will recur on every renewal until the per-site
+vhost template is fixed. The two-space indent anchors the server-level `root` — the
+acme-challenge block's `root` is indented four and **must not change**:
+
+```
+sed -i 's#^  root /home/digitlab-2s-dashboard/htdocs/2s-dashboard.digitlab.ai;#  root /home/digitlab-2s-dashboard/htdocs/2s-dashboard.digitlab.ai/dist;#' \
+  /etc/nginx/sites-enabled/2s-dashboard.digitlab.ai.conf
+nginx -t && systemctl reload nginx
+curl -s https://2s-dashboard.digitlab.ai/ | grep -q '/assets/index-' && echo OK || echo STILL BROKEN
+```
+
+See `docs/backlog.md` B11 for the permanent fix and `docs/testing-lessons.md` §14.
+
 Several edge modes are gated on a real **admin user JWT** (`getCallerUser` then
 `has_role`). A service-role key has no user and fails the first check, so these
 cannot be driven without the operator's session:
