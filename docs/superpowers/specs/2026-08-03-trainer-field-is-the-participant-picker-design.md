@@ -141,8 +141,11 @@ so both live together rather than being rediscovered one deploy at a time.
 
 ## THE FORMAT CONTRACT — what any writer must put in `TrainerNames`
 
-This is the interface between the web app, the PowerApp, and a hand-typed backfill. A
-row written by any of them must be indistinguishable from the others.
+This is the interface between the web app, a hand-typed backfill, and any writer added
+later. A row written by any of them must be indistinguishable from the others. (The
+PowerApp was the second party when this was written and is being retired — see "one door"
+below. The contract is unchanged by that: the backfill is still a second writer, and it was
+one in practice on 2026-08-04.)
 
 ```
 TrainerNames = names.join('; ')
@@ -163,8 +166,10 @@ double space, and a position of `" IT Manager"` with a leading space. Verbatim w
 propagate invisible characters into two stores, and the report's dedupe
 (`raw.trim().toLowerCase()`) treats `"A  B"` and `"A B"` as two different trainers. One
 stray edit in SharePoint would then silently split a person in the report. Collapsing is
-the smallest rule that makes the value stable. **The PowerApp must collapse too**, or
-the two writers produce values that differ by an invisible character.
+the smallest rule that makes the value stable. **Any other writer must collapse too**, or
+two writers produce values differing by an invisible character. Written for the PowerApp,
+which is being retired; the obligation transfers intact to whatever writes next, including
+a hand-typed row.
 
 Examples:
 
@@ -180,7 +185,7 @@ multi-value Person fields, so a `TrainerNames` value reads natively in the list 
 and a backfilled row looks like a new one.
 
 **There is no parser.** Nothing in this system reads `TrainerNames` back — the value
-exists for SharePoint views, the PowerApp, and humans. It is a *formatting* contract,
+exists for SharePoint views and for humans reading the list. It is a *formatting* contract,
 not a round-trip one. That is why the format must be agreed rather than inferred: no
 code would catch a divergence.
 
@@ -333,10 +338,33 @@ any consumer existed, the choice would have been between a half-populated Person
 (one trainer of two, when only one has an account) and a visibly broken downstream view
 — and both are worse than blank.
 
-For the PowerApp specifically, if it remains a submission path it needs two changes:
-write `TrainerNames` per the format contract above, and source its trainer list from
-Colleagues_Master rather than `Office365Users.SearchUser` — otherwise the two doors
-offer different populations of trainers and the requirement holds in only one of them.
+### RESOLVED 2026-08-04 — the PowerApp is being retired, so there is one door
+
+This section previously ended: *if the PowerApp remains a submission path it needs two
+changes — write `TrainerNames` per the format contract above, and source its trainer list
+from Colleagues_Master rather than `Office365Users.SearchUser`, otherwise the two doors
+offer different populations of trainers and the requirement holds in only one of them.*
+
+**It does not remain a submission path.** The operator's decision, 2026-08-04: retire it
+rather than change it, on three findings — nobody uses it; the only cloud flow has been
+**suspended since June on a lapsed licence**, so even the automation that existed has not
+run in two months; and the webhook turned out to be **tenant plumbing rather than
+automation of ours**.
+
+**Note what kind of answer that is.** §2a asked one door or two, and the answer is
+operational, not architectural. Nothing in this repo changed, and nothing in it *could*
+have established this — no test, type or query here can see a licence lapse. The
+two-writer divergence the format contract guards against cannot occur because the second
+writer is being switched off, and switching it back on is a decision a person can make in
+an afternoon without touching a line of our code. That is a weaker guarantee than the code
+providing it, and it should not be recorded as if the risk were designed out.
+
+**So the contract stays exactly as written.** It costs nothing to keep, and it is still
+load-bearing for the **hand-typed backfill** — it is the reason a backfilled row is
+indistinguishable from a machine-written one, which the 2026-08-04 backfill of items 22,
+23, 25, 26 and 27 relied on. What changed is only that its second party no longer exists.
+The two obligations above are kept rather than deleted because any revived PowerApp, Power
+Automate flow or bulk import inherits them unchanged.
 
 ## The reporting picture, corrected
 
@@ -367,6 +395,23 @@ SharePoint UI by the operator and **deleted on 2026-08-03** once identified as a
 rather than a session: it carried 13+ trainers against `Total Participants = 2`, a shape
 no submission path can produce. So the one item not attributable to
 `sp-submit-training` was not a rival writer either — it was us, holding a different tool.
+
+### The count on 2026-08-04 — 7 items, and one phrasing to pin down
+
+Monthly_Training holds **7**, up from 4, and the increase is fully accounted for by this
+work: **27** (submitted from the still-unchanged frontend to prove commit 3's edge deploy),
+**28** (the first row written by the new picker — `['Amir Gerges Daoud', 'Jagmohan Singh']`)
+and **29** (after commit 8's deletions, `['Shahidul Islam', 'Moen Muslem']`). All three were
+written by `sp-submit-training`.
+
+**The retirement note describes the 7 as "four of them ours", which needs one look before
+anyone quotes it.** Four is the count of items *predating this work* — 22, 23, 25, 26 — and
+on that reading 7 of 7 are ours. The other reading, that three items came from a door we do
+not control, would **contradict** the retirement conclusion rather than support it, and it
+is the reading a later reader takes from the sentence alone. One glance at `Created By` in
+the default view settles it; until then, neither number is evidence about writers. Recorded
+because the withdrawn ~20-session inference further up this section came from exactly this
+— a count carrying an unstated assumption about who wrote the rows.
 
 ### The real finding, parked
 

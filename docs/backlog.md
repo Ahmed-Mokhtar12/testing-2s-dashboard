@@ -279,9 +279,16 @@ the new `TrainerNames` column.
 
 **The gap.** Trainers are written to two places: `training_sessions.trainer_names` in
 Postgres, and the `TrainerNames` text column on Monthly_Training. **Nothing in this
-system reads `TrainerNames` back.** So a divergence — the PowerApp joining with a
-comma, a hand-typed backfill row with a double space, a session written to one store
-and not the other — would sit there indefinitely, because no code path compares them.
+system reads `TrainerNames` back.** So a divergence — a hand-typed backfill row with a
+double space, a session written to one store and not the other — would sit there
+indefinitely, because no code path compares them.
+
+**One motivating case is gone, and the item survives it.** This was logged partly against
+"the PowerApp joining with a comma"; the PowerApp is being retired (2026-08-04), so that
+writer will not diverge from anything. What remains is not hypothetical: five rows were
+hand-typed into `TrainerNames` on 2026-08-04, and the one-store-and-not-the-other case is
+the parked leak, which is measured. Re-check the premise before building this, though —
+an item whose strongest example has been retired deserves that.
 The format contract in
 `docs/superpowers/specs/2026-08-03-trainer-field-is-the-participant-picker-design.md`
 is agreed precisely because no test can enforce it.
