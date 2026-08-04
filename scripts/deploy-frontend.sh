@@ -189,8 +189,20 @@ echo "--- restart (serve re-reads serve.json here, and only here) ---"
 pm2 restart "$PM2_APP" --update-env
 
 echo "--- verify against the public URL ---"
+# READINESS, not a check. `pm2 restart` returns as soon as it has respawned the
+# process, before `serve` has bound 3007 — so nginx has nothing behind it for a
+# moment and answers 502. That is expected, every single deploy.
+#
+# `curl -fs` here, NOT `-fsS`. With -S curl printed
+#   curl: (22) The requested URL returned error: 502
+# on the first attempt of a completely successful deploy, immediately above
+# "DEPLOY OK". It was raised as a suspected failure more than once. A scary line in
+# a green run is not free: it teaches whoever reads this output to skim it, which
+# is the opposite of what a self-verifying script is for. Nothing is lost by
+# silencing it — if the site never comes up, the four real assertions below fail
+# with a message that says which one and why.
 for attempt in $(seq 1 20); do
-  if curl -fsS -o /dev/null "$PUBLIC_URL/"; then break; fi
+  if curl -fs -o /dev/null "$PUBLIC_URL/"; then break; fi
   sleep 0.5
 done
 

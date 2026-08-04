@@ -39,10 +39,18 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 | 4 | `test` dedicated trainer fixture colleague | — | `4ee0045` | done |
 | 5 | `refactor` one colleague search rule | — | `9436dc0` | done |
 | 6 | `revert` the escape hatch | delete sp-search-directory | `c357ef2` | done; platform delete DONE 2026-08-03 |
-| 7 | `feat(hotel-training)` the field itself | **frontend** — operator present | `0a4fdc2` is row 6.5 | done, NOT deployed |
-| 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | |
+| 7 | `feat(hotel-training)` the field itself | **frontend** | `4939bf9` | **done and DEPLOYED 2026-08-04** |
+| 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | held for one working day |
 
 Between 6 and 7: `0a4fdc2`, a docs-only commit correcting §1 and recording the §2a answer.
+
+**Commit 8 is held deliberately, and for a reason the plan did not state.** Its gate was
+"a working day after the frontend deploy, so no stale tab is still sending the old
+shape". The stronger reason is the rollback: if the new path had to be withdrawn, the
+remedy is redeploying the previous bundle, which sends `trainers: TrainerRef[]` — and
+that only works while the deployed edge function still accepts the legacy shape. Commit
+8 deletes exactly that. So it stays unwritten, not merely undeployed, until the new path
+has been live through a working day.
 
 Commits 1–6 are safe to land in any order relative to the PowerApp decision; see
 §"One check before the frontend deploy".
@@ -204,11 +212,19 @@ touching the path that is still live.
 - **Freeze** — the app stops writing it entirely. Explicitly **not** "written when the
   trainer happens to have an account": a session with one account-holder and one
   housekeeper would then show one trainer out of two, which is worse than blank.
-- **Backfill** — **four rows** (`sharepoint_id` 22, 23, 25, 26), typed by hand in the
-  list, in the format above. No script, no dry-run, no idempotency logic. This is also
-  why `_shared/uil.ts` and `uil-mapper.ts` need not survive commit 8: they were only
+- **Backfill** — **five rows** (`sharepoint_id` 22, 23, 25, 26, 27), typed by hand in
+  the list, in the format above. No script, no dry-run, no idempotency logic. This is
+  also why `_shared/uil.ts` and `uil-mapper.ts` need not survive commit 8: they were only
   being kept alive to map LookupIds to display names for a backfill that no longer needs
-  code. Five until "Housekeeping" was deleted; it is now every row on the list.
+  code.
+
+  The count moved twice and both moves are worth recording, because the number is not a
+  property of the past — it is "every row written before the frontend deploy". It was
+  five, then four when "Housekeeping" turned out to be a deleted probe, then five again
+  when **item 27** was created on 2026-08-04 as the deploy-order proof: that submission
+  went through the still-unchanged frontend, so it has the Person column populated and
+  `TrainerNames` empty, exactly like 22/23/25/26. Its value needs no reading-off —
+  Postgres already holds the normalised spelling, `Ahmed Mokhtar Elsayed Elaktaa`.
 
 **Backfill AFTER the frontend deploy and after the first new-path submission, not
 before.** The order looks arbitrary — the four rows are historical and the deploy only
@@ -437,3 +453,29 @@ the common case, so the exposure is a cold or stale mirror rather than every loa
 - **Live**: one real submission after commit 3's deploy (proving both shapes still work
   and `TrainerName_x002e_` is still populated), one after commit 7's (the only proof the
   `TrainerNames` write works), one after commit 8's.
+
+### The live results, 2026-08-04
+
+**Item 27 "sss" — the legacy path, after commit 3's deploy.** Submitted from the
+still-unchanged frontend: 3 participants declared and 3 landed, `synced`, sync queue
+empty, trainer recorded as `Ahmed Mokhtar Elsayed Elaktaa` — the normalised spelling from
+commit 2, so the migration and the old client agree. Both wire shapes work and the
+legacy path is intact, which is what makes the rollback above real rather than
+theoretical.
+
+**Item 28 "qqq" — the new path, after commit 7's deploy.**
+`trainer_names = ["Amir Gerges Daoud", "Jagmohan Singh"]`, 3 participants declared and
+landed, `synced`, zero queued.
+
+**`Jagmohan Singh` is the whole requirement, in one row.** An ordinary colleague with no
+Microsoft account — unselectable as a trainer in every version of this app before today,
+and not because anyone decided he could not train. He was excluded by a schema detail:
+the Person column could only hold someone SharePoint had a user id for. Three withdrawn
+designs each tried to work around that and each would have kept him out.
+
+Operator checks, all passing: employee-ID search returned Amir alone for `102387`;
+name matching is case-insensitive; exclusion holds in both directions with the chosen
+trainer still shown, checked, in its own field; clicking a badge's text opens the list
+instead of deleting a trainer; the mobile "Next: Review" clears the Sera button;
+deselecting a trainer re-offers them as a participant; and a pre-existing localStorage
+draft restored with the Alert naming its dropped legacy trainers.
