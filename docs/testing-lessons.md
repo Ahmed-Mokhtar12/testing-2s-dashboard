@@ -487,3 +487,28 @@ path would have emptied the current set while leaving the mechanism, converting 
 five-example reproducible pattern into a future single mystery — strictly harder to
 diagnose than what we started with. Fix the entry point in the same change as the data,
 or the next occurrence arrives with no pattern attached.
+
+### 13a. The set you measured is not the set that matters
+
+**Found:** 2026-08-04, applying the migration that closed the item above.
+
+The measurement said **six dirty rows in Colleagues_Master**. The migration that repaired
+`training_participants` collapsed **one**. Both numbers are right: five of the six
+colleagues had never attended a recorded session, so they were dirty at the *source* and
+absent from the *reader*. `102188` was the single overlap — and, of the five, the one who
+also appears on the trainer list.
+
+Six would have been the confident guess, and it would have been wrong by a factor of six
+in the direction that makes a migration look broken. The lesson above says measure the set
+before calling something a one-off; this is its other half: **measure it where the damage
+is read, not only where it originates.** A source table and a table populated from it years
+of rows apart are two populations, and a count taken from one predicts nothing about the
+other.
+
+**What made this survivable was writing the migration not to know the answer.** It
+selected rows differing from their collapsed form rather than naming the six known ids, so
+it could not be wrong about the count — and it reported both outcomes as legitimate,
+including *"nothing was dirty … the rollback is a no-op"*. An assertion of `expected = 6`
+would have aborted a correct migration; a silent success would have left "did it find
+anything?" unanswerable. **State the count you found. Assert the invariant, not the
+population** — here: nothing still dirty, and the row count unchanged.

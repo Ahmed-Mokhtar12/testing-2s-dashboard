@@ -4,8 +4,65 @@ Named, queued work items. This file exists because a known caveat buried in a
 design document fades, while a task with a name does not.
 
 Each item states what is wrong, why it matters now, what "done" looks like, and
-what it would cost. Nothing here is in progress. Ordered by the date it was
-logged, newest first.
+what it would cost. Nothing here is in progress.
+
+Items are appended as they are logged, **except that anything with a date on it
+comes first** — a dated action at the bottom of a long file is a dated action
+nobody sees in time.
+
+---
+
+## B10 — two snapshot tables are alive, with different lifetimes and no single owner
+
+**Logged:** 2026-08-04 · **Raised by:** Ahmed, on applying the B8 migration: *"Two
+snapshot tables with different lifetimes is how one of them gets forgotten."*
+
+**Look at this on 2026-08-14.** That is a calendar trigger for reading this item, not a
+deadline for either table — their conditions are independent and one of them is not met.
+
+| Table | Rows | Holds | Drop when |
+|---|---|---|---|
+| `public.reviews_backup_20260731` | 7,889 | pre-dedup state of `"Two Seasons and Reviews"`, including guest names and review text | the reviews backfill has run **and** the numbers have been sanity-checked for a few days |
+| `public.training_participants_ws_backfill_20260804` | 1 | pre-collapse participant name for `102188` in `TRN-20260803113419` | the single row is transcribed into the rollback file (below) |
+
+**Do not give these one shared date.** The tempting simplification — "drop both on the
+14th" — silently attaches the participant snapshot to a condition it has nothing to do
+with. `reviews_backup_20260731` is gated on **the reviews backfill, which has not run**
+(`docs/runbooks/2026-07-31-reviews-backfill-checklist.md` — the runbook's own drop
+reminder says to keep the table until it has), so its date moves whenever that work
+moves. The participant snapshot has no
+outstanding condition at all. Coupling them means the free one waits for the blocked one,
+and the reason gets lost.
+
+**The participant snapshot can stop being a table today.** It is one row of four text
+columns. Transcribe it and a drop costs nothing:
+
+```sql
+select id, colleague_name, position, section, department
+from public.training_participants_ws_backfill_20260804;
+```
+
+Paste that output into the header of
+`supabase/migrations/20260804110000_collapse_participant_whitespace_rollback.sql`, where
+that file already reserves a place for it and says why, then:
+
+```sql
+drop table public.training_participants_ws_backfill_20260804;
+```
+
+After which the rollback for one row is a hand-written `UPDATE` against a value recorded
+in git, instead of a query against a table nobody remembers keeping. **Do not drop it
+before the transcription** — the pre-collapse strings exist nowhere else, because the
+Colleagues_Master source rows were corrected by hand on 2026-08-04.
+
+**Worth being honest about what the rollback is for.** Restoring that row restores the
+defect (a name Sera cannot find), so nobody will ever want it *as a rollback*. Its only
+real use is if the collapse itself mangled a value — and that is checkable by eye against
+one transcribed row. Which is the argument for transcribing rather than for keeping a
+table alive on a calendar.
+
+**Done** = both tables gone, or this item states a new condition and a new date for
+whichever survives.
 
 ---
 
@@ -379,10 +436,13 @@ than adding on impulse.
 
 ---
 
-## B8 — five colleagues are stored collapsed as trainers and raw as participants
+## B8 — five colleagues are stored collapsed as trainers and raw as participants — CLOSED 2026-08-04
 
 **Logged:** 2026-08-04 · **Found while** answering whether the double space in
 Colleagues_Master should be fixed at source rather than collapsed by every consumer.
+**Closed** the same day, all four parts done. Kept in full because the reasoning is why
+the write paths look the way they do, and because the last part left a snapshot table
+alive — see B10 for its drop.
 
 **The gap.** `useTrainingSubmit` writes the same person's name two different ways in the
 same submission:
@@ -460,13 +520,31 @@ above the write.
    Covered by an e2e test over a page-scoped dirty roster that asserts BOTH destinations —
    the SharePoint payload and the Postgres insert — and mutation-checked: removing the
    collapse takes it from 1 passed to 1 failed.
-3. **Normalise the existing `training_participants` values** — **MIGRATION WRITTEN, NOT
-   YET APPLIED**: `supabase/migrations/20260804110000_collapse_participant_whitespace.sql`
-   with its rollback sibling. Needs `apply_migration`. Until it runs, the affected
-   colleagues stay unsearchable in every session already recorded — **this is the half
-   that repairs history, and the only one still outstanding.**
+3. ~~**Normalise the existing `training_participants` values**~~ — **DONE 2026-08-04**,
+   `supabase/migrations/20260804110000_collapse_participant_whitespace.sql`, applied by the
+   operator. Result: **1 of 28 participant rows collapsed, 1 snapshotted** —
+   `TRN-20260803113419`, employee_id `102188`, `"Abdelfattah Abdelwahed··Ghallab"`. Abdel
+   Fattah Ghallab, the one of the five who is also a working trainer, attending a session
+   as a participant. So there was exactly one live instance of the defect, and Sera's
+   participant search was missing him in that session, silently.
 
-   Three things about that migration worth knowing before applying it:
+   **Verified independently of the migration's own NOTICEs**, which is the standard this
+   repo holds migrations to: participants still 28, `still_dirty` 0, `snapshot_rows` 1,
+   `relrowsecurity` true, and `has_table_privilege('anon', <snapshot>, 'select')` = false.
+   The privilege assertion did not fire — correct, and confirmed by querying the privilege
+   rather than by reading the assertion's own success message.
+
+   **The atomicity claim was measured, not assumed.** The probe in the migration's header
+   ran first: `begin; create table …; do $$ raise exception $$; commit;` left
+   `leftover = 0`. DDL rolls back with the transaction on this runner, so the file's
+   all-or-nothing behaviour is a property of this platform and not a hope about Postgres.
+
+   **1, not 6, and not 0.** The Colleagues_Master measurement found six dirty rows and a
+   guess from it would have said six here. Only one of those five colleagues had ever
+   attended a recorded session. The two sets are different sets — see
+   `docs/testing-lessons.md` §13.
+
+   Three things about that migration worth knowing, kept for whoever reads it next:
 
    - **It is self-determining.** It updates any row differing from its collapsed form
      rather than naming the six known ids, so it does not depend on a measurement taken
@@ -489,10 +567,10 @@ above the write.
 4. ~~The six **source rows**~~ — **DONE 2026-08-04** by the operator, as data-entry typos
    wrong on their own terms rather than as an accommodation to our contract.
 
-**So what remains is applying the migration.** Nothing else: the entry point is closed,
-both write paths collapse, and Colleagues_Master measured clean across all four text
-fields on 2026-08-04 — 336 rows, zero dirty — so the set cannot grow through our own UI.
-There is no clock on it, but it is the only step that repairs history.
+**Nothing remains.** The entry point is closed, both write paths collapse,
+Colleagues_Master measured clean across all four text fields on 2026-08-04 — 336 rows,
+zero dirty — so the set cannot grow through our own UI, and the one historical row is
+repaired. The only artifact still alive is the snapshot table, tracked in B10.
 
 **Why 4 does not make 1–3 redundant.** Fixing the data empties the current set; it changes
 neither the way a name gets IN nor the two-writers disagreement in how it gets STORED.
@@ -501,8 +579,10 @@ because the symptom today is a five-example reproducible pattern and the symptom
 the next paste is a single mysterious case with the diagnosis to redo from scratch.
 Fixing data without fixing the write path converts a class into a future one-off.
 
-**Not urgent, but no longer trivial.** Five colleagues, one of them a working trainer, and
-the affected reader is a Sera search that returns too few rows rather than wrong ones.
+**What it cost in the end.** Five dirty colleagues at source, one of them a working
+trainer; one recorded session actually affected; one Sera search silently returning too
+few rows rather than wrong ones; and a write path that would have kept producing more.
+Two commits, one migration, one hand-fix in SharePoint.
 
 ---
 

@@ -23,6 +23,23 @@
 -- back and this file cannot help. Verify before relying on it:
 --
 --   select count(*) from public.training_participants_ws_backfill_20260804;
+--
+-- ---------------------------------------------------------------------------
+-- APPLIED 2026-08-04. It collapsed ONE row: TRN-20260803113419, employee_id 102188,
+-- "Abdelfattah Abdelwahed  Ghallab" (double space) -> "Abdelfattah Abdelwahed Ghallab".
+-- So the snapshot table holds exactly one row, and this whole file exists for it.
+--
+-- BEFORE DROPPING THAT TABLE (docs/backlog.md B10), record its contents HERE, in the
+-- block below. One row of four text columns pasted into git makes the drop cost nothing:
+-- the restore becomes a hand-written UPDATE against a value under version control,
+-- instead of a query against a table someone has to remember not to drop.
+--
+--   select id, colleague_name, position, section, department
+--   from public.training_participants_ws_backfill_20260804;
+--
+-- RECORDED PRE-COLLAPSE VALUES: none yet — the table is still alive, so it is still the
+-- source of truth. Do not drop it while this line still reads "none yet".
+-- ---------------------------------------------------------------------------
 
 begin;
 

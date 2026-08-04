@@ -146,6 +146,15 @@ commit;
   ```
   Keep it until the backfill has run and the numbers have been sanity-checked
   for a few days; a snapshot is only useful while you might still want it.
+  **That condition is not met as of 2026-08-04** — the backfill has not run — so
+  the 14th is when to re-read this, not a date to drop on.
+
+  **This is no longer the only live snapshot table.** `docs/backlog.md` **B10**
+  lists both this one and `training_participants_ws_backfill_20260804` with
+  their separate conditions, and is the single place to look; it exists because
+  two snapshots on different clocks is how one gets forgotten. Their dates are
+  deliberately **not** coupled — this table waits on the backfill, that one
+  waits on nothing.
 
 ---
 
