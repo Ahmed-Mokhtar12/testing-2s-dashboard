@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
 import { invokeManageColleague } from '@/services/sharepoint';
+import { collapseColleagueFields } from '@/lib/text';
 import { ADMIN_EMAILS, DEPARTMENT_SECTIONS } from '@/lib/hotel-training-constants';
 
 const schema = z.object({
@@ -62,15 +63,18 @@ export function AddMemberForm() {
     }
 
     try {
+      // Normalised here as well as in the edge function, which is authoritative. Sending
+      // the value that will actually be stored keeps the success toast and the list
+      // refresh from describing something different from what landed.
       await invokeManageColleague({
         action: 'add',
-        colleague: {
+        colleague: collapseColleagueFields({
           employeeId: values.employeeId,
           colleagueName: values.name,
           position: values.position,
           section: values.section,
           department: values.department,
-        },
+        }),
       });
 
       await queryClient.invalidateQueries({ queryKey: ['colleagues'] });

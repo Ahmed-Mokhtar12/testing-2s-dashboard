@@ -38,6 +38,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/hooks/useAuth';
 import { useColleagues } from '@/hooks/useColleagues';
 import { invokeManageColleague } from '@/services/sharepoint';
+import { collapseColleagueFields } from '@/lib/text';
 import { ADMIN_EMAILS, DEPARTMENT_SECTIONS } from '@/lib/hotel-training-constants';
 import type { Colleague } from '@/types/hotel-training';
 
@@ -103,12 +104,30 @@ export function EditMemberForm() {
   const sections = selectedDept ? DEPARTMENT_SECTIONS[selectedDept] ?? [] : [];
 
   const values = watch();
-  const changes = selected
+  // BOTH SIDES NORMALISED, and the diff is computed from the normalised values.
+  //
+  // The edge function collapses whitespace before writing, so `to` must be shown
+  // collapsed or this dialog states one value and the list stores another. And `from` is
+  // collapsed too, because it comes straight off Colleagues_Master, which held six dirty
+  // rows as recently as 2026-08-04 — comparing a dirty `from` against a clean `to` would
+  // report "Name: A··B -> A B" as a pending change on a form where the admin touched only
+  // the department, and a confirmation listing edits nobody made is one people learn to
+  // click through.
+  const proposed = selected
+    ? collapseColleagueFields({
+        colleagueName: values.name ?? '',
+        position: values.position ?? '',
+        section: values.section ?? '',
+        department: values.department ?? '',
+      })
+    : null;
+  const current = selected ? collapseColleagueFields(selected) : null;
+  const changes = current && proposed
     ? [
-        { label: 'Name', from: selected.colleagueName, to: values.name },
-        { label: 'Position', from: selected.position, to: values.position },
-        { label: 'Department', from: selected.department, to: values.department },
-        { label: 'Section', from: selected.section, to: values.section },
+        { label: 'Name', from: current.colleagueName, to: proposed.colleagueName },
+        { label: 'Position', from: current.position, to: proposed.position },
+        { label: 'Department', from: current.department, to: proposed.department },
+        { label: 'Section', from: current.section, to: proposed.section },
       ].filter((change) => change.from !== change.to)
     : [];
   const canSave = selected !== null && (changes.length > 0 || reactivate);
@@ -127,10 +146,12 @@ export function EditMemberForm() {
         action: 'update',
         itemId: selected.id,
         patch: {
-          colleagueName: v.name,
-          position: v.position,
-          section: v.section,
-          department: v.department,
+          ...collapseColleagueFields({
+            colleagueName: v.name,
+            position: v.position,
+            section: v.section,
+            department: v.department,
+          }),
           ...(reactivate ? { reactivate: true } : {}),
         },
       });

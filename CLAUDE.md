@@ -105,6 +105,27 @@ with a deliberately invalid JWT — the gateway returns 401 before the function
 runs, which exercises URL, body, headers and error handling while making a real
 send impossible.
 
+## Colleague text
+
+**Every writer to Colleagues_Master must collapse whitespace before writing** —
+`collapseColleagueFields` from `supabase/functions/_shared/text.ts` (edge) or
+`src/lib/text.ts` (frontend), on all four text fields, not just the name.
+
+This is here because the test cannot enforce it.
+`tests/unit/colleague-fields-agree.test.ts` pins the two *existing* declarations to
+each other; nothing stops a new writer — a bulk import, a fix-up script — from
+writing raw values and reopening the hole.
+
+What the hole costs: the monthly report dedupes trainer names with
+`raw.trim().toLowerCase()`, so `"A  B"` and `"A B"` count as two different trainers,
+and Sera matches participants with `.includes(needle)`, so a stored double space
+cannot be found by a needle typed with one. Six of 336 rows were dirty on
+2026-08-04 — five names and two positions — five colleagues were silently
+unfindable, and the source was `sp-manage-colleague` validating with `.trim()` and
+writing the raw value one line later. See `docs/testing-lessons.md` §13 and
+`docs/backlog.md` B8, which still owes the participant-write backstop and the
+migration for rows already written.
+
 ## Database
 
 - PostgREST clamps every response to `api.max_rows = 1000`. A literal

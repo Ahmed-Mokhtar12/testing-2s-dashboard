@@ -437,3 +437,53 @@ alias transform (`ahmed.mokhtar` → `ahmedm`) is consistent but not injective, 
 `ahmed.mansour` collides onto the same value. A name matcher here does not merely fail
 — it succeeds against the wrong person. See
 `docs/superpowers/specs/2026-08-03-trainer-field-is-the-participant-picker-design.md`.
+
+## 13. One anomaly is a sample. Measure the set before calling it a one-off
+
+**Found:** 2026-08-04, while agreeing the `TrainerNames` format contract.
+
+Ahmed ran the trainer-name join by hand and got nine exact matches out of ten. The one
+mismatch was `Muhammed Muhammed Zawahir`: Colleagues_Master holds
+`"Muhammed Muhammed··Zawahir"` with a double space, and the format contract collapses
+runs of whitespace, so the recorded value was right and the comparison was naive.
+
+The obvious next move — the one that was nearly taken — was to fix that row and move on.
+It is one character, in one row, with a known cause. Everything about it says *one-off*.
+
+He asked instead whether it should be fixed at source, which turned into "how many rows
+are like this?" The answer was not one:
+
+- **five** names with repeated whitespace, out of 336;
+- **two** positions, one leading-space and one internal, in fields nobody had looked at;
+- one of the five, `Abdelfattah Abdelwahed··Ghallab`, an **active trainer** — so this was
+  not a latent participant-only problem;
+- a **live broken search**: Sera matches participants with
+  `(p.colleague_name ?? '').toLowerCase().includes(needle)`, so a needle typed with one
+  space cannot match a stored double space. Five colleagues were unfindable, silently,
+  and had been for as long as the rows existed;
+- and a **write path that keeps producing them**: `sp-manage-colleague` validated a field
+  with `.trim()` and then wrote the RAW value one line later, so the Manage Members tab
+  was itself the source. Not hand-editing in SharePoint, which was the assumption —
+  our own form.
+
+None of that is visible from the single row. The row shows a typo; the set shows a defect
+with a mechanism, a live symptom, and a supply.
+
+**The rule.** When one anomaly turns up in a dataset, the cheap question is not "what
+caused this one?" but **"how many are there, and in which fields?"** One `group by` or one
+`~ '\s\s'` scan across the whole set, before deciding anything. It costs a query and it
+decides whether you are looking at an incident or a class — and those get different fixes.
+
+**The trap that makes this feel unnecessary.** A single instance always has a satisfying
+explanation, because you go and find one. "A double space, someone pasted it" is true,
+complete, and sufficient — and it accounts for exactly one row while quietly implying the
+others don't exist. A plausible cause for the sample is not evidence about the population.
+This is the same shape as §12 (a heuristic's miss reads as an absence) and §11 (silence
+reads as success): in all three the wrong conclusion is the *comfortable* one, and the
+correction is one deliberate extra measurement.
+
+**And the corollary about fixing data.** Cleaning the six rows without fixing the write
+path would have emptied the current set while leaving the mechanism, converting a
+five-example reproducible pattern into a future single mystery — strictly harder to
+diagnose than what we started with. Fix the entry point in the same change as the data,
+or the next occurrence arrives with no pattern attached.

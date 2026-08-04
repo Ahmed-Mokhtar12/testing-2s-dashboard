@@ -445,9 +445,14 @@ above the write.
 
 **"Done" is four things, in this order.**
 
-1. **Collapse where a name ENTERS the system** — both branches of `sp-manage-colleague`.
-   This is the root: it stops new dirt being created through our own UI, which is where
-   the trim already sits unused.
+1. ~~**Collapse where a name ENTERS the system**~~ — **DONE 2026-08-04.** Both branches of
+   `sp-manage-colleague` now call `collapseColleagueFields`, and so do both member forms,
+   so the confirmation dialog states the value that will actually be stored. All four text
+   fields, not just the name — position, section and department travel into
+   `training_participants` the same way, and two of the six dirty rows were positions. The
+   rule is declared once per runtime (`supabase/functions/_shared/text.ts`,
+   `src/lib/text.ts`) with `tests/unit/colleague-fields-agree.test.ts` failing the build if
+   they disagree.
 2. **Collapse on the participant write** in `useTrainingSubmit`, as the backstop for names
    that arrive from a hand-edit rather than through our form. Demoted from "the fix" to
    "defence in depth" by the finding above, but not removed — the list is still editable
@@ -456,8 +461,14 @@ above the write.
    `20260803190000` normalised the trainer names, with the same per-`training_id`
    rollback and for the same reason. Without this the five colleagues above stay
    unsearchable in every session already recorded.
-4. The six **source rows** — fixed by the operator on 2026-08-04, as data-entry typos
+4. ~~The six **source rows**~~ — **DONE 2026-08-04** by the operator, as data-entry typos
    wrong on their own terms rather than as an accommodation to our contract.
+
+**So what remains is 2 and 3**: the participant-write backstop, and the migration for the
+`training_participants` rows already written. Neither is urgent — the entry point is closed
+and the data is clean, so the set cannot grow through our own UI — but 3 is the only thing
+that repairs the five colleagues' existing history, and until it runs those sessions stay
+unfindable in a Sera participant search.
 
 **Why 4 does not make 1–3 redundant.** Fixing the data empties the current set; it changes
 neither the way a name gets IN nor the two-writers disagreement in how it gets STORED.

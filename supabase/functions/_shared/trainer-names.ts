@@ -33,15 +33,18 @@ export const MAX_TRAINER_COUNT = 20;
 
 // Runs of whitespace collapse to a single space, then trim.
 //
-// NOT cosmetic. Colleagues_Master carries its own whitespace dirt — one live row is
-// "Muhammed Muhammed  Zawahir" with a double space, and a position of " IT Manager"
-// with a leading one. The monthly report dedupes trainer names with
-// raw.trim().toLowerCase(), which treats "A  B" and "A B" as two different trainers,
-// so propagating invisible characters would leave the report one stray SharePoint edit
-// away from silently splitting one person into two.
-export function collapseWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
+// NOT cosmetic. Colleagues_Master carries its own whitespace dirt — measured 2026-08-04,
+// six of 336 rows: five names including "Muhammed Muhammed  Zawahir", and two positions
+// including " IT Manager". The monthly report dedupes trainer names with
+// raw.trim().toLowerCase(), which treats "A  B" and "A B" as two different trainers, so
+// propagating invisible characters would leave the report one stray SharePoint edit away
+// from silently splitting one person into two.
+//
+// MOVED to _shared/text.ts, and re-exported here so this module's importers are
+// unchanged. It stopped being a trainer-name concern the moment sp-manage-colleague — the
+// writer of the rows this contract reads from — needed the same rule.
+export { collapseWhitespace } from './text.ts';
+import { collapseWhitespace } from './text.ts';
 
 // The client's trainer field, cleaned. null means "this client did not send trainer
 // names", which is how a not-yet-redeployed client falls through to the legacy paths.

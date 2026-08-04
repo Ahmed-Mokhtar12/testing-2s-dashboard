@@ -21,9 +21,18 @@
 // of inputs and fails the build when they disagree.
 
 // Runs of whitespace collapse to a single space, then trim.
-export function collapseWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
+//
+// MOVED to src/lib/text.ts, and re-exported here so this module's importers are
+// unchanged. It stopped being a trainer-name concern the moment the Manage Members forms
+// — which write the rows this contract reads from — needed the same rule.
+// The '.ts' extension is REQUIRED here and is not a style choice. `node --test` loads
+// this module directly (tests/unit/trainer-names-agree.test.ts) and its ESM resolver does
+// not add extensions, so an extensionless './text' fails with ERR_MODULE_NOT_FOUND at
+// import time — a whole test FILE erroring, which reads as one failure rather than as the
+// several assertions that never ran. tsconfig.app.json already sets
+// allowImportingTsExtensions, so tsc and Vite are equally happy either way.
+export { collapseWhitespace } from './text.ts';
+import { collapseWhitespace } from './text.ts';
 
 // The names to send and to store, from the chosen trainers. One array, computed
 // once, used for both destinations.

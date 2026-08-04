@@ -3,6 +3,7 @@ import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_ID
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { invalidateMirror } from '../_shared/mirror.ts';
+import { collapseColleagueFields } from '../_shared/text.ts';
 
 // Server-side copy of the admin allowlist. MUST stay in sync with
 // ADMIN_EMAILS in src/lib/hotel-training-constants.ts.
@@ -64,11 +65,19 @@ Deno.serve(async (req) => {
     const siteId = await getSiteId(token);
 
     if (body.action === 'add') {
-      const c = body.colleague;
-      if (!c?.employeeId || !/^\d+$/.test(c.employeeId)) return json(req, { error: 'Employee ID must be numeric.' }, 400);
-      if (!c.colleagueName?.trim() || !c.position?.trim() || !c.section?.trim() || !c.department?.trim()) {
+      const raw = body.colleague;
+      if (!raw?.employeeId || !/^\d+$/.test(raw.employeeId)) return json(req, { error: 'Employee ID must be numeric.' }, 400);
+      if (!raw.colleagueName?.trim() || !raw.position?.trim() || !raw.section?.trim() || !raw.department?.trim()) {
         return json(req, { error: 'All colleague fields are required.' }, 400);
       }
+
+      // COLLAPSE BEFORE WRITING. The guard above trims only to decide whether a field is
+      // empty and then, until 2026-08-04, the RAW value was written one line later — so
+      // this form was itself a source of the whitespace dirt that the trainer-name
+      // contract, the report's dedupe and Sera's participant search all have to cope
+      // with. Six of 336 rows were affected. `trim()` sitting next to an unnormalised
+      // write is the whole defect.
+      const c = collapseColleagueFields(raw);
 
       const result = await graphFetch<{ id: string }>(
         token,
@@ -116,10 +125,13 @@ Deno.serve(async (req) => {
       if (!itemId || !/^\d+$/.test(itemId)) {
         return json(req, { error: 'itemId must be a numeric SharePoint item id.' }, 400);
       }
-      const p = body.patch;
-      if (!p?.colleagueName?.trim() || !p.position?.trim() || !p.section?.trim() || !p.department?.trim()) {
+      const rawPatch = body.patch;
+      if (!rawPatch?.colleagueName?.trim() || !rawPatch.position?.trim() || !rawPatch.section?.trim() || !rawPatch.department?.trim()) {
         return json(req, { error: 'All colleague fields are required.' }, 400);
       }
+      // Same rule as the add branch, and it has to be in BOTH: an edit is how five of
+      // the six dirty rows would most plausibly have been created in the first place.
+      const p = collapseColleagueFields(rawPatch);
       const fields: Record<string, unknown> = {
         Title: p.colleagueName,
         ColleagueName: p.colleagueName,
