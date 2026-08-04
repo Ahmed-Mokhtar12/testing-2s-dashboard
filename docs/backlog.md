@@ -632,3 +632,145 @@ the one thing on the review screen a human cannot verify. Adding the ID to those
 puts the discriminating fact in front of someone at the last moment it can still be caught,
 and it survives in a screenshot. Folded into commit 8 of the trainer-field work. It is
 prevention-adjacent, not detection: it does nothing for a row already written.
+
+---
+
+## B11 — a hand-edit to a CloudPanel-managed nginx vhost is reverted by the next certificate renewal
+
+**Logged:** 2026-08-04, from a live 29-minute production outage.
+
+**This already happened, and it will happen again on a schedule.** Ahmed renewed the SSL
+certificates for all five sites from a root terminal. CloudPanel regenerates a site's vhost
+as part of that flow:
+
+```
+18:05:35  clp : /bin/cp   /etc/nginx/sites-enabled/2s-dashboard...conf  ...conf.bak
+18:05:35  clp : /usr/bin/tee /etc/nginx/sites-enabled/2s-dashboard...conf   <- the rewrite
+18:05:35  clp : /bin/rm -f  ...conf.bak                                      <- deletes its own backup
+18:06:23  root: clpctlWrapper lets-encrypt:install:certificate --domainName=2s-dashboard.digitlab.ai
+```
+
+The regenerated file reverted `root` from `.../dist` to the site root. nginx reloaded in the
+same second, and from 18:05:35 until 18:42:56 — **37 minutes** — every request, `/` and every
+`/assets/*`, returned the Vite **source** `index.html`, whose `<script src="/src/main.tsx">`
+does not exist in a build. The whole dashboard was white-screened, not just one page.
+
+**Who saw it is not fully knowable, and the reason is B13.** Roughly 20 requests from ~12
+IPs arrived in the window, including four browser-UA clients at 18:08:05–18:08:33 that
+fetched `/` and then `/src/main.tsx` and `/src/App.tsx` — proof that something parsed the
+source HTML. Whether any was a person is undetermined: the cluster spans four unrelated IPs
+in 28 seconds over HTTP/1.1 with no referer, and fetching `/src/App.tsx` after
+`/src/main.tsx` fails to parse is not browser behaviour, which reads as automated scanning.
+What is clean is that **no client in the window fetched a hashed `/assets/*` file or a
+`/dashboard/*` route** — the signature of a signed-in session, and what the one real visit
+earlier that day (23 requests, 21 of them assets) looks like.
+
+**Why it reverted, precisely.** CloudPanel renders `{{root}}` in a per-site stored
+`vhost_template` from a `root_directory` column, which held `2s-dashboard.digitlab.ai`. The
+`/dist` suffix existed **only on disk**. Anything true only on disk is reverted by
+regeneration, and regeneration is triggered by an action — renewing a certificate — that
+nobody associates with the document root.
+
+**Fixed for this site on 2026-08-04** by setting CloudPanel's Root Directory to
+`2s-dashboard.digitlab.ai/dist`, so `{{root}}` renders correctly and regeneration
+reproduces the working config. See `docs/testing-lessons.md` §14.
+
+**What is still open, and is why this stays logged.** The *class* is not closed.
+
+- Testing survives regeneration for a reason that is luck-adjacent: its `proxy_pass` is in
+  CloudPanel's **stored template**, so it is reproduced. Its vhost has not been regenerated
+  since 3 June — that is not evidence of safety, only of nothing having triggered it.
+- Any **future** hand-edit to either vhost re-opens exactly this hole, silently, with the
+  revert deferred to an unrelated action weeks later.
+- CloudPanel deletes the `.bak` it makes one second after making it, so there is no
+  on-disk record of what was replaced.
+
+**What "done" looks like.** A check that fails loudly when a served document root stops
+matching the built tree — cheapest honest version is a cron`curl` of `/` on both sites
+asserting the response references `/assets/index-*.js` and not `/src/main.tsx`, alerting on
+failure. That single assertion would have caught this within a minute instead of never.
+**Do not** implement it as a check of the vhost file: the file was correct on disk for the
+17 minutes before nginx reloaded, so a file check reports green through the exact window
+that matters. Assert what is **served**.
+
+---
+
+## B12 — production serves no cache headers at all, and testing's cache discipline does not apply there
+
+**Logged:** 2026-08-04, established while verifying the promotion from the public URL.
+
+`public/serve.json` is **inert on production.** It is read by `serve`, and production has no
+`serve` and no PM2 process — nginx serves `dist/` directly. `nginx/global_settings` sets
+security headers only. Measured the same minute:
+
+| | hashed asset | `/` |
+|---|---|---|
+| testing | `public, max-age=31536000, immutable` | `no-cache` |
+| **production** | **none** | **none** |
+
+Both sites do send `ETag`, so this is not a correctness bug — a browser revalidates and gets
+a 304. The costs are real but bounded: content-hashed assets that could be cached forever
+are revalidated on every navigation, and `index.html` has no `no-cache`, so a browser is
+free to apply heuristic freshness to the one file that must never be stale — which can defer
+a deploy being picked up for an interval nobody controls.
+
+**Why this is not urgent.** The overlay deploy means a stale `index.html` still references
+chunks that are still on disk, so the failure mode is "sees the old app for a while", not a
+dead panel.
+
+**What "done" looks like.** `Cache-Control` set in the production vhost —
+`immutable` for `/assets/*`, `no-cache` for `index.html` — mirroring what `serve.json`
+declares on testing. **It must go in CloudPanel's stored template, not the file**, or B11
+reverts it at the next renewal. Worth pairing with a served-header assertion, for the same
+reason B11 gives.
+
+---
+
+## B13 — logrotate renames nginx's log files without signalling nginx, so live traffic is written to a rotated filename
+
+**Logged:** 2026-08-04, noticed while establishing whether the B11 outage hit any user.
+
+`access.log` was 0 bytes on both sites while nginx kept appending to
+`access.log-2026-08-03` — it holds the open fd across the rename and never reopens. Nothing
+is lost; it is filed under yesterday's name, and `access.log` looks like a site with no
+traffic.
+
+**Why it matters more than it looks — it produced a wrong answer, not just a slow one.**
+During the B11 outage the first question was "was anyone affected?". `access.log` was empty,
+so the rotated file was read instead, and it showed nothing after 16:51. The conclusion drawn
+was *"zero requests in the window, nobody affected."* **That was wrong.** A reload during the
+cert batch had made nginx reopen its log files, so traffic had moved *back* to `access.log`
+part-way through — the rotated file went quiet because the writes moved, not because the
+requests stopped. The window in fact held ~20 requests, including four browser-UA clients
+that fetched the broken page.
+
+The trap is specific and worth naming: **the same event can both start an incident and move
+the log that records it.** Here one `systemctl reload nginx` in the cert batch activated the
+broken vhost *and* redirected the access log, so the obvious file was authoritative-looking
+and stale for exactly the period under investigation.
+
+**Currently masked, which is the trap.** `systemctl reload nginx` reopens the log files, so
+the 2026-08-04 18:42 reload made `access.log` live again. It will re-break at the next
+rotation that is not followed by a reload. Do not read a healthy `access.log` as this being
+fixed.
+
+**What "done" looks like.** A `postrotate` stanza in the logrotate config for these sites
+that signals nginx (`systemctl reload nginx`, or `kill -USR1`). Check whether CloudPanel owns
+that config too — if it does, B11 applies and the fix belongs wherever CloudPanel reads from.
+
+---
+
+## B14 — CLOSED 2026-08-04 — an applied migration with no ledger row
+
+`20260804110000_collapse_participant_whitespace` had run — measured: 0 dirty rows across all
+four text fields of `training_participants` over 33 rows, and its snapshot table already
+dropped — but `supabase_migrations.schema_migrations` had no row for it.
+
+**Closed by inserting the row by hand**, with `version` and `name` only. `statements` was
+left NULL deliberately: the effect is verified by measurement, but the exact statement list
+that ran is not known, and filling it from the repo file would assert something unverified
+into the one table people trust to say what ran.
+
+Recorded rather than dropped because the failure it invites is specific: an absent record
+invites someone to re-run a migration whose snapshot table is already gone, and the rollback
+file for that migration is the only remaining copy of the row it changed (see B10).

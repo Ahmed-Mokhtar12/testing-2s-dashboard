@@ -512,3 +512,73 @@ including *"nothing was dirty … the rollback is a no-op"*. An assertion of `ex
 would have aborted a correct migration; a silent success would have left "did it find
 anything?" unanswerable. **State the count you found. Assert the invariant, not the
 population** — here: nothing still dirty, and the row count unchanged.
+
+## 14. Verify what is *served*, not what you built — a routine admin action can revert an invariant held only on disk
+
+**Found:** 2026-08-04, promoting the trainer-field work to production.
+
+Everything reported green. `npm run typecheck` passed. `vite build` exited 0. The git state
+was exactly right — single parent, tree identical to staging except one deliberate path,
+hashes matching the previous promotion. The built artifact was checked directly and was
+correct: `trainerColleagueNames` present, `sp-read-trainers` absent. The overlay landed, 40
+assets became 74, the old chunks were retained, `index.html` was cut over by atomic rename.
+
+Then the last step — fetch the chunk **from the public URL** — returned 2167 bytes of HTML.
+
+Production had been serving the Vite **source** `index.html` for `/` and for every
+`/assets/*` path since a reload 5 minutes before the promotion started. `<script
+src="/src/main.tsx">` does not exist in a build, so the whole dashboard was white-screened.
+Not the page being promoted — all of it.
+
+**The cause was not in this repository at all.** Ahmed renewed the SSL certificates from a
+root terminal, in a different window, as unrelated maintenance. CloudPanel regenerates a
+site's vhost as part of that flow, and the regenerated file reverted `root` from `.../dist`
+to the site root. The `/dist` suffix had been hand-added **on disk only**; CloudPanel renders
+that line from a database column. See `docs/backlog.md` B11.
+
+**The shape, which is the transferable part:** *a routine administrative action reverted an
+invariant held only on disk, and the revert was deferred to a reload nobody was watching.*
+Every property of it works against detection —
+
+- the action (renew a certificate) has **no conceptual link** to the thing it broke (the
+  document root), so nobody thinks to check;
+- the config was correct on disk for **17 minutes** after being rewritten, because nginx had
+  not reloaded yet — so a check that reads the vhost file reports green through the exact
+  window that matters;
+- it landed at 18:05 on a quiet evening, so nothing alerted and nothing would have;
+- CloudPanel deletes the backup it takes one second after taking it, so there is no on-disk
+  trace of what changed.
+
+**What caught it was the one check that reads the public URL.** That step was in the
+procedure only because deploying by hand meant reproducing what `deploy-frontend.sh` does,
+and that script verifies against `PUBLIC_URL` after restarting rather than trusting its own
+build. §10 established that a suite which never runs the built app cannot see build-only
+failures. This is the same argument one layer further out: **a check that never leaves the
+machine cannot see serving failures.** The build was perfect. The files were perfect. The
+bytes on the wire were someone else's.
+
+**The trap to avoid when reasoning about blame.** The vhost changed at 18:05:35 and the
+first write of the promotion was at 18:18:27 — 13 minutes later. It would have been easy,
+and wrong, to assume the deploy caused it because the two were close in time and one of them
+was ours. Causation was settled with `journalctl`: the actor (`clp`), the command
+(`tee` over the vhost), the timestamp, and the fact that the promotion touched no path under
+`/etc` and did not modify the repo-root `index.html`. **Establish causation from a record,
+not from adjacency** — the honest answer here was "not us", and it was only defensible
+because it was demonstrated rather than asserted.
+
+**And the second half of the same investigation got it wrong, which is the sharper lesson.**
+Asked "was anyone affected?", the answer given was *"zero requests in the window."* It came
+from the rotated access log, which had gone quiet — and it was wrong. A reload inside the
+same cert batch had made nginx reopen its log files, so traffic had moved back to
+`access.log` mid-incident. The rotated file went silent because the **writes moved**, not
+because the requests stopped; the window actually held ~20 requests, four of them browser
+clients that fetched the broken page.
+
+The failure is the file's own thesis pointed inward: **an empty log is not evidence of no
+traffic — it is evidence of no traffic *to that file*.** The distinction only matters when
+something moved the writes, and the thing that moved them here was the same reload that
+started the outage. When an incident and a log rotation share a cause, the obvious file is
+authoritative-looking and stale for exactly the period under investigation. Confirm *where
+the writes are going* before reading silence as absence — cheapest check is the first
+timestamp in the live file versus the last in the rotated one, which would have exposed the
+handover immediately.
