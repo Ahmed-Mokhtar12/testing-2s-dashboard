@@ -23,7 +23,7 @@ deadline for either table — their conditions are independent and one of them i
 | Table | Rows | Holds | Drop when |
 |---|---|---|---|
 | `public.reviews_backup_20260731` | 7,889 | pre-dedup state of `"Two Seasons and Reviews"`, including guest names and review text | the reviews backfill has run **and** the numbers have been sanity-checked for a few days |
-| `public.training_participants_ws_backfill_20260804` | 1 | pre-collapse participant name for `102188` in `TRN-20260803113419` | the single row is transcribed into the rollback file (below) |
+| `public.training_participants_ws_backfill_20260804` | 1 | pre-collapse participant name for `102188` in `TRN-20260803113419` | ~~the single row is transcribed into the rollback file~~ **done — clear to drop, no date** |
 
 **Do not give these one shared date.** The tempting simplification — "drop both on the
 14th" — silently attaches the participant snapshot to a condition it has nothing to do
@@ -34,26 +34,28 @@ moves. The participant snapshot has no
 outstanding condition at all. Coupling them means the free one waits for the blocked one,
 and the reason gets lost.
 
-**The participant snapshot can stop being a table today.** It is one row of four text
-columns. Transcribe it and a drop costs nothing:
-
-```sql
-select id, colleague_name, position, section, department
-from public.training_participants_ws_backfill_20260804;
-```
-
-Paste that output into the header of
-`supabase/migrations/20260804110000_collapse_participant_whitespace_rollback.sql`, where
-that file already reserves a place for it and says why, then:
+**The participant snapshot has stopped being a table — 2026-08-04.** Its one row is
+recorded verbatim in the header of
+`supabase/migrations/20260804110000_collapse_participant_whitespace_rollback.sql`, with a
+length-checked `UPDATE` that supersedes the table-driven one, so this is now free to run
+and needs no date:
 
 ```sql
 drop table public.training_participants_ws_backfill_20260804;
 ```
 
-After which the rollback for one row is a hand-written `UPDATE` against a value recorded
-in git, instead of a query against a table nobody remembers keeping. **Do not drop it
-before the transcription** — the pre-collapse strings exist nowhere else, because the
-Colleagues_Master source rows were corrected by hand on 2026-08-04.
+**The transcription needed a guard, because the thing being transcribed is a double
+space** — the one character class that an editor, a formatter, a markdown renderer or a
+paste through a browser collapses without asking. A mangled literal would restore the
+*collapsed* form: a silent no-op wearing a rollback's clothes, discovered only by whoever
+was relying on it. So the recorded statement asserts its own literal is 31 characters with
+the doubled space at offset 23 and raises otherwise, and those two numbers were checked
+against the committed file rather than counted by eye.
+
+Not turned into a unit test, deliberately. A build-time check protecting a one-row
+historical literal for a rollback nobody will ever want is `docs/testing-lessons.md` §9 —
+an artifact that exists to support an artifact. The check runs at restore time, which is
+the only moment it can matter.
 
 **Worth being honest about what the rollback is for.** Restoring that row restores the
 defect (a name Sera cannot find), so nobody will ever want it *as a rollback*. Its only
@@ -62,7 +64,8 @@ one transcribed row. Which is the argument for transcribing rather than for keep
 table alive on a calendar.
 
 **Done** = both tables gone, or this item states a new condition and a new date for
-whichever survives.
+whichever survives. As of 2026-08-04: the participant snapshot is cleared to drop with no
+condition left, `reviews_backup_20260731` waits on the reviews backfill.
 
 ---
 

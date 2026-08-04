@@ -13,10 +13,11 @@
 -- which is the condition the whole B8 thread existed to remove.
 --
 -- WHY A SNAPSHOT EXISTS AT ALL. Collapsing is not invertible: "A B" carries no record of
--- having been "A  B", and the original strings exist nowhere else — the SharePoint source
--- rows were corrected by hand on 2026-08-04, so Colleagues_Master cannot supply them
--- either. Without the snapshot table this migration would be strictly one-way. That is
--- the reason it is here, and the reason it must not be dropped casually.
+-- having been "A  B", and at the time the migration ran the original strings existed
+-- nowhere else — the SharePoint source rows were corrected by hand on 2026-08-04, so
+-- Colleagues_Master could not supply them either. Without the snapshot table the migration
+-- would have been strictly one-way. (Since 2026-08-04 the single affected row is also
+-- recorded in the block further down, which is what makes the table safe to drop.)
 --
 -- ROLLING BACK IS ONLY POSSIBLE WHILE THE SNAPSHOT SURVIVES. If
 -- public.training_participants_ws_backfill_20260804 has been dropped, there is no route
@@ -29,16 +30,52 @@
 -- "Abdelfattah Abdelwahed  Ghallab" (double space) -> "Abdelfattah Abdelwahed Ghallab".
 -- So the snapshot table holds exactly one row, and this whole file exists for it.
 --
--- BEFORE DROPPING THAT TABLE (docs/backlog.md B10), record its contents HERE, in the
--- block below. One row of four text columns pasted into git makes the drop cost nothing:
--- the restore becomes a hand-written UPDATE against a value under version control,
--- instead of a query against a table someone has to remember not to drop.
+-- RECORDED PRE-COLLAPSE VALUES — transcribed from the snapshot table 2026-08-04, one row,
+-- verbatim. With these here, the snapshot table is redundant and dropping it costs
+-- nothing: the statement below replaces the table-driven UPDATE further down.
 --
---   select id, colleague_name, position, section, department
---   from public.training_participants_ws_backfill_20260804;
+--   id             88b0975a-7af4-47ed-aceb-af9068b96a0e
+--   colleague_name Abdelfattah Abdelwahed  Ghallab   <- TWO spaces: Abdelwahed··Ghallab
+--   position       Assistant Reservations Manager
+--   section        Reservation
+--   department     Revenue
 --
--- RECORDED PRE-COLLAPSE VALUES: none yet — the table is still alive, so it is still the
--- source of truth. Do not drop it while this line still reads "none yet".
+-- Only the name was dirty. The other three are recorded anyway because the restore writes
+-- all four columns, and a restore that guesses three of them is not a restore.
+--
+-- THIS RECORD IS A DOUBLE SPACE, AND A DOUBLE SPACE IS PRECISELY WHAT AN EDITOR, A
+-- FORMATTER, A MARKDOWN RENDERER OR A PASTE THROUGH A BROWSER COLLAPSES WITHOUT ASKING.
+-- The value would then look right and restore the collapsed form — a silent no-op dressed
+-- as a rollback. So the statement carries its own integrity check: the literal must be 31
+-- characters with the doubled space at offset 23. If that check raises, this comment block
+-- has been mangled since it was written; do NOT trust the literal, recover from a database
+-- backup instead.
+--
+--   do $$
+--   declare
+--     original text := 'Abdelfattah Abdelwahed  Ghallab';
+--   begin
+--     if length(original) <> 31 or position('  ' in original) <> 23 then
+--       raise exception
+--         'RECORDED LITERAL MANGLED: length % (expected 31), double space at % (expected 23)',
+--         length(original), position('  ' in original);
+--     end if;
+--
+--     update public.training_participants
+--     set colleague_name = original,
+--         position       = 'Assistant Reservations Manager',
+--         section        = 'Reservation',
+--         department     = 'Revenue'
+--     where id = '88b0975a-7af4-47ed-aceb-af9068b96a0e';
+--   end $$;
+--
+-- SUPERSEDES one claim made twice above and once in the migration itself: that the
+-- pre-collapse strings "exist nowhere else". That was true while the snapshot table was
+-- the only copy, and it is why the table was created; it stopped being true when this
+-- block was committed. The migration file is deliberately left byte-identical to what was
+-- applied, so its comment still says the older thing — this is the correction.
+--
+-- See docs/backlog.md B10.
 -- ---------------------------------------------------------------------------
 
 begin;
@@ -51,9 +88,10 @@ begin
       and table_name = 'training_participants_ws_backfill_20260804'
   ) then
     raise exception
-      'ROLLBACK IMPOSSIBLE: the snapshot table is gone. The pre-collapse values existed '
-      'only there — Colleagues_Master was corrected by hand the same day, so nothing else '
-      'holds them. Rolling back would require re-entering them from a database backup.';
+      'SNAPSHOT TABLE GONE — expected, if it was dropped after 2026-08-04. This path needs '
+      'it, but the rollback is still possible: the one row it held is recorded verbatim in '
+      'the header of this file, with a length-checked UPDATE. Run that instead of this '
+      'file. Do NOT conclude the values are lost without reading the header first.';
   end if;
 end $$;
 
