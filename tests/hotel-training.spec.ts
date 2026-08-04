@@ -698,6 +698,85 @@ test.describe('Hotel Training', () => {
     expect(colleaguesInvoked).toBeGreaterThan(0);
   });
 
+  // Colleagues_Master is hand-maintained and carried whitespace dirt in six of its 336
+  // rows on 2026-08-04 — five names and two positions. Both write paths now collapse it,
+  // and this is the test that would notice either one stopping.
+  //
+  // WHY IT MATTERS RATHER THAN BEING TIDINESS. The submission writes the same person
+  // twice: the trainer name into training_sessions.trainer_names and the participant into
+  // training_participants.colleague_name. Until the backstop landed, only the trainer side
+  // collapsed, so one colleague was stored two ways in one session — and Sera matches
+  // participants with `.includes(needle)`, so a needle typed with one space could not find
+  // a stored double space. See docs/backlog.md B8.
+  //
+  // A PAGE-SCOPED roster override, not an edit to the shared fixture. Appending to
+  // MOCK_COLLEAGUES_FLAT once made this suite flaky (see the note in the helper), and
+  // dirtying a shared entry would change what every other test's selectors match.
+  test('whitespace in a colleague name is collapsed on BOTH the trainer and participant writes', async ({ page }) => {
+    const dirtyRoster = MOCK_COLLEAGUES_FLAT.map((colleague) => {
+      if (colleague.employeeId === TRAINER_COLLEAGUE.employeeId) {
+        return { ...colleague, colleagueName: 'Tariq  Rashed' };
+      }
+      if (colleague.employeeId === '1001') {
+        // A dirty NAME and a dirty POSITION on the same row: two of the six real rows
+        // were positions, and position travels into training_participants too.
+        return { ...colleague, colleagueName: 'Alice  Smith', position: ' Supervisor' };
+      }
+      return colleague;
+    });
+
+    const submitBodies: Array<Record<string, unknown>> = [];
+    const writes: CapturedWrite[] = [];
+    await setMockAuthSession(page, USER_EMAIL);
+    await mockColleaguesFunction(page, { list: dirtyRoster });
+    await mockColumnsFunction(page);
+    await mockSubmitFunction(page, { onBody: (body) => submitBodies.push(body as Record<string, unknown>) });
+    await mockManageColleagueFunction(page);
+    await mockSupabaseRest(page, { onWrite: (write) => writes.push(write) });
+    await page.goto('/dashboard/hotel-training');
+    await expect(page.getByRole('button', { name: 'Training Details' })).toBeVisible();
+
+    // Searched by a substring that spans no whitespace, so the selector cannot depend on
+    // which spelling the option renders.
+    await page.getByLabel('Training Title').fill('Whitespace Collapse Test');
+    await selectByTriggerText(page, 'Select department', 'Engineering');
+    await selectByTriggerText(page, 'Select duration', '1 hour');
+    await page.getByLabel('Total Participants').fill('1');
+    await page.getByRole('button', { name: /Pick a date/ }).click();
+    await page.getByRole('gridcell', { name: FUTURE_DAY, exact: true }).first().click();
+    await selectByTriggerText(page, /09|Hour/, '09');
+    await selectByTriggerText(page, /00|Min/, '00');
+    await selectTrainer(page, 'Tariq');
+
+    await page.getByRole('button', { name: /Next: Add Participants/ }).click();
+    await selectParticipant(page, 1, 'Alice');
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+    await page.getByRole('button', { name: 'Confirm & Submit' }).last().click();
+    await expect(page.getByText('Training submitted successfully.')).toBeVisible({ timeout: 10_000 });
+
+    // The trainer side.
+    expect(submitBodies).toHaveLength(1);
+    expect(submitBodies[0].trainerColleagueNames).toEqual(['Tariq Rashed']);
+
+    // The participant side, in BOTH destinations — the SharePoint payload and the
+    // Postgres insert. They are written by different code paths from the same array.
+    const participants = submitBodies[0].participants as Array<Record<string, unknown>>;
+    expect(participants[0].colleagueName).toBe('Alice Smith');
+    expect(participants[0].position).toBe('Supervisor');
+
+    const sessionWrite = writes.find((w) => w.table.startsWith('training_sessions') && w.method === 'POST');
+    expect(sessionWrite?.body).toMatchObject({ trainer_names: ['Tariq Rashed'] });
+
+    const participantWrite = writes.find((w) => w.table.startsWith('training_participants') && w.method === 'POST');
+    expect(participantWrite?.body).toMatchObject([{ colleague_name: 'Alice Smith', position: 'Supervisor' }]);
+
+    // ANTI-VACUITY: the fixture really was dirty, so none of the above can pass by the
+    // roster having been clean all along.
+    expect(dirtyRoster.find((c) => c.employeeId === '1001')?.colleagueName).toBe('Alice  Smith');
+    expect(dirtyRoster.find((c) => c.employeeId === TRAINER_COLLEAGUE.employeeId)?.colleagueName)
+      .toBe('Tariq  Rashed');
+  });
+
   test('colleague load failure surfaces an error instead of empty dropdowns', async ({ page }) => {
     await setMockAuthSession(page, USER_EMAIL);
     await mockColumnsFunction(page);

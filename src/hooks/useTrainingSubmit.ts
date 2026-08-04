@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeSubmitTraining, type ParticipantPayload } from '@/services/sharepoint';
 import { toTrainerNames } from '@/lib/trainer-names';
+import { collapseColleagueFields } from '@/lib/text';
 import type { TrainingDetailsValues, ParticipantRow } from '@/types/hotel-training';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -56,7 +57,18 @@ export function useTrainingSubmit() {
           throw new Error('Participant row is missing a colleague.');
         }
 
-        return {
+        // COLLAPSED, exactly as the trainer names above are. Before this, one submission
+        // stored the same person two ways: `trainer_names` went through toTrainerNames
+        // and the participant row was written raw, so employeeId 101710 was
+        // "Muhammed Muhammed Zawahir" as a trainer and "Muhammed Muhammed  Zawahir" as a
+        // participant. Sera matches participants with `.includes(needle)`, so a needle
+        // typed with one space could not find him (docs/backlog.md B8).
+        //
+        // A BACKSTOP, not the fix. The root was sp-manage-colleague writing raw values
+        // after validating with .trim(), closed in 38c41ed, and Colleagues_Master itself
+        // is clean as of 2026-08-04. This covers the path that remains open: the list can
+        // still be edited directly in SharePoint, outside our forms.
+        return collapseColleagueFields({
           trainingId,
           rowNo: index + 1,
           employeeId: colleague.employeeId,
@@ -64,7 +76,7 @@ export function useTrainingSubmit() {
           position: colleague.position,
           section: colleague.section,
           department: colleague.department,
-        };
+        });
       });
 
       const { sharepointId, failedParticipants } = await invokeSubmitTraining({

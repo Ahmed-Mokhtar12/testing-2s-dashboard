@@ -453,22 +453,46 @@ above the write.
    rule is declared once per runtime (`supabase/functions/_shared/text.ts`,
    `src/lib/text.ts`) with `tests/unit/colleague-fields-agree.test.ts` failing the build if
    they disagree.
-2. **Collapse on the participant write** in `useTrainingSubmit`, as the backstop for names
-   that arrive from a hand-edit rather than through our form. Demoted from "the fix" to
-   "defence in depth" by the finding above, but not removed — the list is still editable
-   directly.
-3. **Normalise the existing `training_participants.colleague_name` values** the way
-   `20260803190000` normalised the trainer names, with the same per-`training_id`
-   rollback and for the same reason. Without this the five colleagues above stay
-   unsearchable in every session already recorded.
+2. ~~**Collapse on the participant write**~~ — **DONE 2026-08-04.** `useTrainingSubmit`
+   passes the participant payload through `collapseColleagueFields`, so one submission can
+   no longer store the same person two ways. Kept as the backstop it is: the root was the
+   entry point, but the SharePoint list is still editable directly, outside our forms.
+   Covered by an e2e test over a page-scoped dirty roster that asserts BOTH destinations —
+   the SharePoint payload and the Postgres insert — and mutation-checked: removing the
+   collapse takes it from 1 passed to 1 failed.
+3. **Normalise the existing `training_participants` values** — **MIGRATION WRITTEN, NOT
+   YET APPLIED**: `supabase/migrations/20260804110000_collapse_participant_whitespace.sql`
+   with its rollback sibling. Needs `apply_migration`. Until it runs, the affected
+   colleagues stay unsearchable in every session already recorded — **this is the half
+   that repairs history, and the only one still outstanding.**
+
+   Three things about that migration worth knowing before applying it:
+
+   - **It is self-determining.** It updates any row differing from its collapsed form
+     rather than naming the six known ids, so it does not depend on a measurement taken
+     on a particular day, and it covers all four text columns.
+   - **Collapsing is not invertible** — `"A B"` carries no record of having been
+     `"A  B"` — and the original strings now exist nowhere else, because the
+     Colleagues_Master source rows were corrected by hand the same day. So the migration
+     snapshots the prior values into a table, and that table is the ONLY route back.
+   - **The snapshot is explicitly locked down**, because `CREATE TABLE` in this project
+     starts world-readable *and world-writable* through the published anon key
+     (CLAUDE.md, Database). It is created with an explicit DDL rather than
+     `create table as`, has RLS enabled and forced, has all grants revoked from `anon`
+     and `authenticated`, and the migration's own assertion block calls
+     `has_table_privilege` for all four verbs on both roles — a refused privilege is
+     proof, where `relrowsecurity = true` is only a setting.
+
+   Postgres's `[[:space:]]` does **not** include U+00A0 where JavaScript's `\s` does, so
+   the pattern is `([[:space:]]|chr(160))+` — matching the app's rule rather than a
+   narrower one that would leave a value the app then rewrites differently.
 4. ~~The six **source rows**~~ — **DONE 2026-08-04** by the operator, as data-entry typos
    wrong on their own terms rather than as an accommodation to our contract.
 
-**So what remains is 2 and 3**: the participant-write backstop, and the migration for the
-`training_participants` rows already written. Neither is urgent — the entry point is closed
-and the data is clean, so the set cannot grow through our own UI — but 3 is the only thing
-that repairs the five colleagues' existing history, and until it runs those sessions stay
-unfindable in a Sera participant search.
+**So what remains is applying the migration.** Nothing else: the entry point is closed,
+both write paths collapse, and Colleagues_Master measured clean across all four text
+fields on 2026-08-04 — 336 rows, zero dirty — so the set cannot grow through our own UI.
+There is no clock on it, but it is the only step that repairs history.
 
 **Why 4 does not make 1–3 redundant.** Fixing the data empties the current set; it changes
 neither the way a name gets IN nor the two-writers disagreement in how it gets STORED.
