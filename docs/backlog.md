@@ -379,7 +379,7 @@ than adding on impulse.
 
 ---
 
-## B8 — one colleague is stored collapsed as a trainer and raw as a participant
+## B8 — five colleagues are stored collapsed as trainers and raw as participants
 
 **Logged:** 2026-08-04 · **Found while** answering whether the double space in
 Colleagues_Master should be fixed at source rather than collapsed by every consumer.
@@ -409,23 +409,101 @@ nothing, or too little. No error and no explanation: exactly the shape
 `docs/testing-lessons.md` §12 describes, where a heuristic's miss is indistinguishable
 from a genuine absence.
 
-**Two candidate fixes, and they are not alternatives.**
+**Measured 2026-08-04 — it is not one row, it is six.** Out of 336 colleagues, five names
+and two positions carry repeated or leading whitespace (`··` marks a double space):
 
-1. **Collapse on the participant write too**, so both roles store one spelling. Cheap and
-   correct going forward, but it does not repair rows already written, and it makes new
-   participant rows disagree with historical ones for that colleague — the same cutover
-   split migration `20260803190000` had to clean up for trainers.
-2. **Fix the source row** in Colleagues_Master (employeeId 101710, 26 characters → 25).
-   Removes the divergence at its origin and unifies the two spellings with no code change.
+```
+101187  Kazi Belayet··Hossai kazi Abdul Awal
+101322  Walid··Abd El Monem Mahmoud
+101710  Muhammed Muhammed··Zawahir      + position " IT Manager" (leading)
+102188  Abdelfattah Abdelwahed··Ghallab
+102613  Nuwan··Buddhika kuma Bandara Arachchilage
+101270  position "Executive Secretary··/PA"
+```
 
-Doing 2 alone leaves the *class* open — Colleagues_Master is hand-maintained and already
-carries a second instance, a position of `" IT Manager"` with a leading space — so the
-collapse in `trainer-names.ts` must stay regardless of what the data looks like today.
-Doing 1 alone leaves the search broken for the rows that already exist. **"Done" is all
-three: fix the source row, collapse on the participant write, and normalise the existing
-`training_participants.colleague_name` values** the way `20260803190000` normalised the
-trainer names, with the same per-`training_id` rollback and for the same reason.
+So five colleagues — not one — are currently stored two ways in the same session, and
+Sera's substring search misses all five. `102188` is Abdel Fattah Ghallab, who is on the
+operator's actual trainer list, so this was going to be hit by a real trainer and not only
+by a hypothetical participant.
 
-**Not urgent.** One colleague, and the only affected reader is a Sera search that returns
-too few rows rather than wrong ones. Sized here so the next person does not rediscover it
-one consumer at a time.
+**THE APP ITSELF CREATES THESE.** This was assumed to be hand-editing in SharePoint. It is
+not only that: `sp-manage-colleague` validates for emptiness with `.trim()` and then writes
+the **raw** value —
+
+```ts
+if (!c.colleagueName?.trim() || ...) { /* reject */ }
+...
+Title: c.colleagueName,
+ColleagueName: c.colleagueName,
+```
+
+[sp-manage-colleague/index.ts:69,80-82](../supabase/functions/sp-manage-colleague/index.ts),
+and again in the update branch at :120,124-125. Neither `AddMemberForm` nor
+`EditMemberForm` normalises before sending. So the Manage Members tab will happily create
+the next dirty row, and even a plain leading space survives a guard that trims one line
+above the write.
+
+**"Done" is four things, in this order.**
+
+1. **Collapse where a name ENTERS the system** — both branches of `sp-manage-colleague`.
+   This is the root: it stops new dirt being created through our own UI, which is where
+   the trim already sits unused.
+2. **Collapse on the participant write** in `useTrainingSubmit`, as the backstop for names
+   that arrive from a hand-edit rather than through our form. Demoted from "the fix" to
+   "defence in depth" by the finding above, but not removed — the list is still editable
+   directly.
+3. **Normalise the existing `training_participants.colleague_name` values** the way
+   `20260803190000` normalised the trainer names, with the same per-`training_id`
+   rollback and for the same reason. Without this the five colleagues above stay
+   unsearchable in every session already recorded.
+4. The six **source rows** — fixed by the operator on 2026-08-04, as data-entry typos
+   wrong on their own terms rather than as an accommodation to our contract.
+
+**Why 4 does not make 1–3 redundant.** Fixing the data empties the current set; it changes
+neither the way a name gets IN nor the two-writers disagreement in how it gets STORED.
+Clean data hides that disagreement instead of removing it — and a hidden one is worse,
+because the symptom today is a five-example reproducible pattern and the symptom after
+the next paste is a single mysterious case with the diagnosis to redo from scratch.
+Fixing data without fixing the write path converts a class into a future one-off.
+
+**Not urgent, but no longer trivial.** Five colleagues, one of them a working trainer, and
+the affected reader is a Sera search that returns too few rows rather than wrong ones.
+
+---
+
+## B9 — trainers are stored by name alone, so a mis-pick is undetectable
+
+**Logged:** 2026-08-04 · **Raised by:** Ahmed, asking whether anything cheap could make a
+wrong trainer selection visible after the fact.
+
+**The gap.** `training_sessions.trainer_names` is `text[]`. If two active colleagues shared
+a `ColleagueName` and the wrong one were chosen in the picker, the stored value would be a
+perfectly valid name and **no check anywhere could detect it** — after the fact, a name
+that identifies the wrong person is indistinguishable from one that identifies the right
+person. Participants do not have this problem: `training_participants` stores
+`employee_id`, so a mis-picked participant is detectable. Trainers are the only role stored
+by name alone, which is the direct and accepted cost of the plain-text decision that made
+colleagues without a Microsoft account recordable at all.
+
+**MEASURED, AND CURRENTLY EMPTY — this is why it is logged rather than built.** On
+2026-08-04, grouping the 336 active colleagues by `ColleagueName` returned **zero**
+duplicates. There is no ambiguous pick available to make, so the risk today is nil, and
+building a schema change against it would be building against a hypothetical. Recorded as
+measured rather than assumed away, so the next reader does not have to re-derive it.
+
+**The trigger.** A second active colleague sharing an existing `ColleagueName` — most
+likely a new hire, or a re-hire creating a second row for the same person. At that moment
+this stops being hypothetical and the fix below becomes worth its cost.
+
+**What "done" looks like.** A `trainer_employee_ids` column beside `trainer_names`, written
+from the same `Colleague[]` the picker already holds, with the names kept for display.
+Two payoffs, not one: a mis-pick becomes detectable forever, and **B7's drift check gets a
+reliable key** instead of comparing names — which is what forces B7 to collapse whitespace
+on both sides today.
+
+**Cheap mitigation, already agreed and not a substitute.** The confirmation step shows every
+participant with their Employee ID and shows trainers as name-only badges, so trainers are
+the one thing on the review screen a human cannot verify. Adding the ID to those badges
+puts the discriminating fact in front of someone at the last moment it can still be caught,
+and it survives in a screenshot. Folded into commit 8 of the trainer-field work. It is
+prevention-adjacent, not detection: it does nothing for a row already written.
