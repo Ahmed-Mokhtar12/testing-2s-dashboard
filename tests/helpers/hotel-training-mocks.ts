@@ -141,9 +141,9 @@ export const MOCK_COLUMNS_FLAT = {
 // reads the colleagues payload, so nothing in the app calls that function and a route
 // for it would only make an accidental call invisible.
 //
-// Removed here rather than with sp-read-trainers itself in commit 8, because commit 7 is
-// what orphans them and an unused fixture invites someone to wire it back up. The
-// FUNCTION is still deployed — deleting a mock is not undeploying anything.
+// Removed in commit 7 rather than with sp-read-trainers itself in commit 8, because
+// commit 7 is what orphaned them and an unused fixture invites someone to wire it back
+// up. The function's source went in commit 8; the platform deletion is separate again.
 //
 // The trainer every test picks is TRAINER_COLLEAGUE at the top of this file.
 

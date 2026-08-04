@@ -33,7 +33,10 @@ import { writeFileSync } from 'node:fs';
 
 const PROJECT_REF = 'yczcebfaqerlwfalrbjn';
 const DEFAULT_URL = 'https://testing-2s-dashboard.digitlab.ai/dashboard/hotel-training';
-const WATCHED_ENDPOINTS = ['sp-read-colleagues', 'sp-read-columns', 'sp-read-trainers'];
+// Two, not three: sp-read-trainers was deleted with the LookupId path. The trainer
+// field reads the colleagues payload now, so the page's cold-start cost is one read
+// lower than every number in docs/perf/hotel-training-baseline.md was measured against.
+const WATCHED_ENDPOINTS = ['sp-read-colleagues', 'sp-read-columns'];
 
 const args = process.argv.slice(2);
 const url = args.find((a) => a.startsWith('http')) ?? DEFAULT_URL;

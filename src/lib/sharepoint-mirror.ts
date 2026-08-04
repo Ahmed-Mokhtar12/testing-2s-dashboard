@@ -8,10 +8,10 @@
 // a migration.
 
 // 'trainers' was a third key, serving the SharePoint User Information List to the old
-// trainer dropdown. Nothing on the frontend reads it now — the trainer picker reads the
-// colleagues payload. The database CHECK constraint still ALLOWS 'trainers' and
-// sp-read-trainers still writes it until commit 8 removes that function; this type is
-// the set of keys this app reads, which is now a strict subset.
+// trainer dropdown. Both the reader and the writer are gone — the picker reads the
+// colleagues payload, and sp-read-trainers has been deleted. The database CHECK
+// constraint still ALLOWS 'trainers', deliberately: dropping it would be a migration
+// whose only effect is to forbid a value nothing writes.
 export type MirrorKey = 'colleagues' | 'columns';
 
 // How long a mirrored payload is served before the client goes back to the edge

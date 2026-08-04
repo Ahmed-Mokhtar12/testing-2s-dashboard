@@ -1,6 +1,6 @@
 # The Trainer field becomes the Participant picker
 
-**Date:** 2026-08-03 · **Status:** approved, in progress
+**Date:** 2026-08-03 · **Status:** implemented; the field is live. Commit 8 awaits its deploy.
 **Supersedes:** `2026-08-03-trainer-field-from-colleagues-master-design.md`
 (which itself superseded `2026-08-03-trainer-directory-escape-hatch-design.md`)
 
@@ -35,22 +35,23 @@ lands in commit N+1, and the last row's lands in whatever touches this file next
 |---|---|---|---|---|
 | 1 | `docs(spec)` this document | — | `77f7c9f` | done |
 | 2 | `fix(report)` normalise all six trainer names | SQL only | `6d0fd21` | done |
-| 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | `63e15a8` | done, NOT deployed |
+| 3 | `feat(trainers)` edge accepts trainer names | sp-submit-training | `63e15a8` | done and DEPLOYED 2026-08-04 |
 | 4 | `test` dedicated trainer fixture colleague | — | `4ee0045` | done |
 | 5 | `refactor` one colleague search rule | — | `9436dc0` | done |
 | 6 | `revert` the escape hatch | delete sp-search-directory | `c357ef2` | done; platform delete DONE 2026-08-03 |
 | 7 | `feat(hotel-training)` the field itself | **frontend** | `4939bf9` | **done and DEPLOYED 2026-08-04** |
-| 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | held for one working day |
+| 8 | `chore(trainers)` delete the LookupId path | sp-submit-training, sp-read-colleagues | | done, NOT deployed |
 
 Between 6 and 7: `0a4fdc2`, a docs-only commit correcting §1 and recording the §2a answer.
 
-**Commit 8 is held deliberately, and for a reason the plan did not state.** Its gate was
-"a working day after the frontend deploy, so no stale tab is still sending the old
-shape". The stronger reason is the rollback: if the new path had to be withdrawn, the
-remedy is redeploying the previous bundle, which sends `trainers: TrainerRef[]` — and
-that only works while the deployed edge function still accepts the legacy shape. Commit
-8 deletes exactly that. So it stays unwritten, not merely undeployed, until the new path
-has been live through a working day.
+**Commit 8 was held for a working day, and for a reason the plan did not state.** Its
+gate was "so no stale tab is still sending the old shape". The stronger reason was the
+rollback: withdrawing the new path meant redeploying the previous bundle, which sends
+`trainers: TrainerRef[]`, and that only worked while the deployed edge function still
+accepted the legacy shape. Commit 8 deletes exactly that, so it stayed **unwritten**
+rather than merely undeployed. The window closed on 2026-08-04 after item 28 landed
+through the new path and every operator check passed; **deploying commit 8 is the point
+of no return** for the legacy shape.
 
 Commits 1–6 are safe to land in any order relative to the PowerApp decision; see
 §"One check before the frontend deploy".
@@ -87,7 +88,20 @@ reasons nobody should revive name matching or `ensureuser`:
 1. **Name matching is refuted by this tenant's data.** "Amir Monir" (his account's
    display name) is **"Amir Gerges Daoud"** in Colleagues_Master — EmployeeID 102387,
    Assistant HR Manager. One person, two names, sharing only the token "Amir".
-2. **A login cannot be derived from an address.** The tenant signs in with a short UPN:
+2. **The pending SharePoint consent must not be requested.** Writing the Person column
+   for someone who had never opened the Training Record site needed SharePoint's
+   `_api/web/ensureuser`, and `_api` rejects Graph tokens — it needed a token whose
+   audience is `https://2seasonshotels.sharepoint.com`, which needs a **SharePoint**
+   application permission (`Sites.Manage.All`, escalating to `Sites.FullControl.All` if
+   Manage proved insufficient) plus tenant admin consent. It was never granted, and it
+   must not be: **the write it existed for no longer exists.** `Sites.Manage.All` is a
+   tenant-wide grant over every SharePoint site, and requesting it now would buy a
+   capability nothing uses. Probe whether it somehow exists with one token request for
+   `https://2seasonshotels.sharepoint.com/.default` — a token at all means some
+   SharePoint permission is present. Moved here from CLAUDE.md in commit 8, in full,
+   because the reason to remember it is that it is the last thing anyone should reach
+   for, not that it is pending.
+3. **A login cannot be derived from an address.** The tenant signs in with a short UPN:
    `ahmed.mokhtar@` → `ahmedm@`, `Amir.Monir@` → `amirm@`, `xarmaigne.narciso@` →
    `xarmaignen@`. The pattern is consistent and still unusable, because it is not
    injective — `ahmed.mokhtar` and `ahmed.mansour` both yield `ahmedm`, and a collision
@@ -479,3 +493,52 @@ trainer still shown, checked, in its own field; clicking a badge's text opens th
 instead of deleting a trainer; the mobile "Next: Review" clears the Sera button;
 deselecting a trainer re-offers them as a participant; and a pre-existing localStorage
 draft restored with the Alert naming its dropped legacy trainers.
+
+## Commit 8 — what was deleted, and the counts
+
+The plan called commit 8 "delete the LookupId path". It is larger than that, and the
+excess was flagged in advance rather than discovered in review: five modules and their
+tests were deferred out of commit 6 because `sp-read-trainers`, `uil.ts` and
+`sharepoint-rest.ts` all imported `directory.ts`, so that cluster could only fall
+together.
+
+**Deleted from `sp-submit-training/index.ts`** — 500 lines to 206. `TRAINER_EMAILS`,
+`UIL_LIST_ID`, `lookupIdCache`, `extractIdentityKeys`, `resolveTrainerLookupIds`,
+`normalizeTrainers`, `fetchColleagueTrainerRows`, the `TrainerRef` type, the
+`ensureUser` branch, the three-way precedence chain, and the three deprecated body
+fields (`trainers`, `trainerNames`, `trainerEmployeeIds`). One shape remains.
+
+**Deleted outright:**
+
+| Path | Was |
+|---|---|
+| `sp-read-trainers/` | served the User Information List to the old dropdown |
+| `sp-probe-columns/` + `scripts/probe-colleague-columns.sh` | the throwaway diagnostic that answered the column question; its own header said to delete it once answered |
+| `_shared/directory.ts` + test (13) | directory search for the withdrawn escape hatch |
+| `_shared/uil.ts` | UIL read |
+| `_shared/uil-mapper.ts` + `tests/unit/uil-mapper.test.ts` (5) | LookupId to display name |
+| `_shared/sharepoint-rest.ts` | `_api/web/ensureuser` |
+| `_shared/colleague-trainers.ts` + test (8) | the ColleagueAccount attempt |
+
+`hasAccount` is gone from `sp-read-colleagues`, and `ColleagueAccountLookupId` is out of
+its `$select`. The first-request fallback to the full field set STAYS: it was added for
+that column, but the reasoning never depended on it — any of the six remaining fields can
+be renamed by an admin in the list UI, and this read now gates step 1 as well as step 2.
+
+**Counts, per T-F.** A green suite that shrank is
+`docs/testing-lessons.md` §11, so both deltas are accounted for exactly:
+
+- **unit 261 → 235**, −26 = directory 13 + colleague-trainers 8 + uil-mapper 5.
+- **e2e unchanged at 111 passing / 37 skipped.** No e2e test covered the LookupId path;
+  the suite exercises the wizard through mocked edge functions, and the only reference to
+  `sp-read-trainers` that remains is the hang-route in the fresh-mirror test, kept
+  deliberately as the assertion that the retired hook is not resurrected.
+
+**`ColleagueAccount` stays as a SharePoint column**, as decided in commit 1 — the 17
+linked rows cost nothing and churning the list buys nothing.
+
+**Left in place deliberately:** the `sharepoint_mirror` CHECK constraint still allows
+`key = 'trainers'`. Dropping it would be a migration whose only effect is to forbid a
+value nothing writes. The stale row itself can be removed with
+`delete from sharepoint_mirror where key = 'trainers';` — cosmetic, since no reader
+remains.

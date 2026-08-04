@@ -3,7 +3,6 @@ import { haveAzureCreds, getAppToken, getSiteId, graphFetch, GRAPH_BASE, LIST_ID
 import { corsHeaders, json } from '../_shared/http.ts';
 import { getCallerEmail } from '../_shared/auth.ts';
 import { writeMirror } from '../_shared/mirror.ts';
-import { parseAccountLookupId } from '../_shared/colleague-trainers.ts';
 
 interface Colleague {
   id: string;
@@ -13,12 +12,10 @@ interface Colleague {
   section: string;
   department: string;
   isActive: boolean;
-  // Whether ColleagueAccount is set — i.e. whether this colleague can be recorded
-  // as a trainer. A BOOLEAN, deliberately, not the LookupId: the id stays on the
-  // server so a client can never send one, and sp-submit-training re-reads it from
-  // the colleague's row at submit time. See
-  // docs/superpowers/specs/2026-08-03-trainer-field-from-colleagues-master-design.md.
-  hasAccount: boolean;
+  // `hasAccount` was here — whether ColleagueAccount was set, i.e. whether this
+  // colleague could be recorded as a trainer. Removed with the withdrawal of that
+  // requirement: having a Microsoft account is not a qualification for training, and a
+  // field that gates the picker on one is worse than no field.
 }
 
 // SharePoint Yes/No columns normally return a JSON boolean, but be defensive:
@@ -36,7 +33,7 @@ function parseActive(raw: unknown): boolean {
 // The narrow field list keeps this read small — it runs on page load, and the list
 // carries 31 columns of which 7 are wanted.
 const FIELD_SELECT =
-  'EmployeeID,ColleagueName,Position,Section,Department,IsActive,ColleagueAccountLookupId';
+  'EmployeeID,ColleagueName,Position,Section,Department,IsActive';
 
 interface GraphItemsPage {
   value: Array<{ id: string; fields: Record<string, unknown> }>;
@@ -50,13 +47,17 @@ async function fetchColleagues(token: string): Promise<Colleague[]> {
   const base = `${GRAPH_BASE}/sites/${siteId}/lists/${LIST_IDS.colleagues}/items?$top=500`;
   const narrowUrl = `${base}&$expand=fields($select=${FIELD_SELECT})`;
 
-  // A $select naming a field that does not exist ERRORS rather than returning null,
-  // and this read gates the whole page. ColleagueAccountLookupId was confirmed by
-  // probe on 2026-08-03, but a later rename would take the page down for everyone —
-  // so the FIRST request, and only the first, falls back to the full field set. Then
-  // hasAccount reads false everywhere and the trainer picker explains itself: a bad
-  // day rather than a broken page. Scoped to the first request because that is where
-  // a naming error surfaces; a later page failing is a real error and must propagate.
+  // A $select naming a field that does not exist ERRORS rather than returning null, and
+  // this read gates the whole page — every field above is required to render the
+  // participant rows AND, since the trainer field became this same picker, step 1 as
+  // well. So the FIRST request, and only the first, falls back to the full field set: a
+  // renamed column degrades to blank strings rather than taking the page down for
+  // everyone. Scoped to the first request because that is where a naming error surfaces;
+  // a later page failing is a real error and must propagate.
+  //
+  // The fallback was added for ColleagueAccountLookupId specifically, which is no longer
+  // selected. It stays because the reasoning never depended on that column — any of the
+  // six can be renamed by an admin in the list UI.
   let url: string | null = narrowUrl;
   let pagesRead = 0;
 
@@ -92,9 +93,6 @@ async function fetchColleagues(token: string): Promise<Colleague[]> {
         section: String(f.Section ?? ''),
         department,
         isActive: parseActive(f.IsActive),
-        // Reuses the submit path's parser, so "linked" cannot mean one thing to the
-        // picker and another to the write that has to honour it.
-        hasAccount: parseAccountLookupId(f.ColleagueAccountLookupId) !== null,
       });
     }
 

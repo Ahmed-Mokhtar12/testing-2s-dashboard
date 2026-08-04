@@ -3,18 +3,18 @@
 # git-archive-pinned scratch workdir.
 #
 # Usage:
-#   SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh sp-read-trainers
+#   SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh sp-read-colleagues
 #   SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh --all
 #   SUPABASE_ACCESS_TOKEN=<token> DEPLOY_REF=<ref> bash scripts/deploy-sp-function.sh --all
 #
-# WHY ONE SCRIPT AND NOT FOUR. These four are identical to deploy: same project,
+# WHY ONE SCRIPT AND NOT THREE. These three are identical to deploy: same project,
 # same verify_jwt, same _shared dependency set, same version check. The existing
 # per-function scripts (chat-with-data, training-report, sp-submit-training) each
-# carry function-specific notes worth keeping separate; these do not. Four copies
+# carry function-specific notes worth keeping separate; these do not. Three copies
 # of the same 120 lines would drift, and the drift would be invisible until a
 # deploy silently skipped a file.
 #
-# WHY THEY ALL NEED DEPLOYING TOGETHER RIGHT NOW: all four import
+# WHY THEY ALL NEED DEPLOYING TOGETHER RIGHT NOW: all three import
 # _shared/graph.ts (the app-token cache) and _shared/mirror.ts (the Postgres
 # mirror write-through). A partial deploy is not broken, but it is confusing —
 # half the functions would populate the mirror and half would not, so the page
@@ -36,7 +36,11 @@ REPO=/home/digitlab-testing-2s-dashboard/htdocs/testing-2s-dashboard.digitlab.ai
 PROJECT=yczcebfaqerlwfalrbjn
 REF="${DEPLOY_REF:-HEAD}"
 
-ALL_FUNCTIONS=(sp-read-colleagues sp-read-columns sp-read-trainers sp-manage-colleague)
+# sp-read-trainers was the fourth. Deleted with the LookupId path: it served the
+# SharePoint User Information List to a trainer dropdown that no longer exists. Removing
+# it from this list is what makes the script REFUSE the name rather than redeploy a
+# function whose source is gone.
+ALL_FUNCTIONS=(sp-read-colleagues sp-read-columns sp-manage-colleague)
 
 usage() {
   echo "Usage: SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh <function|--all>" >&2

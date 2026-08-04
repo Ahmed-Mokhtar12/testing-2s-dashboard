@@ -634,10 +634,11 @@ test.describe('Hotel Training', () => {
     // falls through to the edge function cannot quietly succeed and make this test pass
     // for the wrong reason.
     //
-    // sp-read-trainers stays in this list even though no mirror key feeds it and nothing
-    // is meant to call it. That is the point: the function is still deployed until commit
-    // 8, so this is the assertion that the retired hook is really gone rather than merely
-    // unreferenced in the file someone happened to read.
+    // sp-read-trainers stays in this list even though no mirror key feeds it, nothing is
+    // meant to call it, and its source has been deleted. That is the point: this is the
+    // assertion that the retired hook is really gone rather than merely unreferenced in
+    // whichever file someone happened to read. It costs one route and it is the only
+    // thing that would catch a resurrection.
     for (const fn of ['sp-read-colleagues', 'sp-read-columns', 'sp-read-trainers']) {
       await page.route(`https://${PROJECT_REF}.supabase.co/functions/v1/${fn}`, async (route) => {
         if (route.request().method() === 'OPTIONS') {

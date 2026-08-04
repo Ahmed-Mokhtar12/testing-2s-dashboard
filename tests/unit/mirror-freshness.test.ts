@@ -18,10 +18,10 @@ const NOW = 1_700_000_000_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 
 // 'trainers' was a third key until the trainer field became the participant picker.
-// The database CHECK constraint still allows it and sp-read-trainers still writes it,
-// so this list is the keys THIS APP READS — which must be a subset of what the table
-// accepts, never a superset: a key the table refuses would write nothing and read
-// nothing, silently (supabase/migrations/20260802230000_sharepoint_mirror.sql).
+// Nothing reads or writes it now, but the database CHECK constraint still ALLOWS it, so
+// this list is the keys THIS APP READS — a subset of what the table accepts, never a
+// superset: a key the table refuses would write nothing and read nothing, silently
+// (supabase/migrations/20260802230000_sharepoint_mirror.sql).
 const KEYS: MirrorKey[] = ['colleagues', 'columns'];
 
 test('every mirror key has a positive TTL', () => {

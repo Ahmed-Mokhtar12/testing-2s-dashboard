@@ -55,9 +55,24 @@ export function ConfirmationStep({
           <span>{dateLabel}</span>
           <span className="text-muted-foreground">Trainers</span>
           <span className="flex flex-wrap gap-1">
+            {/* The employee ID is shown here and nowhere else in the trainer flow.
+                Trainers are stored by NAME alone (training_sessions.trainer_names is
+                text[]), so if two active colleagues ever shared a ColleagueName, a
+                wrong pick would be undetectable afterwards — a name identifying the
+                wrong person is indistinguishable from one identifying the right person.
+                Participants do not have that problem; they carry employee_id.
+
+                Measured 2026-08-04: zero duplicate names among the 336 active
+                colleagues, so the risk is currently nil and no schema change is
+                justified (docs/backlog.md B9). This is the cheap half — it puts the
+                discriminating fact in front of a human at the last moment it can still
+                be caught, and it survives in a screenshot. The participants table below
+                already shows an Employee ID column; trainers were the one thing on this
+                screen that could not be verified. */}
             {trainingDetails.trainers.map((trainer) => (
               <Badge key={trainer.employeeId} variant="secondary">
                 {trainer.colleagueName}
+                <span className="ml-1.5 font-normal opacity-70">{trainer.employeeId}</span>
               </Badge>
             ))}
           </span>
