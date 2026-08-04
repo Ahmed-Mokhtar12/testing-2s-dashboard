@@ -242,12 +242,30 @@ comparison per session, no new infrastructure, no new schedule.
   outside it or behind an optional argument.
 - Names the specific divergence — which session, which store held what — because
   "1 mismatch" is not actionable.
+- **Collapses whitespace on BOTH sides before comparing.** Not a nicety — without it the
+  very first thing this check reports is a name that is correct. Proven by hand on
+  2026-08-04: nine of ten recorded trainer names matched `ColleagueName` exactly and the
+  tenth, session 23, did not, because Colleagues_Master holds
+  `"Muhammed Muhammed  Zawahir"` with a double space (26 characters, employeeId 101710)
+  and the format contract collapses runs of whitespace. Commit 2 wrote the single-spaced
+  form deliberately and correctly. A comparison that skips the collapse therefore
+  false-positives on every colleague whose stored name contains repeated whitespace, and
+  a data-quality note whose first finding is a false alarm is a note nobody reads twice.
+  Use the same rule both sides — `value.replace(/\s+/g, ' ').trim()`, the one in
+  `src/lib/trainer-names.ts` and `supabase/functions/_shared/trainer-names.ts`.
 
 **THE CAVEAT THAT MUST NOT BE LOST.** This check **only sees sessions Postgres already
 knows about**, because that is what the report iterates. A session recorded in
 SharePoint and never written to Postgres is invisible to it. So it is *not* coverage of
 the store-to-store leak — the separate finding that `sharepoint_id` 20 and 21 exist in
-Postgres but not the list, while "Housekeeping" exists in the list but not Postgres.
+Postgres but not the list.
+
+(That leak was described here as bidirectional when this item was logged, on the strength
+of a "Housekeeping" row existing in the list but not Postgres. It was a hand-made probe —
+13+ trainers against `Total Participants` = 2 — and was deleted on 2026-08-03. The leak is
+one-directional: the report can over-count, but no session is invisible to it. The caveat
+above stands either way, because it is about what this check *iterates*, not about which
+direction the leak runs.)
 Whoever picks this up must not mistake one for the other: this catches **content**
 drift on rows both stores hold, and says nothing about rows only one store holds.
 Detecting the latter needs a SharePoint-side enumeration, which is a different task.
@@ -358,3 +376,56 @@ repo that just had 19 packages and 5 MB removed) or a documented manual step.
 Second, the check needs network to resolve `jsr:` and `npm:` specifiers, so it
 can never join the hermetic `test:unit` gate. Worth deciding deliberately rather
 than adding on impulse.
+
+---
+
+## B8 — one colleague is stored collapsed as a trainer and raw as a participant
+
+**Logged:** 2026-08-04 · **Found while** answering whether the double space in
+Colleagues_Master should be fixed at source rather than collapsed by every consumer.
+
+**The gap.** `useTrainingSubmit` writes the same person's name two different ways in the
+same submission:
+
+- **trainers** go through `toTrainerNames` (`src/lib/trainer-names.ts`), which collapses
+  runs of whitespace and trims — so `training_sessions.trainer_names` holds
+  `"Muhammed Muhammed Zawahir"`.
+- **participants** are written raw — `colleagueName: colleague.colleagueName` at
+  [useTrainingSubmit.ts:63](../src/hooks/useTrainingSubmit.ts) into
+  `training_participants.colleague_name` — so that same colleague, in the same session,
+  is stored as `"Muhammed Muhammed  Zawahir"`, double space intact.
+
+**This is already wrong in production, independently of the trainer work.** Sera searches
+participants by substring:
+
+```ts
+(p.colleague_name ?? '').toLowerCase().includes(needle)
+```
+
+[training-aggregator.ts:147](../supabase/functions/chat-with-data/training-aggregator.ts).
+A needle typed the way any human types it — with one space — **does not match** a stored
+double space. So "which trainings did Muhammed Muhammed Zawahir attend" silently returns
+nothing, or too little. No error and no explanation: exactly the shape
+`docs/testing-lessons.md` §12 describes, where a heuristic's miss is indistinguishable
+from a genuine absence.
+
+**Two candidate fixes, and they are not alternatives.**
+
+1. **Collapse on the participant write too**, so both roles store one spelling. Cheap and
+   correct going forward, but it does not repair rows already written, and it makes new
+   participant rows disagree with historical ones for that colleague — the same cutover
+   split migration `20260803190000` had to clean up for trainers.
+2. **Fix the source row** in Colleagues_Master (employeeId 101710, 26 characters → 25).
+   Removes the divergence at its origin and unifies the two spellings with no code change.
+
+Doing 2 alone leaves the *class* open — Colleagues_Master is hand-maintained and already
+carries a second instance, a position of `" IT Manager"` with a leading space — so the
+collapse in `trainer-names.ts` must stay regardless of what the data looks like today.
+Doing 1 alone leaves the search broken for the rows that already exist. **"Done" is all
+three: fix the source row, collapse on the participant write, and normalise the existing
+`training_participants.colleague_name` values** the way `20260803190000` normalised the
+trainer names, with the same per-`training_id` rollback and for the same reason.
+
+**Not urgent.** One colleague, and the only affected reader is a Sera search that returns
+too few rows rather than wrong ones. Sized here so the next person does not rediscover it
+one consumer at a time.
