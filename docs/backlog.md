@@ -676,7 +676,25 @@ Restore the server-level `root` (two-space indent — the acme block's `root` is
 and must not change), `nginx -t && systemctl reload nginx`, then confirm `/` references
 `/assets/index-` and not `/src/main.tsx`. Takes about ten seconds once you know.
 
-**THE PERMANENT FIX — still to apply, in CloudPanel's UI.** Not the Root Directory setting:
+**APPLIED AND PROVEN, 2026-08-04 19:10.** The template edit below went in through the Vhost
+tab, and the renewal was then re-run as a test: `clpctl lets-encrypt:install:certificate`
+returned *"Certificate installation was successful"*, issued a genuinely new certificate
+(serial `05B21DE6…` → `056B1F60…`, expiry 13:08 → 14:13), and **regenerated the vhost
+byte-identically** — same SHA-256 before and after, with all three roots intact. The site
+stayed up across both nginx reloads and still serves `trainerColleagueNames` with no
+`sp-read-trainers`.
+
+The ACME uncertainty is **moot rather than resolved**, and that is the better outcome: the
+location-level route never touches `root_directory`, so whether CloudPanel derives the
+challenge *write* path from that column was never put to the test. Nothing now depends on
+the answer.
+
+Worth recording about the route itself: the first paste failed validation — a lost closing
+brace — and CloudPanel refused it with *"unexpected end of file, expecting }"* rather than
+writing it. `updateNginxVhostWithRollback` is real, and it caught a genuine mistake on the
+first attempt.
+
+**THE FIX, as applied — in CloudPanel's UI.** Not the Root Directory setting:
 that field also generates the SSL config, its effect beyond the vhost is undocumented, and
 Delete Site sits on the same screen. Use the **Vhost tab** on the site's page instead, which
 edits the same per-site template regeneration renders from. Add one line to `location /`:
