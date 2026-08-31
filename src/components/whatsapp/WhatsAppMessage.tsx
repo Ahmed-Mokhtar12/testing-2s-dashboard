@@ -83,7 +83,7 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
 
         <div className={hasMediaBlock ? 'px-2 pt-1.5 pb-0.5' : ''}>
           {content && (
-            <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{content}</p>
+            <p dir="auto" className="text-sm text-gray-800 whitespace-pre-wrap break-words">{content}</p>
           )}
 
           <div className={`flex items-center gap-1 mt-1 ${isUser ? 'justify-end' : 'justify-start'}`}>

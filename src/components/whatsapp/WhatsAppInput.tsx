@@ -211,6 +211,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
           </Popover>
           <input
             ref={inputRef}
+            dir="auto"
             type="text"
             value={message}
             onChange={(e) => { setMessage(e.target.value); trackCursor(); }}

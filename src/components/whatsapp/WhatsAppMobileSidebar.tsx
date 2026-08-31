@@ -170,7 +170,7 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
-                  <p className="text-[14px] text-[#667781] truncate pr-2">{chat.lastMessage}</p>
+                  <p dir="auto" className="text-[14px] text-[#667781] truncate pr-2">{chat.lastMessage}</p>
                   {chat.unreadCount && chat.unreadCount > 0 && (
                     <span className="bg-[#25D366] text-white text-[11px] font-semibold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0">
                       {chat.unreadCount}
