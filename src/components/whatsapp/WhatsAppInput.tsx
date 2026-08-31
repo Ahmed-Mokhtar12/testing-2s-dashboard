@@ -112,7 +112,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
   const canSend = (message.trim().length > 0 || !!staged) && !isUploading;
 
   return (
-    <div className="bg-[#F7F8FA] px-4 py-2.5">
+    <div className="bg-[#F0F2F5] px-4 py-2.5">
       {/* Hidden file inputs */}
       <input
         ref={docInputRef}
@@ -139,7 +139,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
             <button
               type="button"
               className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
-                isAttachOpen ? 'text-[#128C7E] bg-[#E9EDEF]' : 'text-[#54656F] hover:bg-[#E9EDEF]'
+                isAttachOpen ? 'text-[#008069] bg-[#E9EDEF]' : 'text-[#54656F] hover:bg-[#E9EDEF]'
               }`}
               aria-label="Attach"
               title="Attach"
@@ -172,7 +172,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
               <button
                 type="button"
                 className={`shrink-0 p-1.5 transition-colors ${
-                  isEmojiOpen ? 'text-[#128C7E]' : 'text-[#54656F] hover:text-[#128C7E]'
+                  isEmojiOpen ? 'text-[#008069]' : 'text-[#54656F] hover:text-[#008069]'
                 }`}
                 aria-label="Emoji"
                 title="Emoji"
@@ -237,7 +237,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
           <button
             type="submit"
             disabled={disabled || isUploading}
-            className="shrink-0 w-10 h-10 flex items-center justify-center bg-[#128C7E] text-white rounded-full hover:bg-[#075E54] transition-colors disabled:opacity-50"
+            className="shrink-0 w-10 h-10 flex items-center justify-center bg-[#008069] text-white rounded-full hover:bg-[#017561] transition-colors disabled:opacity-50"
             aria-label="Send message"
           >
             <Send size={20} />

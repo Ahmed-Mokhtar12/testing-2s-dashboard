@@ -32,7 +32,7 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
       <div
         className={`max-w-[65%] rounded-lg shadow-sm relative ${
           isUser
-            ? 'bg-[#DCF8C6] rounded-tr-none'
+            ? 'bg-[#D9FDD3] rounded-tr-none'
             : isHumanReply
             ? 'bg-[#FFF3E0] rounded-tl-none border border-orange-100'
             : 'bg-white rounded-tl-none'
@@ -42,7 +42,7 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
         <div
           className={`absolute top-0 w-0 h-0 ${
             isUser
-              ? 'right-[-8px] border-l-[8px] border-l-[#DCF8C6] border-t-[8px] border-t-transparent'
+              ? 'right-[-8px] border-l-[8px] border-l-[#D9FDD3] border-t-[8px] border-t-transparent'
               : isHumanReply
               ? 'left-[-8px] border-r-[8px] border-r-[#FFF3E0] border-t-[8px] border-t-transparent'
               : 'left-[-8px] border-r-[8px] border-r-white border-t-[8px] border-t-transparent'

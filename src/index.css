@@ -143,21 +143,21 @@
   --epr-bg-color: #ffffff;
   --epr-category-label-bg-color: #ffffff;
   --epr-text-color: #111B21;
-  --epr-search-border-color: #128C7E;
-  --epr-search-input-bg-color: #F7F8FA;
+  --epr-search-border-color: #008069;
+  --epr-search-input-bg-color: #F0F2F5;
   --epr-search-input-bg-color-active: #ffffff;
   --epr-picker-border-color: #E9EDEF;
-  --epr-category-icon-active-color: #128C7E;
-  --epr-highlight-color: #128C7E;
+  --epr-category-icon-active-color: #008069;
+  --epr-highlight-color: #008069;
   --epr-hover-bg-color: #E9EDEF;
   --epr-focus-bg-color: #E9EDEF;
-  --epr-active-skin-tone-indicator-border-color: #128C7E;
+  --epr-active-skin-tone-indicator-border-color: #008069;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   border: 1px solid #E9EDEF;
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 .wa-emoji-popover .EmojiPickerReact .epr-search-container input.epr-search:focus {
-  border-color: #128C7E;
-  box-shadow: 0 0 0 1px #128C7E;
+  border-color: #008069;
+  box-shadow: 0 0 0 1px #008069;
 }

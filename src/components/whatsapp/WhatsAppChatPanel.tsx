@@ -103,7 +103,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           {onBack && (
             <button
               onClick={onBack}
-              className="p-1 -ml-1 text-[#128C7E] hover:bg-black/5 rounded-full shrink-0"
+              className="p-1 -ml-1 text-[#008069] hover:bg-black/5 rounded-full shrink-0"
               aria-label="Back"
             >
               <ArrowLeft size={22} />
@@ -155,8 +155,8 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
             </button>
           )}
 
-          <Search className="w-5 h-5 cursor-pointer hover:text-[#128C7E] shrink-0" />
-          <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#128C7E] shrink-0" />
+          <Search className="w-5 h-5 cursor-pointer hover:text-[#008069] shrink-0" />
+          <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#008069] shrink-0" />
         </div>
       </div>
 
@@ -173,7 +173,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           <button
             onClick={onToggleHumanControl}
             disabled={isTogglingControl}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#128C7E] text-white hover:bg-[#0e6b5f] transition-all shadow-sm shrink-0 disabled:opacity-60 whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#008069] text-white hover:bg-[#017561] transition-all shadow-sm shrink-0 disabled:opacity-60 whitespace-nowrap"
           >
             {isTogglingControl ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} />}
             Release to AI
@@ -187,7 +187,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-2"
         style={{
-          backgroundColor: '#E5DDD5',
+          backgroundColor: '#EFEAE2',
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C7BBA9' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
       >
@@ -252,7 +252,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
         {/* Sending indicator in human mode */}
         {isLoading && isHumanControlled && (
           <div className="flex justify-end mb-2">
-            <div className="bg-[#DCF8C6] rounded-lg rounded-tr-none px-3 py-2 shadow-sm flex items-center gap-2">
+            <div className="bg-[#D9FDD3] rounded-lg rounded-tr-none px-3 py-2 shadow-sm flex items-center gap-2">
               <Loader2 size={12} className="animate-spin text-gray-500" />
               <span className="text-xs text-gray-500">Sending...</span>
             </div>

@@ -68,7 +68,7 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
     <div className="flex flex-col h-full bg-white border-r border-gray-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-white">
-        <span className="text-[#111B21] font-semibold text-2xl tracking-tight">WhatsApp</span>
+        <span className="text-[#111B21] font-semibold text-2xl tracking-tight">Chats</span>
         <div className="flex items-center gap-4 text-[#54656F]">
           <MessageSquarePlus className="w-5 h-5 cursor-pointer hover:text-[#111B21]" />
           <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#111B21]" />
@@ -81,7 +81,7 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
           <Search className="w-4 h-4 text-[#54656F] mr-3" />
           <input
             type="text"
-            placeholder="Ask Meta AI or Search"
+            placeholder="Search or start a new chat"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className="bg-transparent flex-1 text-sm text-[#3B4A54] placeholder-[#667781] focus:outline-none"

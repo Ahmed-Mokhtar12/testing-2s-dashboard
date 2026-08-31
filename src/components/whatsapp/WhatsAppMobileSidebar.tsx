@@ -86,7 +86,7 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
           <Search className="w-4 h-4 text-[#8696A0] mr-2" />
           <input
             type="text"
-            placeholder="Ask Meta AI or Search"
+            placeholder="Search or start a new chat"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className="min-h-[44px] bg-transparent flex-1 text-[15px] text-[#111B21] placeholder-[#8696A0] focus:outline-none"

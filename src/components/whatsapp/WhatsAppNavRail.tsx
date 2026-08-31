@@ -44,7 +44,7 @@ const WhatsAppNavRail: React.FC = () => {
         title={item.label}
         className={`relative w-12 h-12 flex items-center justify-center rounded-lg transition-colors ${
           isActive
-            ? 'bg-[#E7FCE8] text-[#128C7E]'
+            ? 'bg-[#D9FDD3] text-[#008069]'
             : 'text-[#54656F] hover:bg-[#E9EDEF]'
         }`}
       >
@@ -72,7 +72,7 @@ const WhatsAppNavRail: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-between w-16 h-full bg-[#F7F8FA] border-r border-gray-200 py-3 shrink-0">
+    <div className="flex flex-col items-center justify-between w-16 h-full bg-[#F0F2F5] border-r border-gray-200 py-3 shrink-0">
       <div className="flex flex-col items-center gap-2">
         {topItems.map(renderItem)}
       </div>
@@ -81,7 +81,7 @@ const WhatsAppNavRail: React.FC = () => {
         <button
           onClick={() => navigate('/dashboard')}
           title="Back to Dashboard"
-          className="w-12 h-14 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-[#E7FCE8] text-[#128C7E] hover:bg-[#d3f7d5] transition-colors"
+          className="w-12 h-14 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-[#D9FDD3] text-[#008069] hover:bg-[#d3f7d5] transition-colors"
         >
           <Home size={20} />
           <span className="text-[9px] font-semibold leading-none">Dashboard</span>
