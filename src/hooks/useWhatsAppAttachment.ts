@@ -20,6 +20,12 @@ export interface UploadedAttachment {
 
 const MAX_SIZE = 16 * 1024 * 1024; // 16MB
 
+// The whatsapp-attachments bucket is PRIVATE (staff-gated RLS since 2026-04-23);
+// getPublicUrl links 400 for everyone, so URLs must be signed. The signed URL is
+// stored in "Chat History".Media and fetched later by the operator UI and by
+// Meta's { link } media fetch at send time, so the TTL must cover both.
+const SIGNED_URL_TTL_SECONDS = 365 * 24 * 60 * 60; // 365 days
+
 const DOC_TYPES = [
   'application/pdf',
   'application/msword',
@@ -72,7 +78,7 @@ export const useWhatsAppAttachment = () => {
       setIsUploading(true);
       try {
         const safeName = file.name.replace(/[^\w.-]+/g, '_');
-        const path = `${senderNumber}/${Date.now()}_${safeName}`;
+        const path = `${senderNumber}/${crypto.randomUUID()}_${safeName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('whatsapp-attachments')
@@ -80,10 +86,16 @@ export const useWhatsAppAttachment = () => {
 
         if (uploadError) throw uploadError;
 
-        const { data: pub } = supabase.storage.from('whatsapp-attachments').getPublicUrl(path);
+        const { data: signed, error: signError } = await supabase.storage
+          .from('whatsapp-attachments')
+          .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+
+        if (signError || !signed?.signedUrl) {
+          throw signError ?? new Error('Could not create a signed URL for the upload.');
+        }
 
         return {
-          url: pub.publicUrl,
+          url: signed.signedUrl,
           filename: file.name,
           mimeType: file.type || 'application/octet-stream',
           size: file.size,
