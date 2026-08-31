@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { UploadedAttachment } from './useWhatsAppAttachment';
+import { parseMediaColumn } from '@/lib/whatsappMedia';
 import { toast } from 'sonner';
 
 export interface WhatsAppMessage {
@@ -130,33 +131,16 @@ export const useWhatsAppChat = () => {
           setIsHumanControlled(Boolean(controlData));
 
           data.forEach((chat) => {
-            // Extract attachment / media URL from Media column
-            let mediaUrl: string | undefined;
-            let attachment: UploadedAttachment | undefined;
-            if (chat['Media']) {
-              if (typeof chat['Media'] === 'string') {
-                mediaUrl = chat['Media'];
-              } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
-                const m = chat['Media'] as Record<string, unknown>;
-                const url = (m.url || m.link || m.src) as string | undefined;
-                if (url && typeof m.kind === 'string') {
-                  attachment = {
-                    url,
-                    filename: (m.filename as string) || 'file',
-                    mimeType: (m.mimeType as string) || '',
-                    size: (m.size as number) || 0,
-                    kind: m.kind as UploadedAttachment['kind'],
-                  };
-                } else {
-                  mediaUrl = url;
-                }
-              }
-            }
+            const { mediaUrl, attachment } = parseMediaColumn(chat['Media']);
+            // A media row with no reply fields is a guest message even without
+            // caption text — render an attachment-only bubble instead of nothing.
+            const guestMediaOnly =
+              Boolean(mediaUrl || attachment) && !chat['human_reply'] && !chat['Ai Reply'];
 
-            if (chat['Sender Message']) {
+            if (chat['Sender Message'] || guestMediaOnly) {
               historyMessages.push({
                 id: `user-${chat.id}`,
-                content: chat['Sender Message'],
+                content: chat['Sender Message'] ?? '',
                 isUser: true,
                 timestamp: new Date(chat.created_at),
                 mediaUrl,
@@ -221,49 +205,14 @@ export const useWhatsAppChat = () => {
 
       const newMessages: WhatsAppMessage[] = [];
       for (const row of data) {
-        let mediaUrl: string | undefined;
-        let attachment: UploadedAttachment | undefined;
+        const { mediaUrl, attachment } = parseMediaColumn(row['Media']);
+        const guestMediaOnly =
+          Boolean(mediaUrl || attachment) && !row['human_reply'] && !row['Ai Reply'];
 
-        if (row['Media']) {
-          if (typeof row['Media'] === 'string') {
-            try {
-              const parsed = JSON.parse(row['Media']) as Record<string, unknown>;
-              const url = (parsed.url || parsed.link || parsed.src) as string | undefined;
-              if (url && typeof parsed.kind === 'string') {
-                attachment = {
-                  url,
-                  filename: (parsed.filename as string) || 'file',
-                  mimeType: (parsed.mimeType as string) || '',
-                  size: (parsed.size as number) || 0,
-                  kind: parsed.kind as UploadedAttachment['kind'],
-                };
-              } else {
-                mediaUrl = url;
-              }
-            } catch {
-              mediaUrl = row['Media'];
-            }
-          } else if (typeof row['Media'] === 'object' && row['Media'] !== null) {
-            const m = row['Media'] as Record<string, unknown>;
-            const url = (m.url || m.link || m.src) as string | undefined;
-            if (url && typeof m.kind === 'string') {
-              attachment = {
-                url,
-                filename: (m.filename as string) || 'file',
-                mimeType: (m.mimeType as string) || '',
-                size: (m.size as number) || 0,
-                kind: m.kind as UploadedAttachment['kind'],
-              };
-            } else {
-              mediaUrl = url;
-            }
-          }
-        }
-
-        if (row['Sender Message']) {
+        if (row['Sender Message'] || guestMediaOnly) {
           newMessages.push({
             id: `user-${row.id}`,
-            content: row['Sender Message'],
+            content: row['Sender Message'] ?? '',
             isUser: true,
             timestamp: new Date(row.created_at),
             mediaUrl,
@@ -332,37 +281,18 @@ export const useWhatsAppChat = () => {
         (payload) => {
           const chat = payload.new as Record<string, unknown>;
 
-          // Extract attachment / media URL
-          let mediaUrl: string | undefined;
-          let attachment: UploadedAttachment | undefined;
-          if (chat['Media']) {
-            if (typeof chat['Media'] === 'string') {
-              mediaUrl = chat['Media'] as string;
-            } else if (typeof chat['Media'] === 'object' && chat['Media'] !== null) {
-              const m = chat['Media'] as Record<string, unknown>;
-              const url = (m.url || m.link || m.src) as string | undefined;
-              if (url && typeof m.kind === 'string') {
-                attachment = {
-                  url,
-                  filename: (m.filename as string) || 'file',
-                  mimeType: (m.mimeType as string) || '',
-                  size: (m.size as number) || 0,
-                  kind: m.kind as UploadedAttachment['kind'],
-                };
-              } else {
-                mediaUrl = url;
-              }
-            }
-          }
+          const { mediaUrl, attachment } = parseMediaColumn(chat['Media']);
+          const guestMediaOnly =
+            Boolean(mediaUrl || attachment) && !chat['human_reply'] && !chat['Ai Reply'];
 
           const newMessages: WhatsAppMessage[] = [];
           const timestamp = new Date(chat['created_at'] as string);
           const id = chat['id'] as number;
 
-          if (chat['Sender Message']) {
+          if (chat['Sender Message'] || guestMediaOnly) {
             newMessages.push({
               id: `user-${id}`,
-              content: chat['Sender Message'] as string,
+              content: (chat['Sender Message'] as string | null) ?? '',
               isUser: true,
               timestamp,
               mediaUrl,
