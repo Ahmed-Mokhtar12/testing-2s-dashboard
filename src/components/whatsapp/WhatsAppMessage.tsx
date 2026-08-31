@@ -10,13 +10,16 @@ interface WhatsAppMessageProps {
   mediaUrl?: string;
   attachment?: AttachmentBubbleData;
   repliedByName?: string;
+  /** First bubble of a same-sender run gets the tail + squared corner and a
+      larger gap; followers sit tight beneath it (WhatsApp's run rhythm). */
+  isFirstOfGroup?: boolean;
 }
 
 const isImageUrl = (url: string): boolean => {
   return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url);
 };
 
-const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHumanReply, timestamp, mediaUrl, attachment, repliedByName }) => {
+const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHumanReply, timestamp, mediaUrl, attachment, repliedByName, isFirstOfGroup = true }) => {
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -28,26 +31,30 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
   const hasMediaBlock = !!attachment || !!mediaUrl;
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} ${isFirstOfGroup ? 'mt-2' : 'mt-0.5'}`}>
       <div
         className={`max-w-[65%] rounded-lg shadow-sm relative ${
+          isFirstOfGroup ? (isUser ? 'rounded-tr-none' : 'rounded-tl-none') : ''
+        } ${
           isUser
-            ? 'bg-[#D9FDD3] rounded-tr-none'
+            ? 'bg-[#D9FDD3]'
             : isHumanReply
-            ? 'bg-[#FFF3E0] rounded-tl-none border border-orange-100'
-            : 'bg-white rounded-tl-none'
+            ? 'bg-[#FFF3E0] border border-orange-100'
+            : 'bg-white'
         } ${hasMediaBlock ? 'p-1.5' : 'px-3 py-2'}`}
       >
-        {/* Message tail */}
-        <div
-          className={`absolute top-0 w-0 h-0 ${
-            isUser
-              ? 'right-[-8px] border-l-[8px] border-l-[#D9FDD3] border-t-[8px] border-t-transparent'
-              : isHumanReply
-              ? 'left-[-8px] border-r-[8px] border-r-[#FFF3E0] border-t-[8px] border-t-transparent'
-              : 'left-[-8px] border-r-[8px] border-r-white border-t-[8px] border-t-transparent'
-          }`}
-        />
+        {/* Message tail — first bubble of a run only */}
+        {isFirstOfGroup && (
+          <div
+            className={`absolute top-0 w-0 h-0 ${
+              isUser
+                ? 'right-[-8px] border-l-[8px] border-l-[#D9FDD3] border-t-[8px] border-t-transparent'
+                : isHumanReply
+                ? 'left-[-8px] border-r-[8px] border-r-[#FFF3E0] border-t-[8px] border-t-transparent'
+                : 'left-[-8px] border-r-[8px] border-r-white border-t-[8px] border-t-transparent'
+            }`}
+          />
+        )}
 
         {/* Human agent label — show sender's first name */}
         {isHumanReply && (

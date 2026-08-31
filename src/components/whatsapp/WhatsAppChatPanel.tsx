@@ -214,6 +214,9 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
         {messages.map((msg, index) => {
           const prevMsg = index > 0 ? messages[index - 1] : null;
           const showDateSeparator = !prevMsg || !isSameDay(msg.timestamp, prevMsg.timestamp);
+          const provenance = (m: MessageType) => (m.isUser ? 'guest' : m.isHumanReply ? 'human' : 'ai');
+          const isFirstOfGroup =
+            !prevMsg || showDateSeparator || provenance(prevMsg) !== provenance(msg);
           return (
             <div key={msg.id}>
               {showDateSeparator && (
@@ -231,6 +234,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
                 mediaUrl={msg.mediaUrl}
                 attachment={msg.attachment}
                 repliedByName={msg.repliedByName}
+                isFirstOfGroup={isFirstOfGroup}
               />
             </div>
           );
