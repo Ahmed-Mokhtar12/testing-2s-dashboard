@@ -41,7 +41,14 @@ const WhatsAppChat: React.FC = () => {
   const [, setClockTick] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => setClockTick((t) => t + 1), 60_000);
-    return () => clearInterval(interval);
+    // Cross-tab draft changes arrive as storage events; a tick re-renders the
+    // sidebar previews (same-tab drafts surface on the chat switch itself).
+    const onStorage = () => setClockTick((t) => t + 1);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const loadChatPreviews = useCallback(async () => {

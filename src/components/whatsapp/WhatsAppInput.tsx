@@ -6,6 +6,7 @@ import AttachmentMenu from './AttachmentMenu';
 import AttachmentPreview from './AttachmentPreview';
 import { useWhatsAppAttachment, validateFile, type StagedAttachment, type UploadedAttachment } from '@/hooks/useWhatsAppAttachment';
 import { toast } from '@/hooks/use-toast';
+import { getDraft, setDraft, clearDraft } from '@/lib/whatsappDrafts';
 
 interface WhatsAppInputProps {
   onSend: (message: string, attachment?: UploadedAttachment) => void;
@@ -15,7 +16,14 @@ interface WhatsAppInputProps {
 }
 
 const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHumanMode, senderNumber }) => {
-  const [message, setMessage] = useState('');
+  // Remounted per conversation (key={senderNumber}); the draft survives the
+  // switch — and a reload — in localStorage.
+  const [message, setMessage] = useState(() => getDraft(senderNumber));
+
+  const updateMessage = (value: string) => {
+    setMessage(value);
+    setDraft(senderNumber, value);
+  };
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const [isAttachOpen, setIsAttachOpen] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment | null>(null);
@@ -55,6 +63,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
 
     onSend(message.trim(), uploaded);
     setMessage('');
+    clearDraft(senderNumber);
     clearStaged();
   };
 
@@ -75,7 +84,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
     const emoji = emojiData.emoji;
     const pos = cursorRef.current ?? message.length;
     const next = message.slice(0, pos) + emoji + message.slice(pos);
-    setMessage(next);
+    updateMessage(next);
     const newPos = pos + emoji.length;
     cursorRef.current = newPos;
     requestAnimationFrame(() => {
@@ -214,7 +223,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
             dir="auto"
             type="text"
             value={message}
-            onChange={(e) => { setMessage(e.target.value); trackCursor(); }}
+            onChange={(e) => { updateMessage(e.target.value); trackCursor(); }}
             onKeyUp={trackCursor}
             onClick={trackCursor}
             onSelect={trackCursor}

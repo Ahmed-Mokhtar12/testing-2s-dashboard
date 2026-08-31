@@ -8,6 +8,7 @@ import {
 } from '@/lib/whatsappUi';
 import { ChatListSkeleton, ChatListError } from './ChatListStates';
 import { formatChatTimestamp } from '@/lib/whatsappTime';
+import { getDraftPreview } from '@/lib/whatsappDrafts';
 
 interface WhatsAppSidebarProps {
   chats: ChatPreview[];
@@ -120,7 +121,17 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <p dir="auto" className="text-sm text-[#667781] truncate pr-2">
-                    {chat.lastMessage}
+                    {(() => {
+                      const draft = getDraftPreview(chat.senderNumber, selectedNumber);
+                      return draft ? (
+                        <>
+                          <span className="text-[#008069] font-medium">Draft: </span>
+                          {draft}
+                        </>
+                      ) : (
+                        chat.lastMessage
+                      );
+                    })()}
                   </p>
                   {(chat.unreadCount ?? 0) > 0 && (
                     <span className="bg-[#25D366] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">

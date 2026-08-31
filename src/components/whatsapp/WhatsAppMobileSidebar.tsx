@@ -8,6 +8,7 @@ import {
 } from '@/lib/whatsappUi';
 import { ChatListSkeleton, ChatListError } from './ChatListStates';
 import { formatChatTimestamp } from '@/lib/whatsappTime';
+import { getDraftPreview } from '@/lib/whatsappDrafts';
 
 interface Props {
   chats: ChatPreview[];
@@ -121,7 +122,19 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
-                  <p dir="auto" className="text-[14px] text-[#667781] truncate pr-2">{chat.lastMessage}</p>
+                  <p dir="auto" className="text-[14px] text-[#667781] truncate pr-2">
+                    {(() => {
+                      const draft = getDraftPreview(chat.senderNumber, selectedNumber);
+                      return draft ? (
+                        <>
+                          <span className="text-[#008069] font-medium">Draft: </span>
+                          {draft}
+                        </>
+                      ) : (
+                        chat.lastMessage
+                      );
+                    })()}
+                  </p>
                   {(chat.unreadCount ?? 0) > 0 && (
                     <span className="bg-[#25D366] text-white text-[11px] font-semibold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0">
                       {chat.unreadCount}

@@ -14,11 +14,30 @@ const GUEST_TEXT = 'I need a late checkout';
 const AI_TEXT = 'Of course, *late checkout* until 2 PM is available.';
 const AI_TEXT_VISIBLE = 'until 2 PM is available.';
 
+const GUEST2_NUMBER = '971500000002';
+const GUEST2_NAME = 'Second Guest';
+
 function chatHistoryRows() {
   const now = Date.now();
   const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
   // Newest-first, as PostgREST returns for order=created_at.desc
   return [
+    {
+      id: 3,
+      created_at: iso(30_000),
+      'Sender Number': GUEST2_NUMBER,
+      'Sender Message': 'Hi from the second guest',
+      'Ai Reply': 'Hello! Welcome.',
+      Name: GUEST2_NAME,
+      Media: null,
+      is_archived: false,
+      is_human_controlled: false,
+      human_reply: null,
+      replied_by_user_id: null,
+      replied_by_name: null,
+      released_to_ai_at: null,
+      handled_by: 'ai',
+    },
     {
       id: 2,
       created_at: iso(60_000),
@@ -68,8 +87,12 @@ async function mockWhatsAppRest(page: Page) {
     }
     if (path.includes('/Chat History')) {
       // Same fixture serves the sidebar query (no sender filter) and the
-      // thread query (Sender Number=eq.<n>): one conversation, two rows.
-      return route.fulfill({ json: chatHistoryRows() });
+      // thread queries (Sender Number=eq.<n>, filtered per conversation).
+      const sender = url.searchParams.get('Sender Number')?.replace(/^eq\./, '');
+      const rows = chatHistoryRows().filter(
+        (r) => !sender || r['Sender Number'] === sender
+      );
+      return route.fulfill({ json: rows });
     }
     return route.fulfill({ json: [] });
   });
@@ -183,6 +206,23 @@ test.describe('WhatsApp inbox', () => {
     fail = false;
     await page.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByText(GUEST_NAME).first()).toBeVisible();
+  });
+
+  test('drafts persist per chat and show in the sidebar', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'same keyed composer; desktop flow covers the mechanism');
+    await openWhatsApp(page);
+    const input = page.getByPlaceholder('Type a message');
+    await input.fill('half-typed reply');
+
+    await page.getByText(GUEST2_NAME).first().click();
+    await expect(page.getByPlaceholder('Type a message')).toHaveValue('');
+    // The non-open chat's preview flips to its draft.
+    await expect(page.getByText('Draft:')).toBeVisible();
+    await expect(page.getByText('half-typed reply')).toBeVisible();
+
+    await page.getByText(GUEST_NAME).first().click();
+    await expect(page.getByPlaceholder('Type a message')).toHaveValue('half-typed reply');
+    await expect(page.getByText('Draft:')).toHaveCount(0);
   });
 
   test('in-chat search counts, cycles, and closes', async ({ page, isMobile }) => {
