@@ -23,6 +23,54 @@ export interface WhatsAppMessage {
   expectedEcho?: 'user' | 'ai' | 'human';
 }
 
+// One row -> bubbles mapping for ALL arrival paths (history, older pages,
+// polling, realtime). A row's media belongs to the guest bubble when the row
+// is a guest message, and to the human bubble when it is an operator send
+// (human_reply + Media with no Sender Message) — operator attachments used to
+// vanish on reload because only the guest bubble ever received media.
+const rowToMessages = (chat: Record<string, unknown>): WhatsAppMessage[] => {
+  const { mediaUrl, attachment } = parseMediaColumn(chat['Media']);
+  const guestMediaOnly =
+    Boolean(mediaUrl || attachment) && !chat['human_reply'] && !chat['Ai Reply'];
+  const guestHasBubble = Boolean(chat['Sender Message']) || guestMediaOnly;
+  const out: WhatsAppMessage[] = [];
+  const id = chat['id'] as number;
+  const timestamp = new Date(chat['created_at'] as string);
+
+  if (guestHasBubble) {
+    out.push({
+      id: `user-${id}`,
+      content: (chat['Sender Message'] as string | null) ?? '',
+      isUser: true,
+      timestamp,
+      mediaUrl,
+      attachment,
+    });
+  }
+
+  if (chat['human_reply']) {
+    out.push({
+      id: `human-${id}`,
+      content: chat['human_reply'] as string,
+      isUser: false,
+      isHumanReply: true,
+      timestamp,
+      repliedByName: (chat['replied_by_name'] as string | null) ?? undefined,
+      mediaUrl: guestHasBubble ? undefined : mediaUrl,
+      attachment: guestHasBubble ? undefined : attachment,
+    });
+  } else if (chat['Ai Reply']) {
+    out.push({
+      id: `ai-${id}`,
+      content: chat['Ai Reply'] as string,
+      isUser: false,
+      isHumanReply: false,
+      timestamp,
+    });
+  }
+  return out;
+};
+
 // Adopt the DB row id for a locally-created bubble once the edge function
 // reports it. If the realtime echo already arrived (it can beat the HTTP
 // response), drop the local twin instead of creating a duplicate id.
@@ -88,6 +136,9 @@ const deriveFirstName = (user: { email?: string | null; user_metadata?: Record<s
 
 // Get or create persistent sender number
 const PHONE_NUMBER_REGEX = /^\+?\d{7,15}$/;
+
+// One PostgREST page (server clamps at 1000 anyway); older pages load on demand.
+const PAGE_SIZE = 1000;
 const DEFAULT_SENDER_NUMBER = import.meta.env.VITE_WA_DEFAULT_NUMBER?.trim() ?? '';
 
 /**
@@ -134,6 +185,9 @@ export const useWhatsAppChat = () => {
   const [isTogglingControl, setIsTogglingControl] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastMessageTsRef = useRef<string>(new Date(0).toISOString());
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const oldestLoadedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -173,18 +227,22 @@ export const useWhatsAppChat = () => {
           .eq('Sender Number', sanitizedSenderNumber)
           .eq('is_archived', false)
           .order('created_at', { ascending: false })
-          .limit(1000);
+          .limit(PAGE_SIZE);
 
         if (error) {
           if (import.meta.env.DEV) console.error('Error loading chat history:', error);
           return;
         }
 
+        // newestFirst is descending: last element is the oldest loaded row.
+        setHasMoreHistory((newestFirst?.length ?? 0) === PAGE_SIZE);
+        oldestLoadedAtRef.current = newestFirst?.length
+          ? (newestFirst[newestFirst.length - 1].created_at as string)
+          : null;
+
         const data = newestFirst ? [...newestFirst].reverse() : newestFirst;
 
         if (data && data.length > 0) {
-          const historyMessages: WhatsAppMessage[] = [];
-          
           // Read authoritative control state regardless of n8n row inserts.
           const { data: controlData } = await supabase.rpc(
             'is_conversation_human_controlled',
@@ -192,45 +250,7 @@ export const useWhatsAppChat = () => {
           );
           setIsHumanControlled(Boolean(controlData));
 
-          data.forEach((chat) => {
-            const { mediaUrl, attachment } = parseMediaColumn(chat['Media']);
-            // A media row with no reply fields is a guest message even without
-            // caption text — render an attachment-only bubble instead of nothing.
-            const guestMediaOnly =
-              Boolean(mediaUrl || attachment) && !chat['human_reply'] && !chat['Ai Reply'];
-
-            if (chat['Sender Message'] || guestMediaOnly) {
-              historyMessages.push({
-                id: `user-${chat.id}`,
-                content: chat['Sender Message'] ?? '',
-                isUser: true,
-                timestamp: new Date(chat.created_at),
-                mediaUrl,
-                attachment,
-              });
-            }
-
-            // Show human_reply if it exists
-            if (chat['human_reply']) {
-              historyMessages.push({
-                id: `human-${chat.id}`,
-                content: chat['human_reply'],
-                isUser: false,
-                isHumanReply: true,
-                timestamp: new Date(chat.created_at),
-                repliedByName: (chat as Record<string, unknown>)['replied_by_name'] as string | undefined,
-              });
-            } else if (chat['Ai Reply']) {
-              historyMessages.push({
-                id: `ai-${chat.id}`,
-                content: chat['Ai Reply'],
-                isUser: false,
-                isHumanReply: false,
-                timestamp: new Date(chat.created_at),
-              });
-            }
-          });
-          setMessages(historyMessages);
+          setMessages(data.flatMap((chat) => rowToMessages(chat)));
         } else {
           setMessages([]);
           setIsHumanControlled(false);
@@ -265,42 +285,7 @@ export const useWhatsAppChat = () => {
         return;
       }
 
-      const newMessages: WhatsAppMessage[] = [];
-      for (const row of data) {
-        const { mediaUrl, attachment } = parseMediaColumn(row['Media']);
-        const guestMediaOnly =
-          Boolean(mediaUrl || attachment) && !row['human_reply'] && !row['Ai Reply'];
-
-        if (row['Sender Message'] || guestMediaOnly) {
-          newMessages.push({
-            id: `user-${row.id}`,
-            content: row['Sender Message'] ?? '',
-            isUser: true,
-            timestamp: new Date(row.created_at),
-            mediaUrl,
-            attachment,
-          });
-        }
-
-        if (row['human_reply']) {
-          newMessages.push({
-            id: `human-${row.id}`,
-            content: row['human_reply'],
-            isUser: false,
-            isHumanReply: true,
-            timestamp: new Date(row.created_at),
-            repliedByName: row['replied_by_name'] ?? undefined,
-          });
-        } else if (row['Ai Reply']) {
-          newMessages.push({
-            id: `ai-${row.id}`,
-            content: row['Ai Reply'],
-            isUser: false,
-            isHumanReply: false,
-            timestamp: new Date(row.created_at),
-          });
-        }
-      }
+      const newMessages: WhatsAppMessage[] = data.flatMap((row) => rowToMessages(row));
 
       if (newMessages.length === 0) {
         return;
@@ -342,44 +327,7 @@ export const useWhatsAppChat = () => {
         },
         (payload) => {
           const chat = payload.new as Record<string, unknown>;
-
-          const { mediaUrl, attachment } = parseMediaColumn(chat['Media']);
-          const guestMediaOnly =
-            Boolean(mediaUrl || attachment) && !chat['human_reply'] && !chat['Ai Reply'];
-
-          const newMessages: WhatsAppMessage[] = [];
-          const timestamp = new Date(chat['created_at'] as string);
-          const id = chat['id'] as number;
-
-          if (chat['Sender Message'] || guestMediaOnly) {
-            newMessages.push({
-              id: `user-${id}`,
-              content: (chat['Sender Message'] as string | null) ?? '',
-              isUser: true,
-              timestamp,
-              mediaUrl,
-              attachment,
-            });
-          }
-
-          if (chat['human_reply']) {
-            newMessages.push({
-              id: `human-${id}`,
-              content: chat['human_reply'] as string,
-              isUser: false,
-              isHumanReply: true,
-              timestamp,
-              repliedByName: (chat['replied_by_name'] as string | undefined) ?? undefined,
-            });
-          } else if (chat['Ai Reply']) {
-            newMessages.push({
-              id: `ai-${id}`,
-              content: chat['Ai Reply'] as string,
-              isUser: false,
-              isHumanReply: false,
-              timestamp,
-            });
-          }
+          const newMessages = rowToMessages(chat);
 
           if (newMessages.length > 0) {
             setMessages((prev) => {
@@ -407,6 +355,39 @@ export const useWhatsAppChat = () => {
       channelRef.current = null;
     };
   }, [senderNumber]);
+
+  // Prepend the previous page of history. The boundary is created_at-exclusive;
+  // rows sharing the exact boundary millisecond would be skipped — accepted
+  // (timestamps are effectively unique in this data; noted for Phase 3).
+  const loadOlderMessages = useCallback(async () => {
+    const sanitized = sanitizeSenderNumber(senderNumber);
+    const before = oldestLoadedAtRef.current;
+    if (!sanitized || !before || isLoadingOlder || isLoadingHistory) return;
+    setIsLoadingOlder(true);
+    try {
+      const { data, error } = await supabase
+        .from('Chat History')
+        .select('*')
+        .eq('Sender Number', sanitized)
+        .eq('is_archived', false)
+        .lt('created_at', before)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE);
+
+      if (error || !data) return;
+      setHasMoreHistory(data.length === PAGE_SIZE);
+      if (data.length > 0) {
+        oldestLoadedAtRef.current = data[data.length - 1].created_at as string;
+        const older = [...data].reverse().flatMap((row) => rowToMessages(row));
+        setMessages((prev) => {
+          const existing = new Set(prev.map((m) => m.id));
+          return [...older.filter((m) => !existing.has(m.id)), ...prev];
+        });
+      }
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [senderNumber, isLoadingOlder, isLoadingHistory]);
 
   const changeSenderNumber = useCallback((number: string) => {
     const sanitized = saveSenderNumber(number);
@@ -590,6 +571,9 @@ export const useWhatsAppChat = () => {
     sendMessage,
     senderNumber,
     changeSenderNumber,
+    hasMoreHistory,
+    isLoadingOlder,
+    loadOlderMessages,
     isHumanControlled,
     isTogglingControl,
     toggleHumanControl,

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft, ChevronDown } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
@@ -29,6 +29,9 @@ interface WhatsAppChatPanelProps {
   guestName?: string;
   isLoading: boolean;
   isLoadingHistory: boolean;
+  hasMoreHistory?: boolean;
+  isLoadingOlder?: boolean;
+  onLoadOlder?: () => void;
   isHumanControlled: boolean;
   isTogglingControl: boolean;
   onSendMessage: (message: string, attachment?: UploadedAttachment) => void;
@@ -42,6 +45,9 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   guestName,
   isLoading,
   isLoadingHistory,
+  hasMoreHistory,
+  isLoadingOlder,
+  onLoadOlder,
   isHumanControlled,
   isTogglingControl,
   onSendMessage,
@@ -54,10 +60,20 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   // never yank someone who scrolled up to read history.
   const isNearBottomRef = useRef(true);
 
+  const [showFab, setShowFab] = useState(false);
+  const [fabCount, setFabCount] = useState(0);
+  const prevLenRef = useRef(0);
+  // Set before onLoadOlder; consumed by the layout effect to keep the viewport
+  // anchored on the same message after older pages are prepended.
+  const pendingRestoreRef = useRef<{ h: number; t: number } | null>(null);
+
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
-    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    isNearBottomRef.current = nearBottom;
+    setShowFab(!nearBottom);
+    if (nearBottom) setFabCount(0);
   };
 
   const scrollToBottom = () => {
@@ -66,16 +82,36 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
 
   useEffect(() => {
     isNearBottomRef.current = true;
+    setShowFab(false);
+    setFabCount(0);
+    prevLenRef.current = 0;
   }, [senderNumber]);
 
-  useEffect(() => {
-    if (isNearBottomRef.current) scrollToBottom();
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (pendingRestoreRef.current && el) {
+      el.scrollTop = el.scrollHeight - pendingRestoreRef.current.h + pendingRestoreRef.current.t;
+      pendingRestoreRef.current = null;
+    } else if (isNearBottomRef.current) {
+      scrollToBottom();
+    } else if (messages.length > prevLenRef.current && prevLenRef.current > 0) {
+      setFabCount((c) => c + (messages.length - prevLenRef.current));
+    }
+    prevLenRef.current = messages.length;
   }, [messages]);
 
   const handleSend: WhatsAppChatPanelProps['onSendMessage'] = (message, attachment) => {
     onSendMessage(message, attachment);
     isNearBottomRef.current = true;
+    setShowFab(false);
+    setFabCount(0);
     requestAnimationFrame(scrollToBottom);
+  };
+
+  const handleLoadOlder = () => {
+    const el = containerRef.current;
+    if (el) pendingRestoreRef.current = { h: el.scrollHeight, t: el.scrollTop };
+    onLoadOlder?.();
   };
 
   const initials = getInitials(guestName, senderNumber);
@@ -168,15 +204,30 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
       )}
 
       {/* Chat area */}
+      <div className="relative flex-1 min-h-0">
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-2"
+        className="h-full overflow-y-auto px-4 sm:px-8 lg:px-16 py-2"
         style={{
           backgroundColor: '#EFEAE2',
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C7BBA9' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
       >
+        {/* Earlier pages exist beyond the newest PAGE_SIZE rows */}
+        {!isLoadingHistory && hasMoreHistory && (
+          <div className="flex justify-center my-2">
+            <button
+              type="button"
+              onClick={handleLoadOlder}
+              disabled={isLoadingOlder}
+              className="bg-white text-[#008069] text-xs font-medium px-3 py-1.5 rounded-full shadow-sm hover:bg-[#F0F2F5] transition-colors disabled:opacity-60"
+            >
+              {isLoadingOlder ? 'Loading…' : 'Load earlier messages'}
+            </button>
+          </div>
+        )}
+
         {/* Loading history indicator */}
         {isLoadingHistory && (
           <div className="flex justify-center my-4">
@@ -250,6 +301,29 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
         )}
 
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Scroll-to-bottom FAB with new-message count while scrolled up */}
+      {showFab && (
+        <button
+          type="button"
+          onClick={() => {
+            setFabCount(0);
+            isNearBottomRef.current = true;
+            setShowFab(false);
+            scrollToBottom();
+          }}
+          aria-label="Scroll to latest messages"
+          className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-[#54656F] hover:bg-[#F0F2F5] transition-colors"
+        >
+          <ChevronDown size={22} />
+          {fabCount > 0 && (
+            <span className="absolute -top-1.5 -right-1 bg-[#25D366] text-white text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+              {fabCount}
+            </span>
+          )}
+        </button>
+      )}
       </div>
 
       {/* Input area — keyed by conversation so text + staged files never leak

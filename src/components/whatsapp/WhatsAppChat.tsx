@@ -26,6 +26,9 @@ const WhatsAppChat: React.FC = () => {
     sendMessage,
     senderNumber,
     changeSenderNumber,
+    hasMoreHistory,
+    isLoadingOlder,
+    loadOlderMessages,
     isHumanControlled,
     isTogglingControl,
     toggleHumanControl,
@@ -149,6 +152,9 @@ const WhatsAppChat: React.FC = () => {
               guestName={chatPreviews.find((c) => c.senderNumber === senderNumber)?.name}
               isLoading={isLoading}
               isLoadingHistory={isLoadingHistory}
+              hasMoreHistory={hasMoreHistory}
+              isLoadingOlder={isLoadingOlder}
+              onLoadOlder={loadOlderMessages}
               isHumanControlled={isHumanControlled}
               isTogglingControl={isTogglingControl}
               onSendMessage={sendMessage}
@@ -204,6 +210,9 @@ const WhatsAppChat: React.FC = () => {
           guestName={chatPreviews.find((c) => c.senderNumber === senderNumber)?.name}
           isLoading={isLoading}
           isLoadingHistory={isLoadingHistory}
+          hasMoreHistory={hasMoreHistory}
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={loadOlderMessages}
           isHumanControlled={isHumanControlled}
           isTogglingControl={isTogglingControl}
           onSendMessage={sendMessage}

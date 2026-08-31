@@ -185,6 +185,75 @@ test.describe('WhatsApp inbox', () => {
     await expect(page.getByText(GUEST_NAME).first()).toBeVisible();
   });
 
+  test('thread over one page offers Load earlier and prepends older rows', async ({ page, isMobile }) => {
+    const now = Date.now();
+    const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+    // First page: exactly 1000 rows (the PostgREST clamp) — ids 2000 (newest)
+    // down to 1001 (oldest of the page). Older page: 3 ancient rows.
+    const firstPage = Array.from({ length: 1000 }, (_, i) => ({
+      id: 2000 - i,
+      created_at: iso((i + 1) * 60_000),
+      'Sender Number': GUEST_NUMBER,
+      'Sender Message': `msg ${2000 - i}`,
+      'Ai Reply': null,
+      Name: GUEST_NAME,
+      Media: null,
+      is_archived: false,
+      human_reply: null,
+      replied_by_name: null,
+    }));
+    const olderPage = [3, 2, 1].map((id) => ({
+      id,
+      created_at: iso((1100 + (4 - id)) * 60_000),
+      'Sender Number': GUEST_NUMBER,
+      'Sender Message': `ancient message ${id}`,
+      'Ai Reply': null,
+      Name: GUEST_NAME,
+      Media: null,
+      is_archived: false,
+      human_reply: null,
+      replied_by_name: null,
+    }));
+
+    await setMockAuthSession(page);
+    await page.route(`https://${PROJECT_REF}.supabase.co/rest/v1/**`, async (route) => {
+      const request = route.request();
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, body: 'ok' });
+      const url = new URL(request.url());
+      const path = decodeURIComponent(url.pathname);
+      if (path.endsWith('/rpc/is_conversation_human_controlled')) {
+        return route.fulfill({ json: false });
+      }
+      if (path.includes('/Chat History')) {
+        const createdFilter = url.searchParams.get('created_at') ?? '';
+        if (createdFilter.startsWith('lt.')) return route.fulfill({ json: olderPage });
+        return route.fulfill({ json: firstPage });
+      }
+      return route.fulfill({ json: [] });
+    });
+    await page.addInitScript((num) => {
+      window.localStorage.setItem('whatsapp_sender_number', num);
+    }, GUEST_NUMBER);
+    await page.goto('/whatsapp');
+    await page.getByTestId('whatsapp-chat-shell').waitFor({ state: 'visible' });
+    if (isMobile) {
+      await page.getByText(GUEST_NAME).first().click();
+    }
+
+    const bubble = (text: string) =>
+      page.locator('p.whitespace-pre-wrap', { hasText: text });
+    await expect(bubble('msg 2000')).toBeVisible();
+
+    const loadEarlier = page.getByRole('button', { name: 'Load earlier messages' });
+    await expect(loadEarlier).toBeVisible();
+    await loadEarlier.click();
+
+    await expect(bubble('ancient message 1')).toHaveCount(1);
+    await expect(bubble('msg 1001')).toHaveCount(1);
+    // Older page was short (3 < 1000) — no more history, button disappears.
+    await expect(loadEarlier).toHaveCount(0);
+  });
+
   test('typing into the composer does not send without a click', async ({ page, isMobile }) => {
     await openWhatsApp(page);
     if (isMobile) {
