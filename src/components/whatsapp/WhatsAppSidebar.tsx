@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, MessageSquarePlus, MoreVertical, Lock } from 'lucide-react';
+import React from 'react';
+import { Search, MessageSquarePlus, MoreVertical } from 'lucide-react';
 
 interface ChatPreview {
   senderNumber: string;
@@ -27,17 +27,6 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   onSearchChange,
   isLoading,
 }) => {
-  const [activeFilter, setActiveFilter] = useState('All');
-
-  // Compute counters from chats
-  const unreadCount = chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0);
-  const filters: { key: string; label: string; count?: number }[] = [
-    { key: 'All', label: 'All' },
-    { key: 'Unread', label: 'Unread', count: unreadCount },
-    { key: 'Favourites', label: 'Favourites' },
-    { key: 'Groups', label: 'Groups' },
-  ];
-
   const filteredChats = chats.filter(chat => {
     const q = searchQuery.toLowerCase();
     return chat.senderNumber.includes(searchQuery) || 
@@ -100,39 +89,10 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 px-3 py-2 overflow-x-auto">
-        {filters.map((filter) => {
-          const isActive = activeFilter === filter.key;
-          const showCount = filter.count !== undefined && filter.count > 0;
-          return (
-            <button
-              key={filter.key}
-              onClick={() => setActiveFilter(filter.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                isActive
-                  ? 'bg-[#D9FDD3] text-[#0a5c45]'
-                  : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
-              }`}
-            >
-              <span>{filter.label}</span>
-              {showCount && (
-                <span className={isActive ? 'text-[#0a5c45]' : 'text-[#667781]'}>
-                  {filter.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Locked Chats */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-[#F5F6F6]">
-        <div className="w-12 h-12 bg-[#F0F2F5] rounded-full flex items-center justify-center">
-          <Lock className="w-5 h-5 text-[#54656F]" />
-        </div>
-        <span className="text-[#111B21] font-medium">Locked chats</span>
-      </div>
+      {/* Filter chips (All/Unread/Favourites/Groups) and the decorative
+          "Locked chats" row were removed: the chips never filtered anything
+          and there is no unread/favourite/group/locked concept yet. The chip
+          row returns with Phase-2 unread tracking, wired to real data. */}
 
       {/* Chat List */}
       <div className="flex-1 overflow-y-auto">

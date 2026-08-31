@@ -5,7 +5,6 @@ import {
   CircleDashed,
   Megaphone,
   Users,
-  Sparkles,
   Settings,
   Home,
   type LucideIcon,
@@ -24,7 +23,6 @@ const topItems: NavItem[] = [
   { key: 'status', icon: CircleDashed, label: 'Status' },
   { key: 'channels', icon: Megaphone, label: 'Channels' },
   { key: 'communities', icon: Users, label: 'Communities' },
-  { key: 'meta-ai', icon: Sparkles, label: 'Meta AI' },
 ];
 
 const bottomItems: NavItem[] = [

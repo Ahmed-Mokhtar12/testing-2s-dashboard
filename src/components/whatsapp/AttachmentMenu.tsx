@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Image as ImageIcon, Camera } from 'lucide-react';
+import { FileText, Image as ImageIcon } from 'lucide-react';
 
 interface AttachmentMenuProps {
   onPickDocument: () => void;
@@ -48,13 +48,8 @@ const AttachmentMenu: React.FC<AttachmentMenuProps> = ({ onPickDocument, onPickM
         iconBg="#007BFC"
         onClick={onPickMedia}
       />
-      <MenuItem
-        icon={<Camera size={18} />}
-        label="Camera"
-        iconBg="#FF2E74"
-        disabled
-        hint="Coming soon"
-      />
+      {/* No Camera item: webcam capture has no pipeline here, and a disabled
+          "Coming soon" row is not something the real menu ever shows. */}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Search, MoreHorizontal, Camera, Plus } from 'lucide-react';
 
 interface ChatPreview {
@@ -49,15 +49,6 @@ const formatPhoneNumber = (number: string) => {
 const WhatsAppMobileSidebar: React.FC<Props> = ({
   chats, selectedNumber, onSelectChat, searchQuery, onSearchChange, isLoading,
 }) => {
-  const [activeFilter, setActiveFilter] = useState('All');
-  const unreadCount = chats.reduce((s, c) => s + (c.unreadCount ?? 0), 0);
-  const filters = [
-    { key: 'All', label: 'All' },
-    { key: 'Unread', label: 'Unread', count: unreadCount },
-    { key: 'Favourites', label: 'Favourites' },
-    { key: 'Groups', label: 'Groups' },
-  ];
-
   const filteredChats = chats.filter((c) => {
     const q = searchQuery.toLowerCase();
     return (
@@ -103,30 +94,8 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Filter pills */}
-      <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar">
-        {filters.map((f) => {
-          const isActive = activeFilter === f.key;
-          return (
-            <button
-              key={f.key}
-              onClick={() => setActiveFilter(f.key)}
-              className={`flex items-center gap-1 px-3.5 py-2.5 rounded-full text-[13px] font-medium whitespace-nowrap border transition-colors ${
-                isActive
-                  ? 'bg-[#D9FDD3] text-[#0a5c45] border-[#D9FDD3]'
-                  : 'bg-white text-[#54656F] border-[#E9EDEF]'
-              }`}
-            >
-              <span>{f.label}</span>
-              {f.count !== undefined && f.count > 0 && (
-                <span className={isActive ? 'text-[#0a5c45]' : 'text-[#54656F]'}>
-                  {f.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* Filter chips removed until Phase-2 unread tracking gives them real
+          data — they only changed their own styling before. */}
 
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto">
