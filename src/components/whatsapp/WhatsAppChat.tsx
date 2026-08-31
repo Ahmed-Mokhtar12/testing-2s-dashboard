@@ -31,16 +31,12 @@ const WhatsAppChat: React.FC = () => {
     toggleHumanControl,
   } = useWhatsAppChat();
 
-  const buildTimestamp = useCallback((dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const isYesterday = date.toDateString() === yesterday.toDateString();
-    if (isToday) return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    if (isYesterday) return 'Yesterday';
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  // Re-render every minute so render-time timestamp labels ("14:05" →
+  // "Yesterday") stay current without refetching.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setClockTick((t) => t + 1), 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadChatPreviews = useCallback(async () => {
@@ -72,7 +68,7 @@ const WhatsAppChat: React.FC = () => {
               senderNumber: num,
               name: chat['Name'] || undefined,
               lastMessage: textPreview || '📎 Attachment',
-              timestamp: buildTimestamp(chat.created_at),
+              lastActivityAt: chat.created_at,
             });
           }
         });
@@ -83,7 +79,7 @@ const WhatsAppChat: React.FC = () => {
       } finally {
         setIsLoadingChats(false);
       }
-  }, [buildTimestamp]);
+  }, []);
 
   useEffect(() => {
     loadChatPreviews();
@@ -108,13 +104,13 @@ const WhatsAppChat: React.FC = () => {
           if (!textPreview && !hasMediaContent(chat['Media'])) return;
 
           const lastMessage = textPreview || '📎 Attachment';
-          const timestamp = buildTimestamp(chat['created_at'] as string);
+          const lastActivityAt = chat['created_at'] as string;
 
           setChatPreviews((prev) => {
             const exists = prev.find((p) => p.senderNumber === num);
             if (exists) {
               return [
-                { ...exists, lastMessage, timestamp },
+                { ...exists, lastMessage, lastActivityAt },
                 ...prev.filter((p) => p.senderNumber !== num),
               ];
             }
@@ -123,7 +119,7 @@ const WhatsAppChat: React.FC = () => {
                 senderNumber: num,
                 name: (chat['Name'] as string) || undefined,
                 lastMessage,
-                timestamp,
+                lastActivityAt,
               },
               ...prev,
             ];
@@ -135,7 +131,7 @@ const WhatsAppChat: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [buildTimestamp]);
+  }, []);
 
   if (isMobile) {
     const handleSelectMobile = (num: string) => {

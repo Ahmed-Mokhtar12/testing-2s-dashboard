@@ -7,6 +7,7 @@ import {
   getInitials,
 } from '@/lib/whatsappUi';
 import { ChatListSkeleton, ChatListError } from './ChatListStates';
+import { formatChatTimestamp } from '@/lib/whatsappTime';
 
 interface Props {
   chats: ChatPreview[];
@@ -109,7 +110,7 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
                       chat.unreadCount ? 'text-[#25D366] font-medium' : 'text-[#667781]'
                     }`}
                   >
-                    {chat.timestamp}
+                    {formatChatTimestamp(chat.lastActivityAt)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">

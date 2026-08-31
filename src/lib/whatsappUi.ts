@@ -7,7 +7,8 @@ export interface ChatPreview {
   senderNumber: string;
   name?: string;
   lastMessage: string;
-  timestamp: string;
+  /** ISO timestamp of the last activity — formatted at render time. */
+  lastActivityAt: string;
   unreadCount?: number;
   avatar?: string;
 }
