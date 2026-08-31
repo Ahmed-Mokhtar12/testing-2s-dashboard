@@ -116,17 +116,25 @@ export const useWhatsAppChat = () => {
 
       setIsLoadingHistory(true);
       try {
-        const { data, error } = await supabase
+        // Newest-first + limit: PostgREST clamps un-limited responses at 1000 rows,
+        // and the old ascending query therefore showed the OLDEST 1000 of a long
+        // thread (hiding current messages). Fetch the newest 1000 and reverse into
+        // chronological order. Threads longer than 1000 rows lose their pre-limit
+        // history until Phase-2 pagination.
+        const { data: newestFirst, error } = await supabase
           .from('Chat History')
           .select('*')
           .eq('Sender Number', sanitizedSenderNumber)
           .eq('is_archived', false)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false })
+          .limit(1000);
 
         if (error) {
           if (import.meta.env.DEV) console.error('Error loading chat history:', error);
           return;
         }
+
+        const data = newestFirst ? [...newestFirst].reverse() : newestFirst;
 
         if (data && data.length > 0) {
           const historyMessages: WhatsAppMessage[] = [];
