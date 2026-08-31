@@ -93,6 +93,20 @@ serve(async (req) => {
       );
     }
 
+    // Staff-only: authentication alone is not authorization. Chat History RLS
+    // and the whatsapp-attachments storage policies all require is_hotel_staff;
+    // this endpoint sends to real guests and must not be weaker than the data
+    // it writes.
+    const { data: isStaff, error: staffErr } = await supabase.rpc('is_hotel_staff', {
+      _user_id: authedUser.id,
+    });
+    if (staffErr || !isStaff) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const repliedByUserId: string | null = authedUser.id;
     let repliedByName: string | null = null;
     {
@@ -171,6 +185,20 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: 'message must not exceed 4096 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // attachment.url is forwarded verbatim to Meta ({ link: url }) and
+    // persisted in "Chat History".Media — restrict it to this project's own
+    // signed whatsapp-attachments URLs so a caller cannot make Meta fetch an
+    // arbitrary URL or plant a foreign link in the conversation record.
+    if (hasAttachment) {
+      const allowedPrefix = `${SUPABASE_URL}/storage/v1/object/sign/whatsapp-attachments/`;
+      if (!(attachment.url as string).startsWith(allowedPrefix)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'attachment.url must be a signed whatsapp-attachments storage URL' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     const sanitizedMessage = hasMessage ? message.trim() : '';
