@@ -181,9 +181,13 @@ Deno.serve(async (req) => {
       insertPayload['Media'] = n8nPayload.attachment;
     }
 
-    const { error: insertError } = await supabase
+    // Return the inserted row id so the client can adopt `user-${id}` /
+    // `ai-${id}` bubble ids — realtime echoes then dedupe exactly.
+    const { data: insertedRow, error: insertError } = await supabase
       .from('Chat History')
-      .insert(insertPayload);
+      .insert(insertPayload)
+      .select('id')
+      .maybeSingle();
 
     if (insertError) {
       console.error('⚠️ Failed to save chat:', insertError);
@@ -192,7 +196,12 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, response: aiResponse, senderNumber: sanitizedSender }),
+      JSON.stringify({
+        success: true,
+        response: aiResponse,
+        senderNumber: sanitizedSender,
+        insertedId: insertedRow?.id ?? null,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

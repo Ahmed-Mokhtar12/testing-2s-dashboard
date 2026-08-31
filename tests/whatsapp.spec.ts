@@ -114,6 +114,38 @@ test.describe('WhatsApp inbox', () => {
     await expect(page.getByPlaceholder('Type a message')).toBeVisible();
   });
 
+  test('AI-mode send renders exactly one guest and one AI bubble (row-id adoption)', async ({ page, isMobile }) => {
+    // Both edge functions are route-mocked — nothing real can be sent.
+    await page.route(
+      `https://${PROJECT_REF}.supabase.co/functions/v1/whatsapp-control-status*`,
+      (route) =>
+        route.request().method() === 'OPTIONS'
+          ? route.fulfill({ status: 200, body: 'ok' })
+          : route.fulfill({ json: { isHumanControlled: false } })
+    );
+    await page.route(
+      `https://${PROJECT_REF}.supabase.co/functions/v1/whatsapp-web-chat`,
+      (route) =>
+        route.request().method() === 'OPTIONS'
+          ? route.fulfill({ status: 200, body: 'ok' })
+          : route.fulfill({ json: { success: true, response: 'Mocked AI reply', insertedId: 99 } })
+    );
+
+    await openWhatsApp(page);
+    if (isMobile) {
+      await page.getByText(GUEST_NAME).first().click();
+    }
+    const input = page.getByPlaceholder('Type a message');
+    await input.fill('Testing the send path');
+    await input.press('Enter');
+
+    const bubble = (text: string) =>
+      page.locator('p.whitespace-pre-wrap', { hasText: text });
+    await expect(bubble('Mocked AI reply')).toHaveCount(1);
+    await expect(bubble('Testing the send path')).toHaveCount(1);
+    await expect(input).toHaveValue('');
+  });
+
   test('typing into the composer does not send without a click', async ({ page, isMobile }) => {
     await openWhatsApp(page);
     if (isMobile) {

@@ -277,16 +277,25 @@ serve(async (req) => {
       insertRow['Media'] = attachment;
     }
 
-    const { error: insertError } = await supabase
+    // Return the inserted row id so the client can adopt it as the bubble id —
+    // its realtime echo (`human-${id}`) then dedupes exactly, replacing the
+    // Phase-1 content-window matching. Additive response field only.
+    const { data: insertedRow, error: insertError } = await supabase
       .from('Chat History')
-      .insert(insertRow);
+      .insert(insertRow)
+      .select('id')
+      .maybeSingle();
 
     if (insertError) {
       console.error('Error saving human reply:', insertError);
     }
 
     return new Response(
-      JSON.stringify({ success: true, messageId: waData?.messages?.[0]?.id }),
+      JSON.stringify({
+        success: true,
+        messageId: waData?.messages?.[0]?.id,
+        insertedId: insertedRow?.id ?? null,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

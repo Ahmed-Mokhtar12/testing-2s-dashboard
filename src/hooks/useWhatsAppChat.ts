@@ -23,6 +23,22 @@ export interface WhatsAppMessage {
   expectedEcho?: 'user' | 'ai' | 'human';
 }
 
+// Adopt the DB row id for a locally-created bubble once the edge function
+// reports it. If the realtime echo already arrived (it can beat the HTTP
+// response), drop the local twin instead of creating a duplicate id.
+const adoptId = (
+  prev: WhatsAppMessage[],
+  localId: string,
+  dbId: string
+): WhatsAppMessage[] =>
+  prev.some((m) => m.id === dbId)
+    ? prev.filter((m) => m.id !== localId)
+    : prev.map((m) =>
+        m.id === localId
+          ? { ...m, id: dbId, status: undefined, expectedEcho: undefined }
+          : m
+      );
+
 // Drop the local twin of each incoming DB-derived message: same echo prefix,
 // same trimmed content, created within the last 30s, and already confirmed
 // 'sent'. Residual (accepted for Phase 1): two operators sending identical
@@ -490,9 +506,13 @@ export const useWhatsAppChat = () => {
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Failed to send');
 
-        // Confirmed by the edge function — eligible for echo reconciliation.
+        // Prefer exact row-id adoption (new edge versions return insertedId);
+        // fall back to content-window reconciliation for older deployments.
+        const insertedId = (data as { insertedId?: number | null })?.insertedId;
         setMessages(prev =>
-          prev.map(m => (m.id === outgoingMessage.id ? { ...m, status: 'sent' as const } : m))
+          insertedId != null
+            ? adoptId(prev, outgoingMessage.id, `human-${insertedId}`)
+            : prev.map(m => (m.id === outgoingMessage.id ? { ...m, status: 'sent' as const } : m))
         );
       } else {
         // AI mode: send to n8n webhook
@@ -506,21 +526,36 @@ export const useWhatsAppChat = () => {
 
         if (error) throw error;
 
-        // Add AI response; both local bubbles are now confirmed and eligible
-        // for reconciliation against the row n8n inserts (user- and ai- echoes).
-        const aiMessage: WhatsAppMessage = {
-          id: crypto.randomUUID(),
-          content: data?.response || 'Sorry, I could not process your request.',
-          isUser: false,
-          isHumanReply: false,
-          timestamp: new Date(),
-          status: 'sent',
-          expectedEcho: 'ai',
-        };
-        setMessages(prev => [
-          ...prev.map(m => (m.id === outgoingMessage.id ? { ...m, status: 'sent' as const } : m)),
-          aiMessage,
-        ]);
+        // The edge function writes the exchange row itself; adopt its row id
+        // for both local bubbles when returned (user- and ai- echoes then
+        // dedupe exactly), else fall back to content-window reconciliation.
+        const insertedId = (data as { insertedId?: number | null })?.insertedId;
+        const aiContent = data?.response || 'Sorry, I could not process your request.';
+        setMessages(prev => {
+          let next =
+            insertedId != null
+              ? adoptId(prev, outgoingMessage.id, `user-${insertedId}`)
+              : prev.map(m =>
+                  m.id === outgoingMessage.id ? { ...m, status: 'sent' as const } : m
+                );
+          const aiBase = {
+            content: aiContent,
+            isUser: false,
+            isHumanReply: false,
+            timestamp: new Date(),
+          };
+          if (insertedId != null) {
+            if (!next.some(m => m.id === `ai-${insertedId}`)) {
+              next = [...next, { ...aiBase, id: `ai-${insertedId}` }];
+            }
+          } else {
+            next = [
+              ...next,
+              { ...aiBase, id: crypto.randomUUID(), status: 'sent' as const, expectedEcho: 'ai' as const },
+            ];
+          }
+          return next;
+        });
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error sending message:', error);
