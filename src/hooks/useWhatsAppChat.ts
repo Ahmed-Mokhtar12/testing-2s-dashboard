@@ -74,7 +74,6 @@ export const useWhatsAppChat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [senderNumber, setSenderNumber] = useState(getSenderNumber);
-  const [availableNumbers, setAvailableNumbers] = useState<string[]>([]);
   const [isHumanControlled, setIsHumanControlled] = useState(false);
   const [isTogglingControl, setIsTogglingControl] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -85,22 +84,6 @@ export const useWhatsAppChat = () => {
       lastMessageTsRef.current = messages[messages.length - 1].timestamp.toISOString();
     }
   }, [messages]);
-
-  // Load available sender numbers
-  useEffect(() => {
-    const loadNumbers = async () => {
-      const { data, error } = await supabase
-        .from('Chat History')
-        .select('"Sender Number"')
-        .not('Sender Number', 'is', null);
-      
-      if (data && !error) {
-        const uniqueNumbers = [...new Set(data.map(d => d['Sender Number']).filter(Boolean))] as string[];
-        setAvailableNumbers(uniqueNumbers);
-      }
-    };
-    loadNumbers();
-  }, []);
 
   // Load conversation history on mount or when sender changes
   useEffect(() => {
@@ -581,7 +564,6 @@ export const useWhatsAppChat = () => {
     isLoadingHistory,
     sendMessage,
     senderNumber,
-    availableNumbers,
     changeSenderNumber,
     isHumanControlled,
     isTogglingControl,
