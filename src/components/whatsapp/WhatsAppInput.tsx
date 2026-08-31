@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Send, Smile, Plus, Mic } from 'lucide-react';
 import EmojiPicker, { EmojiStyle, Categories, EmojiClickData } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -30,6 +30,16 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
     if (staged?.previewUrl) URL.revokeObjectURL(staged.previewUrl);
     setStaged(null);
   };
+
+  // The component is remounted per conversation (key={senderNumber}); revoke any
+  // staged preview object URL on unmount so switching chats doesn't leak it.
+  const stagedRef = useRef<StagedAttachment | null>(null);
+  stagedRef.current = staged;
+  useEffect(() => {
+    return () => {
+      if (stagedRef.current?.previewUrl) URL.revokeObjectURL(stagedRef.current.previewUrl);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

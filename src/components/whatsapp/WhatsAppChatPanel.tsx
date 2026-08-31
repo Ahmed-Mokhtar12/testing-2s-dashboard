@@ -240,8 +240,12 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
+      {/* Input area — keyed by conversation so text + staged files never leak
+          into another guest's composer (mis-send hazard). In-flight sends still
+          deliver to the chat they were typed in: the submit closure captured the
+          old onSend, whose sendMessage closure captured the old senderNumber. */}
       <WhatsAppInput
+        key={senderNumber}
         onSend={onSendMessage}
         disabled={isLoading}
         isHumanMode={isHumanControlled}
