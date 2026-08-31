@@ -1,6 +1,45 @@
 import React from 'react';
 import { ExternalLink, UserCheck } from 'lucide-react';
 import AttachmentBubble, { AttachmentBubbleData } from './AttachmentBubble';
+import { parseWhatsAppText, type WaToken } from '@/lib/whatsappFormat';
+
+// Token tree -> React nodes (tree stays data; nothing goes through innerHTML).
+const renderTokens = (tokens: WaToken[], keyPrefix = ''): React.ReactNode[] =>
+  tokens.map((t, i) => {
+    const key = `${keyPrefix}${i}`;
+    switch (t.kind) {
+      case 'text':
+        return <React.Fragment key={key}>{t.text}</React.Fragment>;
+      case 'link':
+        return (
+          <a
+            key={key}
+            href={t.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#027EB5] underline break-all"
+          >
+            {t.text}
+          </a>
+        );
+      case 'mono':
+        return (
+          <code key={key} className="font-mono text-[13px] bg-black/5 rounded px-1">
+            {t.text}
+          </code>
+        );
+      case 'bold':
+        return (
+          <strong key={key} className="font-semibold">
+            {renderTokens(t.children, `${key}-`)}
+          </strong>
+        );
+      case 'italic':
+        return <em key={key}>{renderTokens(t.children, `${key}-`)}</em>;
+      case 'strike':
+        return <s key={key}>{renderTokens(t.children, `${key}-`)}</s>;
+    }
+  });
 
 interface WhatsAppMessageProps {
   content: string;
@@ -90,7 +129,9 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
 
         <div className={hasMediaBlock ? 'px-2 pt-1.5 pb-0.5' : ''}>
           {content && (
-            <p dir="auto" className="text-sm text-gray-800 whitespace-pre-wrap break-words">{content}</p>
+            <p dir="auto" className="text-sm text-gray-800 whitespace-pre-wrap break-words">
+              {renderTokens(parseWhatsAppText(content))}
+            </p>
           )}
 
           {/* No delivery ticks: real pending/sent/read state needs the wamid

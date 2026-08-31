@@ -11,7 +11,8 @@ import { PROJECT_REF, setMockAuthSession } from './helpers/hotel-training-mocks'
 const GUEST_NUMBER = '971500000001';
 const GUEST_NAME = 'Test Guest';
 const GUEST_TEXT = 'I need a late checkout';
-const AI_TEXT = 'Of course, late checkout until 2 PM is available.';
+const AI_TEXT = 'Of course, *late checkout* until 2 PM is available.';
+const AI_TEXT_VISIBLE = 'until 2 PM is available.';
 
 function chatHistoryRows() {
   const now = Date.now();
@@ -108,7 +109,12 @@ test.describe('WhatsApp inbox', () => {
     const bubble = (text: string) =>
       page.locator('p.whitespace-pre-wrap', { hasText: text });
     await expect(bubble(GUEST_TEXT)).toBeVisible();
-    await expect(bubble(AI_TEXT)).toBeVisible();
+    await expect(bubble(AI_TEXT_VISIBLE)).toBeVisible();
+    // *late checkout* renders as a <strong>, with the asterisks consumed (2.6).
+    await expect(
+      page.locator('p.whitespace-pre-wrap strong', { hasText: 'late checkout' })
+    ).toBeVisible();
+    await expect(bubble('*late checkout*')).toHaveCount(0);
 
     // Composer is present with the AI-mode placeholder.
     await expect(page.getByPlaceholder('Type a message')).toBeVisible();
