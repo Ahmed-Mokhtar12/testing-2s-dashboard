@@ -185,6 +185,22 @@ test.describe('WhatsApp inbox', () => {
     await expect(page.getByText(GUEST_NAME).first()).toBeVisible();
   });
 
+  test('in-chat search counts, cycles, and closes', async ({ page, isMobile }) => {
+    await openWhatsApp(page);
+    if (isMobile) {
+      await page.getByText(GUEST_NAME).first().click();
+    }
+    await page.getByRole('button', { name: 'Search in conversation' }).click();
+    const box = page.getByPlaceholder('Search loaded messages');
+    await box.fill('late checkout');
+    // Matches the guest text and the AI reply (2), newest active first.
+    await expect(page.getByText('2/2')).toBeVisible();
+    await box.press('Enter');
+    await expect(page.getByText('1/2')).toBeVisible();
+    await box.press('Escape');
+    await expect(box).toHaveCount(0);
+  });
+
   test('thread over one page offers Load earlier and prepends older rows', async ({ page, isMobile }) => {
     const now = Date.now();
     const iso = (msAgo: number) => new Date(now - msAgo).toISOString();

@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft, ChevronDown } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Search, MoreVertical, UserCheck, Bot, Loader2, ArrowLeft, ChevronDown, ChevronUp, X } from 'lucide-react';
 import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
@@ -114,6 +114,44 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
     onLoadOlder?.();
   };
 
+  // In-chat search over LOADED messages (server-wide search is Phase 3).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeMatch, setActiveMatch] = useState(0);
+  const [flashId, setFlashId] = useState<string | null>(null);
+
+  const matchIds = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return [] as string[];
+    return messages.filter((m) => m.content.toLowerCase().includes(term)).map((m) => m.id);
+  }, [messages, searchTerm]);
+
+  // A new term jumps to the newest match, like WhatsApp.
+  useEffect(() => {
+    setActiveMatch(matchIds.length ? matchIds.length - 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const id = matchIds[activeMatch];
+    if (!id) return;
+    const el = containerRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+    el?.scrollIntoView({ block: 'center' });
+    setFlashId(id);
+    const t = setTimeout(() => setFlashId(null), 1200);
+    return () => clearTimeout(t);
+  }, [activeMatch, matchIds]);
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchTerm('');
+  };
+
+  const stepMatch = (dir: -1 | 1) => {
+    if (!matchIds.length) return;
+    setActiveMatch((i) => (i + dir + matchIds.length) % matchIds.length);
+  };
+
   const initials = getInitials(guestName, senderNumber);
 
   return (
@@ -177,11 +215,59 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
             </button>
           )}
 
-          <Search className="w-5 h-5 cursor-pointer hover:text-[#008069] shrink-0" />
+          <button
+            type="button"
+            onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+            aria-label="Search in conversation"
+            className={`shrink-0 ${searchOpen ? 'text-[#008069]' : 'hover:text-[#008069]'}`}
+          >
+            <Search className="w-5 h-5" />
+          </button>
           <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#008069] shrink-0" />
         </div>
       </div>
 
+
+      {/* In-chat search bar */}
+      {searchOpen && (
+        <div className="bg-white border-b border-gray-200 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              dir="auto"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  stepMatch(-1);
+                } else if (e.key === 'Escape') {
+                  closeSearch();
+                }
+              }}
+              placeholder="Search loaded messages"
+              className="flex-1 bg-[#F0F2F5] rounded-lg px-3 py-1.5 text-sm text-[#111B21] placeholder:text-[#667781] focus:outline-none"
+            />
+            <span className="text-xs text-[#667781] whitespace-nowrap tabular-nums">
+              {matchIds.length ? `${activeMatch + 1}/${matchIds.length}` : '0/0'}
+            </span>
+            <button type="button" onClick={() => stepMatch(-1)} aria-label="Previous match" className="text-[#54656F] hover:text-[#008069] disabled:opacity-40" disabled={!matchIds.length}>
+              <ChevronUp size={18} />
+            </button>
+            <button type="button" onClick={() => stepMatch(1)} aria-label="Next match" className="text-[#54656F] hover:text-[#008069] disabled:opacity-40" disabled={!matchIds.length}>
+              <ChevronDown size={18} />
+            </button>
+            <button type="button" onClick={closeSearch} aria-label="Close search" className="text-[#54656F] hover:text-[#008069]">
+              <X size={18} />
+            </button>
+          </div>
+          {hasMoreHistory && searchTerm.trim() && (
+            <p className="text-[10px] text-[#667781] mt-1">
+              Searching loaded messages only — load earlier messages to search further back.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Human control banner */}
       {isHumanControlled && (
@@ -255,7 +341,11 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           const isFirstOfGroup =
             !prevMsg || showDateSeparator || provenance(prevMsg) !== provenance(msg);
           return (
-            <div key={msg.id}>
+            <div
+              key={msg.id}
+              data-msg-id={msg.id}
+              className={`rounded-lg transition-colors duration-500 ${flashId === msg.id ? 'bg-black/10' : ''}`}
+            >
               {showDateSeparator && (
                 <div className="flex justify-center my-3">
                   <div className="bg-white/90 text-[#54656F] text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-sm">
