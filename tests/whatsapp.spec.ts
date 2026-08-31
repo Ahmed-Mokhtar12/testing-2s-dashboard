@@ -150,6 +150,35 @@ test.describe('WhatsApp inbox', () => {
     await expect(input).toHaveValue('');
   });
 
+  // NOTE: the "no chat selected" hero panel (WhatsAppEmptyState) is only
+  // reachable when VITE_WA_DEFAULT_NUMBER is unset — this environment sets it
+  // in .env, so an empty selection always falls back to the default chat and
+  // the state cannot be forced end-to-end here. The hero is defensive UI for
+  // unconfigured deployments; covered by review, not by a spec.
+
+  test('sidebar fetch failure shows an error state with retry', async ({ page }) => {
+    await setMockAuthSession(page);
+    let fail = true;
+    await page.route(`https://${PROJECT_REF}.supabase.co/rest/v1/**`, async (route) => {
+      const request = route.request();
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, body: 'ok' });
+      const path = decodeURIComponent(new URL(request.url()).pathname);
+      if (path.endsWith('/rpc/is_conversation_human_controlled')) {
+        return route.fulfill({ json: false });
+      }
+      if (path.includes('/Chat History')) {
+        if (fail) return route.fulfill({ status: 500, json: { message: 'boom' } });
+        return route.fulfill({ json: chatHistoryRows() });
+      }
+      return route.fulfill({ json: [] });
+    });
+    await page.goto('/whatsapp');
+    await expect(page.getByText("Couldn't load conversations.")).toBeVisible();
+    fail = false;
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText(GUEST_NAME).first()).toBeVisible();
+  });
+
   test('typing into the composer does not send without a click', async ({ page, isMobile }) => {
     await openWhatsApp(page);
     if (isMobile) {

@@ -6,6 +6,7 @@ import {
   getAvatarColor,
   getInitials,
 } from '@/lib/whatsappUi';
+import { ChatListSkeleton, ChatListError } from './ChatListStates';
 
 interface Props {
   chats: ChatPreview[];
@@ -14,10 +15,13 @@ interface Props {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   isLoading: boolean;
+  loadError?: boolean;
+  onRetry?: () => void;
 }
 
 const WhatsAppMobileSidebar: React.FC<Props> = ({
   chats, selectedNumber, onSelectChat, searchQuery, onSearchChange, isLoading,
+  loadError, onRetry,
 }) => {
   const filteredChats = chats.filter((c) => {
     const q = searchQuery.toLowerCase();
@@ -70,9 +74,9 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-pulse text-[#667781] text-sm">Loading chats...</div>
-          </div>
+          <ChatListSkeleton />
+        ) : loadError ? (
+          <ChatListError onRetry={onRetry} />
         ) : filteredChats.length === 0 ? (
           <div className="flex justify-center py-8">
             <span className="text-[#667781] text-sm">No conversations found</span>

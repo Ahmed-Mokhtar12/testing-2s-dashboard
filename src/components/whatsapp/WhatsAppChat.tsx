@@ -4,6 +4,7 @@ import WhatsAppNavRail from './WhatsAppNavRail';
 import WhatsAppSidebar from './WhatsAppSidebar';
 import WhatsAppChatPanel from './WhatsAppChatPanel';
 import WhatsAppMobileSidebar from './WhatsAppMobileSidebar';
+import WhatsAppEmptyState from './WhatsAppEmptyState';
 import WhatsAppMobileTabBar from './WhatsAppMobileTabBar';
 import { useWhatsAppChat } from '@/hooks/useWhatsAppChat';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -13,6 +14,7 @@ import type { ChatPreview } from '@/lib/whatsappUi';
 const WhatsAppChat: React.FC = () => {
   const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const isMobile = useIsMobile();
@@ -41,9 +43,9 @@ const WhatsAppChat: React.FC = () => {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }, []);
 
-  useEffect(() => {
-    const loadChatPreviews = async () => {
+  const loadChatPreviews = useCallback(async () => {
       setIsLoadingChats(true);
+      setLoadError(false);
       try {
         const { data, error } = await supabase
           .from('Chat History')
@@ -53,6 +55,7 @@ const WhatsAppChat: React.FC = () => {
 
         if (error) {
           if (import.meta.env.DEV) console.error('Error loading chats:', error);
+          setLoadError(true);
           return;
         }
 
@@ -76,12 +79,15 @@ const WhatsAppChat: React.FC = () => {
         setChatPreviews(Array.from(chatMap.values()));
       } catch (err) {
         if (import.meta.env.DEV) console.error('Failed to load chat previews:', err);
+        setLoadError(true);
       } finally {
         setIsLoadingChats(false);
       }
-    };
-    loadChatPreviews();
   }, [buildTimestamp]);
+
+  useEffect(() => {
+    loadChatPreviews();
+  }, [loadChatPreviews]);
 
   useEffect(() => {
     const channel = supabase
@@ -164,6 +170,8 @@ const WhatsAppChat: React.FC = () => {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 isLoading={isLoadingChats}
+                loadError={loadError}
+                onRetry={loadChatPreviews}
               />
             </div>
             <WhatsAppMobileTabBar active="chats" />
@@ -185,10 +193,15 @@ const WhatsAppChat: React.FC = () => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           isLoading={isLoadingChats}
+          loadError={loadError}
+          onRetry={loadChatPreviews}
         />
       </div>
 
       <div className="flex-1 min-w-0 h-full">
+        {!senderNumber ? (
+          <WhatsAppEmptyState />
+        ) : (
         <WhatsAppChatPanel
           messages={messages}
           senderNumber={senderNumber}
@@ -200,6 +213,7 @@ const WhatsAppChat: React.FC = () => {
           onSendMessage={sendMessage}
           onToggleHumanControl={toggleHumanControl}
         />
+        )}
       </div>
     </div>
   );

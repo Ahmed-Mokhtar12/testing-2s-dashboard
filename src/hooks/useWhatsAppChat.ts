@@ -149,10 +149,17 @@ export const useWhatsAppChat = () => {
         setMessages([]);
         setIsHumanControlled(false);
         setIsLoadingHistory(false);
-        toast.error('Invalid WhatsApp sender number. Please choose a valid number.');
+        // An empty selection means "no chat open" (hero panel) — only a
+        // non-empty malformed number deserves a toast.
+        if (senderNumber) {
+          toast.error('Invalid WhatsApp sender number. Please choose a valid number.');
+        }
         return;
       }
 
+      // Never show the previous guest's thread under the new header while
+      // (or after a failed) fetch — clear first, then load.
+      setMessages([]);
       setIsLoadingHistory(true);
       try {
         // Newest-first + limit: PostgREST clamps un-limited responses at 1000 rows,
