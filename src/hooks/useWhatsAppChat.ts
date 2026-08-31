@@ -14,7 +14,46 @@ export interface WhatsAppMessage {
   mediaUrl?: string;
   attachment?: UploadedAttachment;
   repliedByName?: string;
+  /** Local send lifecycle: 'pending' until the edge call resolves success,
+      'sent' after. Only 'sent' bubbles may be reconciled away by their DB
+      echo — a failed send keeps its bubble and can never be masked by
+      another operator's identical message. */
+  status?: 'pending' | 'sent';
+  /** The "Chat History" row-id prefix this local bubble's echo will carry. */
+  expectedEcho?: 'user' | 'ai' | 'human';
 }
+
+// Drop the local twin of each incoming DB-derived message: same echo prefix,
+// same trimmed content, created within the last 30s, and already confirmed
+// 'sent'. Residual (accepted for Phase 1): two operators sending identical
+// text within 30s can swap attribution; clean row-id reconciliation is
+// Phase 2 (edge functions returning the inserted row id).
+const reconcileEcho = (
+  prev: WhatsAppMessage[],
+  incoming: WhatsAppMessage[]
+): WhatsAppMessage[] => {
+  let next = prev;
+  for (const msg of incoming) {
+    const prefix = msg.id.startsWith('user-')
+      ? 'user'
+      : msg.id.startsWith('ai-')
+        ? 'ai'
+        : msg.id.startsWith('human-')
+          ? 'human'
+          : null;
+    if (!prefix) continue;
+    const content = msg.content.trim();
+    const idx = next.findIndex(
+      (m) =>
+        m.status === 'sent' &&
+        m.expectedEcho === prefix &&
+        m.content.trim() === content &&
+        Date.now() - m.timestamp.getTime() <= 30_000
+    );
+    if (idx !== -1) next = [...next.slice(0, idx), ...next.slice(idx + 1)];
+  }
+  return next;
+};
 
 // Derive a display first name from the auth user
 const deriveFirstName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null | undefined): string | undefined => {
@@ -247,7 +286,7 @@ export const useWhatsAppChat = () => {
       setMessages((prev) => {
         const existingIds = new Set(prev.map((m) => m.id));
         const fresh = newMessages.filter((m) => !existingIds.has(m.id));
-        return fresh.length > 0 ? [...prev, ...fresh] : prev;
+        return fresh.length > 0 ? [...reconcileEcho(prev, fresh), ...fresh] : prev;
       });
     };
 
@@ -321,10 +360,10 @@ export const useWhatsAppChat = () => {
 
           if (newMessages.length > 0) {
             setMessages((prev) => {
-              // Deduplicate by id
+              // Deduplicate by id, then drop reconciled optimistic twins
               const existingIds = new Set(prev.map((m) => m.id));
               const fresh = newMessages.filter((m) => !existingIds.has(m.id));
-              return fresh.length > 0 ? [...prev, ...fresh] : prev;
+              return fresh.length > 0 ? [...reconcileEcho(prev, fresh), ...fresh] : prev;
             });
           }
 
@@ -428,6 +467,10 @@ export const useWhatsAppChat = () => {
       timestamp: new Date(),
       attachment,
       repliedByName: isHumanControlled ? myFirstName : undefined,
+      status: 'pending',
+      // Human-mode sends echo back as a human_reply row; AI-mode sends are
+      // written by the n8n path as the guest's Sender Message row.
+      expectedEcho: isHumanControlled ? 'human' : 'user',
     };
 
     setMessages(prev => [...prev, outgoingMessage]);
@@ -447,6 +490,10 @@ export const useWhatsAppChat = () => {
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Failed to send');
 
+        // Confirmed by the edge function — eligible for echo reconciliation.
+        setMessages(prev =>
+          prev.map(m => (m.id === outgoingMessage.id ? { ...m, status: 'sent' as const } : m))
+        );
       } else {
         // AI mode: send to n8n webhook
         const { data, error } = await supabase.functions.invoke('whatsapp-web-chat', {
@@ -459,15 +506,21 @@ export const useWhatsAppChat = () => {
 
         if (error) throw error;
 
-        // Add AI response
+        // Add AI response; both local bubbles are now confirmed and eligible
+        // for reconciliation against the row n8n inserts (user- and ai- echoes).
         const aiMessage: WhatsAppMessage = {
           id: crypto.randomUUID(),
           content: data?.response || 'Sorry, I could not process your request.',
           isUser: false,
           isHumanReply: false,
           timestamp: new Date(),
+          status: 'sent',
+          expectedEcho: 'ai',
         };
-        setMessages(prev => [...prev, aiMessage]);
+        setMessages(prev => [
+          ...prev.map(m => (m.id === outgoingMessage.id ? { ...m, status: 'sent' as const } : m)),
+          aiMessage,
+        ]);
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error sending message:', error);
