@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCheck, ExternalLink, UserCheck } from 'lucide-react';
+import { ExternalLink, UserCheck } from 'lucide-react';
 import AttachmentBubble, { AttachmentBubbleData } from './AttachmentBubble';
 
 interface WhatsAppMessageProps {
@@ -86,11 +86,11 @@ const WhatsAppMessage: React.FC<WhatsAppMessageProps> = ({ content, isUser, isHu
             <p dir="auto" className="text-sm text-gray-800 whitespace-pre-wrap break-words">{content}</p>
           )}
 
+          {/* No delivery ticks: real pending/sent/read state needs the wamid
+              pipeline (Phase 2). Never fake ticks — the old permanent blue
+              CheckCheck sat on the guest's own messages. */}
           <div className={`flex items-center gap-1 mt-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
             <span className="text-[10px] text-gray-500">{formatTime(timestamp)}</span>
-            {isUser && (
-              <CheckCheck size={14} className="text-[#53BDEB]" />
-            )}
           </div>
         </div>
       </div>
