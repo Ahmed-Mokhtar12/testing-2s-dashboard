@@ -7,6 +7,7 @@ import WhatsAppMobileSidebar from './WhatsAppMobileSidebar';
 import WhatsAppMobileTabBar from './WhatsAppMobileTabBar';
 import { useWhatsAppChat } from '@/hooks/useWhatsAppChat';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { hasMediaContent } from '@/lib/whatsappMedia';
 
 interface ChatPreview {
   senderNumber: string;
@@ -65,12 +66,16 @@ const WhatsAppChat: React.FC = () => {
         const chatMap = new Map<string, ChatPreview>();
         data?.forEach((chat) => {
           const num = chat['Sender Number'];
-          const hasContent = chat['Ai Reply'] || chat['Sender Message'] || chat['human_reply'];
+          // Newest-writer-first preview: an operator reply must show, not a
+          // blank line; media-only rows get a glyph instead of disappearing.
+          const textPreview =
+            chat['human_reply'] || chat['Ai Reply'] || chat['Sender Message'] || '';
+          const hasContent = textPreview || hasMediaContent(chat['Media']);
           if (num && hasContent && !chatMap.has(num)) {
             chatMap.set(num, {
               senderNumber: num,
               name: chat['Name'] || undefined,
-              lastMessage: chat['Ai Reply'] || chat['Sender Message'] || '',
+              lastMessage: textPreview || '📎 Attachment',
               timestamp: buildTimestamp(chat.created_at),
             });
           }
@@ -96,14 +101,14 @@ const WhatsAppChat: React.FC = () => {
           const num = chat['Sender Number'] as string | undefined;
           if (!num) return;
 
-          const hasContent =
-            chat['Sender Message'] || chat['Ai Reply'] || chat['human_reply'];
-          if (!hasContent) return;
-
-          const lastMessage =
+          const textPreview =
+            (chat['human_reply'] as string) ||
             (chat['Ai Reply'] as string) ||
             (chat['Sender Message'] as string) ||
             '';
+          if (!textPreview && !hasMediaContent(chat['Media'])) return;
+
+          const lastMessage = textPreview || '📎 Attachment';
           const timestamp = buildTimestamp(chat['created_at'] as string);
 
           setChatPreviews((prev) => {
