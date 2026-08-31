@@ -10,9 +10,9 @@ interface TabItem {
 
 const tabs: TabItem[] = [
   { key: 'updates', label: 'Updates', icon: CircleDashed },
-  { key: 'calls', label: 'Calls', icon: Phone, badge: 30 },
+  { key: 'calls', label: 'Calls', icon: Phone },
   { key: 'communities', label: 'Communities', icon: Users },
-  { key: 'chats', label: 'Chats', icon: MessageCircle, badge: 9 },
+  { key: 'chats', label: 'Chats', icon: MessageCircle },
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
 

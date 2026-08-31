@@ -20,7 +20,7 @@ interface NavItem {
 }
 
 const topItems: NavItem[] = [
-  { key: 'chats', icon: MessageCircle, label: 'Chats', badge: 19 },
+  { key: 'chats', icon: MessageCircle, label: 'Chats' },
   { key: 'status', icon: CircleDashed, label: 'Status' },
   { key: 'channels', icon: Megaphone, label: 'Channels' },
   { key: 'communities', icon: Users, label: 'Communities' },

@@ -53,9 +53,9 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
   const unreadCount = chats.reduce((s, c) => s + (c.unreadCount ?? 0), 0);
   const filters = [
     { key: 'All', label: 'All' },
-    { key: 'Unread', label: 'Unread', count: unreadCount > 0 ? unreadCount : 9 },
+    { key: 'Unread', label: 'Unread', count: unreadCount },
     { key: 'Favourites', label: 'Favourites' },
-    { key: 'Groups', label: 'Groups', count: 7 },
+    { key: 'Groups', label: 'Groups' },
   ];
 
   const filteredChats = chats.filter((c) => {
@@ -171,7 +171,7 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <p dir="auto" className="text-[14px] text-[#667781] truncate pr-2">{chat.lastMessage}</p>
-                  {chat.unreadCount && chat.unreadCount > 0 && (
+                  {(chat.unreadCount ?? 0) > 0 && (
                     <span className="bg-[#25D366] text-white text-[11px] font-semibold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0">
                       {chat.unreadCount}
                     </span>
