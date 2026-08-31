@@ -245,6 +245,7 @@ const WhatsAppInput: React.FC<WhatsAppInputProps> = ({ onSend, disabled, isHuman
         ) : (
           <button
             type="button"
+            onClick={() => toast({ title: 'Voice messages are not supported yet' })}
             className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-[#54656F] hover:bg-[#E9EDEF] transition-colors"
             aria-label="Voice message"
             title="Voice message"
