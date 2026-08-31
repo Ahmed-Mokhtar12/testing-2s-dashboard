@@ -145,7 +145,7 @@ const WhatsAppChat: React.FC = () => {
     };
 
     return (
-      <div className="flex flex-col h-full w-full bg-white overflow-hidden">
+      <div data-testid="whatsapp-chat-shell" className="flex flex-col h-full w-full bg-white overflow-hidden">
         {mobileView === 'chat' ? (
           <div className="flex-1 min-h-0 flex flex-col">
             <WhatsAppChatPanel
@@ -180,7 +180,7 @@ const WhatsAppChat: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full w-full bg-[#111B21] overflow-hidden">
+    <div data-testid="whatsapp-chat-shell" className="flex h-full w-full bg-[#111B21] overflow-hidden">
       <WhatsAppNavRail />
 
       <div className="w-[30%] min-w-[300px] max-w-[500px] h-full shrink-0">
