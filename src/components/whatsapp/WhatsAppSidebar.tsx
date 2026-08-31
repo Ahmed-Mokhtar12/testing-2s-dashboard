@@ -1,14 +1,11 @@
 import React from 'react';
 import { Search, MessageSquarePlus, MoreVertical } from 'lucide-react';
-
-interface ChatPreview {
-  senderNumber: string;
-  name?: string;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount?: number;
-  avatar?: string;
-}
+import {
+  type ChatPreview,
+  formatPhoneNumber,
+  getAvatarColor,
+  getInitials,
+} from '@/lib/whatsappUi';
 
 interface WhatsAppSidebarProps {
   chats: ChatPreview[];
@@ -33,36 +30,6 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
       chat.lastMessage.toLowerCase().includes(q) ||
       (chat.name && chat.name.toLowerCase().includes(q));
   });
-
-  const formatPhoneNumber = (number: string) => {
-    if (number.startsWith('971')) {
-      return `+${number.slice(0, 3)} ${number.slice(3, 5)} ${number.slice(5, 8)} ${number.slice(8)}`;
-    }
-    return `+${number}`;
-  };
-
-  // Deterministic color palette for avatars
-  const avatarColors = [
-    'bg-[#F44336]', 'bg-[#E91E63]', 'bg-[#9C27B0]', 'bg-[#673AB7]',
-    'bg-[#3F51B5]', 'bg-[#2196F3]', 'bg-[#009688]', 'bg-[#4CAF50]',
-    'bg-[#FF9800]', 'bg-[#FF5722]', 'bg-[#795548]', 'bg-[#607D8B]',
-  ];
-
-  const getAvatarColor = (key: string) => {
-    let hash = 0;
-    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-    return avatarColors[hash % avatarColors.length];
-  };
-
-  const getInitials = (name: string | undefined, number: string) => {
-    if (name && name.trim()) {
-      const parts = name.trim().split(/\s+/);
-      const first = parts[0]?.[0] ?? '';
-      const second = parts[1]?.[0] ?? '';
-      return (first + second).toUpperCase() || number.slice(-2);
-    }
-    return number.slice(-2);
-  };
 
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-200">

@@ -112,6 +112,10 @@ test.describe('WhatsApp inbox', () => {
 
     // Composer is present with the AI-mode placeholder.
     await expect(page.getByPlaceholder('Type a message')).toBeVisible();
+
+    // Header shows the guest's name (2.3), with the number in the subtitle.
+    await expect(page.getByRole('heading', { name: GUEST_NAME })).toBeVisible();
+    await expect(page.getByText('+971 50 000 0001', { exact: false })).toBeVisible();
   });
 
   test('AI-mode send renders exactly one guest and one AI bubble (row-id adoption)', async ({ page, isMobile }) => {

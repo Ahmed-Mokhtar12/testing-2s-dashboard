@@ -8,14 +8,7 @@ import WhatsAppMobileTabBar from './WhatsAppMobileTabBar';
 import { useWhatsAppChat } from '@/hooks/useWhatsAppChat';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { hasMediaContent } from '@/lib/whatsappMedia';
-
-interface ChatPreview {
-  senderNumber: string;
-  name?: string;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount?: number;
-}
+import type { ChatPreview } from '@/lib/whatsappUi';
 
 const WhatsAppChat: React.FC = () => {
   const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
@@ -151,6 +144,7 @@ const WhatsAppChat: React.FC = () => {
             <WhatsAppChatPanel
               messages={messages}
               senderNumber={senderNumber}
+              guestName={chatPreviews.find((c) => c.senderNumber === senderNumber)?.name}
               isLoading={isLoading}
               isLoadingHistory={isLoadingHistory}
               isHumanControlled={isHumanControlled}
@@ -198,6 +192,7 @@ const WhatsAppChat: React.FC = () => {
         <WhatsAppChatPanel
           messages={messages}
           senderNumber={senderNumber}
+          guestName={chatPreviews.find((c) => c.senderNumber === senderNumber)?.name}
           isLoading={isLoading}
           isLoadingHistory={isLoadingHistory}
           isHumanControlled={isHumanControlled}

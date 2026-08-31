@@ -4,17 +4,7 @@ import WhatsAppMessage from './WhatsAppMessage';
 import WhatsAppInput from './WhatsAppInput';
 import { WhatsAppMessage as MessageType } from '@/hooks/useWhatsAppChat';
 import type { UploadedAttachment } from '@/hooks/useWhatsAppAttachment';
-
-const avatarColors = [
-  'bg-[#F44336]', 'bg-[#E91E63]', 'bg-[#9C27B0]', 'bg-[#673AB7]',
-  'bg-[#3F51B5]', 'bg-[#2196F3]', 'bg-[#009688]', 'bg-[#4CAF50]',
-  'bg-[#FF9800]', 'bg-[#FF5722]', 'bg-[#795548]', 'bg-[#607D8B]',
-];
-const getAvatarColor = (key: string) => {
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  return avatarColors[hash % avatarColors.length];
-};
+import { formatPhoneNumber, getAvatarColor, getInitials } from '@/lib/whatsappUi';
 
 const getDateLabel = (date: Date): string => {
   const now = new Date();
@@ -36,6 +26,7 @@ const isSameDay = (d1: Date, d2: Date): boolean =>
 interface WhatsAppChatPanelProps {
   messages: MessageType[];
   senderNumber: string;
+  guestName?: string;
   isLoading: boolean;
   isLoadingHistory: boolean;
   isHumanControlled: boolean;
@@ -45,16 +36,10 @@ interface WhatsAppChatPanelProps {
   onBack?: () => void;
 }
 
-const formatPhoneNumber = (number: string) => {
-  if (number.startsWith('971')) {
-    return `+${number.slice(0, 3)} ${number.slice(3, 5)} ${number.slice(5, 8)} ${number.slice(8)}`;
-  }
-  return `+${number}`;
-};
-
 const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   messages,
   senderNumber,
+  guestName,
   isLoading,
   isLoadingHistory,
   isHumanControlled,
@@ -93,7 +78,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
     requestAnimationFrame(scrollToBottom);
   };
 
-  const initials = senderNumber.slice(-2);
+  const initials = getInitials(guestName, senderNumber);
 
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
@@ -132,9 +117,10 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-medium text-[#111B21] truncate">
-              {formatPhoneNumber(senderNumber)}
+              {guestName || formatPhoneNumber(senderNumber)}
             </h2>
             <p className="text-[11px] text-[#667781] truncate">
+              {guestName ? `${formatPhoneNumber(senderNumber)} · ` : ''}
               {isHumanControlled ? 'Human Agent Active' : 'AI Responding'}
             </p>
           </div>

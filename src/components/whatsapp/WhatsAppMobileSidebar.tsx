@@ -1,14 +1,11 @@
 import React from 'react';
 import { Search, MoreHorizontal, Camera, Plus } from 'lucide-react';
-
-interface ChatPreview {
-  senderNumber: string;
-  name?: string;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount?: number;
-  avatar?: string;
-}
+import {
+  type ChatPreview,
+  formatPhoneNumber,
+  getAvatarColor,
+  getInitials,
+} from '@/lib/whatsappUi';
 
 interface Props {
   chats: ChatPreview[];
@@ -18,33 +15,6 @@ interface Props {
   onSearchChange: (q: string) => void;
   isLoading: boolean;
 }
-
-const avatarColors = [
-  'bg-[#F44336]', 'bg-[#E91E63]', 'bg-[#9C27B0]', 'bg-[#673AB7]',
-  'bg-[#3F51B5]', 'bg-[#2196F3]', 'bg-[#009688]', 'bg-[#4CAF50]',
-  'bg-[#FF9800]', 'bg-[#FF5722]', 'bg-[#795548]', 'bg-[#607D8B]',
-];
-
-const getAvatarColor = (key: string) => {
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  return avatarColors[hash % avatarColors.length];
-};
-
-const getInitials = (name: string | undefined, number: string) => {
-  if (name && name.trim()) {
-    const parts = name.trim().split(/\s+/);
-    return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || number.slice(-2);
-  }
-  return number.slice(-2);
-};
-
-const formatPhoneNumber = (number: string) => {
-  if (number.startsWith('971')) {
-    return `+${number.slice(0, 3)} ${number.slice(3, 5)} ${number.slice(5, 8)} ${number.slice(8)}`;
-  }
-  return `+${number}`;
-};
 
 const WhatsAppMobileSidebar: React.FC<Props> = ({
   chats, selectedNumber, onSelectChat, searchQuery, onSearchChange, isLoading,
