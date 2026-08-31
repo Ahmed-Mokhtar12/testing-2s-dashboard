@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import WhatsAppNavRail from './WhatsAppNavRail';
 import WhatsAppSidebar from './WhatsAppSidebar';
@@ -15,6 +15,8 @@ const WhatsAppChat: React.FC = () => {
   const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [realtimeDown, setRealtimeDown] = useState(false);
+  const refetchTimerRef = useRef<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const isMobile = useIsMobile();
@@ -88,6 +90,22 @@ const WhatsAppChat: React.FC = () => {
     loadChatPreviews();
   }, [loadChatPreviews]);
 
+  // Coalesce burst refetches (auto-release bulk-updates every row of a sender;
+  // REPLICA IDENTITY FULL makes each event carry the whole old row).
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimerRef.current !== null) return;
+    refetchTimerRef.current = window.setTimeout(() => {
+      refetchTimerRef.current = null;
+      loadChatPreviews();
+    }, 800);
+  }, [loadChatPreviews]);
+
+  useEffect(() => {
+    return () => {
+      if (refetchTimerRef.current !== null) window.clearTimeout(refetchTimerRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     const channel = supabase
       .channel('whatsapp-sidebar-realtime')
@@ -129,12 +147,30 @@ const WhatsAppChat: React.FC = () => {
           });
         }
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'Chat History' },
+        (payload) => {
+          // React ONLY to column transitions that affect the list; never
+          // reorder on UPDATE (updates are not new messages).
+          const oldRow = payload.old as Record<string, unknown>;
+          const newRow = payload.new as Record<string, unknown>;
+          if (oldRow['is_archived'] !== newRow['is_archived']) scheduleRefetch();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeDown(false);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setRealtimeDown(true);
+          scheduleRefetch();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [scheduleRefetch]);
 
   if (isMobile) {
     const handleSelectMobile = (num: string) => {
@@ -174,6 +210,7 @@ const WhatsAppChat: React.FC = () => {
                 isLoading={isLoadingChats}
                 loadError={loadError}
                 onRetry={loadChatPreviews}
+                connectionDown={realtimeDown}
               />
             </div>
             <WhatsAppMobileTabBar active="chats" />
@@ -197,6 +234,7 @@ const WhatsAppChat: React.FC = () => {
           isLoading={isLoadingChats}
           loadError={loadError}
           onRetry={loadChatPreviews}
+          connectionDown={realtimeDown}
         />
       </div>
 

@@ -18,11 +18,12 @@ interface Props {
   isLoading: boolean;
   loadError?: boolean;
   onRetry?: () => void;
+  connectionDown?: boolean;
 }
 
 const WhatsAppMobileSidebar: React.FC<Props> = ({
   chats, selectedNumber, onSelectChat, searchQuery, onSearchChange, isLoading,
-  loadError, onRetry,
+  loadError, onRetry, connectionDown,
 }) => {
   const filteredChats = chats.filter((c) => {
     const q = searchQuery.toLowerCase();
@@ -68,6 +69,12 @@ const WhatsAppMobileSidebar: React.FC<Props> = ({
           />
         </div>
       </div>
+
+      {connectionDown && (
+        <div className="bg-[#FFF3C4] text-[#54656F] text-xs px-4 py-2 border-b border-[#F0E6B2]">
+          Reconnecting — new messages may be delayed.
+        </div>
+      )}
 
       {/* Filter chips removed until Phase-2 unread tracking gives them real
           data — they only changed their own styling before. */}

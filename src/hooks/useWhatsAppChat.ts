@@ -188,6 +188,7 @@ export const useWhatsAppChat = () => {
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const oldestLoadedAtRef = useRef<string | null>(null);
+  const controlRecheckTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -346,6 +347,32 @@ export const useWhatsAppChat = () => {
             });
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'Chat History',
+          filter: `Sender Number=eq.${sanitizedSenderNumber}`,
+        },
+        (payload) => {
+          // Takeover/auto-release flips arrive as bulk UPDATEs (one event per
+          // row, full old row via REPLICA IDENTITY FULL). React only to the
+          // control-flag transition, coalesced — never re-render per event.
+          const oldRow = payload.old as Record<string, unknown>;
+          const newRow = payload.new as Record<string, unknown>;
+          if (oldRow['is_human_controlled'] === newRow['is_human_controlled']) return;
+          if (controlRecheckTimerRef.current !== null) return;
+          controlRecheckTimerRef.current = window.setTimeout(() => {
+            controlRecheckTimerRef.current = null;
+            supabase
+              .rpc('is_conversation_human_controlled', { p_sender_number: sanitizedSenderNumber })
+              .then(({ data: controlData }) => {
+                setIsHumanControlled(Boolean(controlData));
+              });
+          }, 500);
+        }
+      )
       .subscribe();
 
     channelRef.current = channel;
@@ -353,6 +380,10 @@ export const useWhatsAppChat = () => {
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
+      if (controlRecheckTimerRef.current !== null) {
+        window.clearTimeout(controlRecheckTimerRef.current);
+        controlRecheckTimerRef.current = null;
+      }
     };
   }, [senderNumber]);
 

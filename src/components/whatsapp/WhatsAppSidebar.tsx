@@ -18,6 +18,7 @@ interface WhatsAppSidebarProps {
   isLoading: boolean;
   loadError?: boolean;
   onRetry?: () => void;
+  connectionDown?: boolean;
 }
 
 const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
@@ -29,6 +30,7 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   isLoading,
   loadError,
   onRetry,
+  connectionDown,
 }) => {
   const filteredChats = chats.filter(chat => {
     const q = searchQuery.toLowerCase();
@@ -61,6 +63,13 @@ const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
           />
         </div>
       </div>
+
+      {/* Live-updates connection warning (list refetches on a timer meanwhile) */}
+      {connectionDown && (
+        <div className="bg-[#FFF3C4] text-[#54656F] text-xs px-4 py-2 border-b border-[#F0E6B2]">
+          Reconnecting — new messages may be delayed.
+        </div>
+      )}
 
       {/* Filter chips (All/Unread/Favourites/Groups) and the decorative
           "Locked chats" row were removed: the chips never filtered anything
