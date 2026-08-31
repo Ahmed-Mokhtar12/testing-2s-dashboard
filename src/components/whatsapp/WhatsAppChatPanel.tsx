@@ -64,14 +64,34 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
   onBack,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Follow the conversation only while the operator is already near the bottom;
+  // never yank someone who scrolled up to read history.
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    isNearBottomRef.current = true;
+  }, [senderNumber]);
+
+  useEffect(() => {
+    if (isNearBottomRef.current) scrollToBottom();
   }, [messages]);
+
+  const handleSend: WhatsAppChatPanelProps['onSendMessage'] = (message, attachment) => {
+    onSendMessage(message, attachment);
+    isNearBottomRef.current = true;
+    requestAnimationFrame(scrollToBottom);
+  };
 
   const initials = senderNumber.slice(-2);
 
@@ -163,6 +183,8 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
 
       {/* Chat area */}
       <div
+        ref={containerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-2"
         style={{
           backgroundColor: '#E5DDD5',
@@ -246,7 +268,7 @@ const WhatsAppChatPanel: React.FC<WhatsAppChatPanelProps> = ({
           old onSend, whose sendMessage closure captured the old senderNumber. */}
       <WhatsAppInput
         key={senderNumber}
-        onSend={onSendMessage}
+        onSend={handleSend}
         disabled={isLoading}
         isHumanMode={isHumanControlled}
         senderNumber={senderNumber}
