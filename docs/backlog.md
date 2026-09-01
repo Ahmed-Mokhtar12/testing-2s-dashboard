@@ -88,6 +88,11 @@ Task 5), so if the job is ever repaired it must send the service key from Vault,
 **Done** = an explicit decision to re-enable, with the job re-scheduled as `postgres` and the live
 definition committed to git.
 
+**2026-09-01, same day:** `whatsapp-send-message` v89 (staff gate + attachment allow-list, commit
+efe02cf) deployed via MCP; verified no-JWT -> 401, anon-bearer -> 401. Roles check before the
+deploy: every account except `sera@2seasonshotels.com` holds `staff`/`admin`, including the three
+password-less Azure accounts, so no operator is locked out; `sera@` is refused by decision.
+
 ---
 
 ## B16 — the 48 h guest-email purge has failed since 2026-05-19 — DEFERRED
