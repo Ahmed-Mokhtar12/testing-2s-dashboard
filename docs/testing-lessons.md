@@ -582,3 +582,25 @@ authoritative-looking and stale for exactly the period under investigation. Conf
 the writes are going* before reading silence as absence — cheapest check is the first
 timestamp in the live file versus the last in the rotated one, which would have exposed the
 handover immediately.
+
+## 15. A config comment is not evidence, and a grep pipeline is not an exit code
+
+**What happened (2026-09-01).** `supabase/config.toml` said four `verify_jwt = false`
+functions "carry their own in-body auth". None of them did: `whatsapp-web-chat` and
+`execute-n8n-action` accepted a header-less POST, wrote to `"Chat History"` with the service
+role and relayed to n8n; `whatsapp-auto-release` could be triggered by anyone; the comment was
+the only thing anyone had checked. The audit proved it the only way that counts — a GET with
+no headers returned 200 — and the fixes were each verified the same way (no JWT → 401, anon
+key → 401/403) before the commit that claimed them.
+
+**The second failure was ours.** Two commits in the fix series went in with a failing
+Playwright case each: `npx playwright test … | grep … | head` reports grep's exit code, not
+Playwright's, and a `set -e` after a `PIPESTATUS` capture did not stop the script either. The
+tests had done their job; the pipeline threw the answer away. Both were corrected in follow-up
+commits that say so.
+
+**What catches it.** For auth: assert the refusal, live, in the commit message — status code
+and body — and never let a comment stand in for a request. For gates: capture
+`${PIPESTATUS[0]}` and branch on it explicitly (`if [ "$PW" != 0 ]; then …; exit 1; fi`), or
+run the gate un-piped. A green line you did not read is the shape of every entry in this file.
+

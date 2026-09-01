@@ -57,14 +57,29 @@ SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-submit-training.sh
 SUPABASE_ACCESS_TOKEN=<token> bash scripts/deploy-sp-function.sh <fn>|--all
 ```
 
+**Only `whatsapp-control-status` is public (`verify_jwt = false`) by contract** — two live n8n
+workflows call it header-less (backlog B17). Every other function requires a signed JWT, and
+the dashboard-facing ones resolve it to a real user and check `is_hotel_staff` in the body;
+the scrapers and `whatsapp-auto-release` accept only a `service_role` claim. The old
+`supabase/config.toml` comment that the public functions "carry their own in-body auth" was
+false (2026-09-01 audit, E1/E2/E5/E12) and is corrected there.
+
 `deploy-sp-function.sh` covers `sp-read-colleagues`, `sp-read-columns`,
 and `sp-manage-colleague` — one script,
 because these are identical to deploy and five copies would drift. It refuses a name
 outside that list rather than creating a new function on the platform.
 
-The token stays in the operator's own shell. The MCP `deploy_edge_function` tool
-requires every file's contents inline, which for a multi-file function means
-hand-reproducing tens of KB — use the scripts.
+The token stays in the operator's own shell — and **never on the command line**:
+`SUPABASE_ACCESS_TOKEN=<token> bash …` lands the token in `~/.bash_history` and in
+`/proc/*/cmdline` for the life of the `curl` (found 5× in root's history on 2026-09-01; that
+token was rotated). Use `read -rs SUPABASE_ACCESS_TOKEN; export SUPABASE_ACCESS_TOKEN`, the
+way `scripts/send-training-report-*.sh` already take a JWT. The MCP `deploy_edge_function`
+tool requires every file's contents inline, which for a multi-file function means
+hand-reproducing tens of KB — use the scripts for anything that imports `_shared/`.
+Single-file functions (and functions with same-directory siblings such as `guards.ts`,
+`csv.ts`, `jwt-role.ts`) are deployed through MCP with `verify_jwt` stated explicitly; a
+function that needs `roleFromAuthorization` carries a byte-identical sibling copy of
+`_shared/jwt-role.ts`, pinned by `tests/unit/jwt-role-copies-agree.test.ts`.
 
 The **frontend** deploys the same way, `bash scripts/deploy-frontend.sh`. nginx
 does not serve the files: it proxies to `serve dist -l 3007 -s` running under PM2
