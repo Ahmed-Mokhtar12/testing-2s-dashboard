@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import twoSeasonsLogo from '@/assets/two-seasons-logo-full.png';
+import { parseCallbackUrl } from '@/lib/auth-callback-url';
 
 const ALLOWED_DOMAIN = '@2seasonshotels.com';
 
@@ -13,32 +14,25 @@ type Status = 'loading' | 'denied' | 'cancelled' | 'error';
 const AuthCallback: React.FC = () => {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<Status>('loading');
+  const [urlFacts] = useState(() => parseCallbackUrl(window.location.search, window.location.hash));
+  const [status, setStatus] = useState<Status>(urlFacts.error ? 'cancelled' : 'loading');
   const [rejectedEmail, setRejectedEmail] = useState<string | null>(null);
-  const [errorDescription, setErrorDescription] = useState<string | null>(null);
+  const errorDescription = urlFacts.description;
 
-  // supabase-js runs the IMPLICIT flow by default, so GoTrue returns here with
-  // #access_token=… (or #error=…&error_description=…) in the HASH. Reading only ?code=
-  // meant every result bounced to /auth before the domain check or the error cards could
-  // run, and a provider-side failure showed the three password-less Azure accounts a blank
-  // sign-in page with no message (audit A7/W1).
+  // supabase-js runs the IMPLICIT flow by default, so GoTrue returns here with the result in
+  // the HASH (see src/lib/auth-callback-url.ts). Reading only ?code= meant every result bounced
+  // to /auth before the domain check or the error cards could run (audit A7/W1).
+  //
+  // The status is derived SYNCHRONOUSLY from the URL rather than in an effect: this route is
+  // lazy-loaded, so by the time it mounts the AuthProvider has usually finished (loading =
+  // false), and an effect-driven setStatus('cancelled') batched with the auth-result effect's
+  // setStatus('error') in the same commit — the latter won and every provider error rendered
+  // as "Sign-in failed". Caught by tests/auth-callback.spec.ts.
   useEffect(() => {
-    const search = new URLSearchParams(window.location.search);
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const urlError = search.get('error') || hash.get('error');
-    const description = search.get('error_description') || hash.get('error_description');
-    const hasResult = search.has('code') || hash.has('access_token');
-
-    if (urlError) {
-      setErrorDescription(description);
-      setStatus('cancelled');
-      return;
-    }
-
-    if (!hasResult) {
+    if (!urlFacts.hasResult) {
       navigate('/auth', { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, urlFacts.hasResult]);
 
   // Handle auth result once Supabase finishes exchanging the code
   useEffect(() => {
