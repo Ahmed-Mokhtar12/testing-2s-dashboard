@@ -1,7 +1,15 @@
 const textEncoder = new TextEncoder();
 const STORAGE_VERSION = 'v1';
 
-const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+// Chunked: `String.fromCharCode(...bytes)` spreads every byte as a call argument and throws
+// RangeError past ~125 KB of ciphertext, which silently killed every later save (audit A2).
+const toBase64 = (bytes: Uint8Array) => {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+};
 
 const fromBase64 = (value: string) =>
   Uint8Array.from(atob(value), (char) => char.charCodeAt(0));

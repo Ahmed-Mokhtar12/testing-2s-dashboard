@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { encryptData, decryptData } from '@/utils/secureStorage';
@@ -66,6 +66,7 @@ export const useSeraLocalSessions = () => {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null);
   const { toast } = useToast();
+  const persistFailureShownRef = useRef(false);
 
   const persistSessions = useCallback(
     async (sessions: ChatSession[]) => {
@@ -79,9 +80,19 @@ export const useSeraLocalSessions = () => {
         localStorage.setItem(storageKey, encrypted);
       } catch (error) {
         if (import.meta.env.DEV) console.warn('Failed to persist Sera sessions', error);
+        // Surface it once: a save that fails silently loses every later conversation on
+        // reload (audit A2).
+        if (!persistFailureShownRef.current) {
+          persistFailureShownRef.current = true;
+          toast({
+            title: 'Chat history could not be saved',
+            description: 'Your Sera conversations will not survive a reload.',
+            variant: 'destructive',
+          });
+        }
       }
     },
-    [storageKey, userId]
+    [storageKey, userId, toast]
   );
 
   const persistActiveSessionId = useCallback(
