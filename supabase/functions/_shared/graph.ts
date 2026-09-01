@@ -1,4 +1,5 @@
 import { TokenCache } from './token-cache.ts';
+import { retryAfterSeconds } from './retry-after.ts';
 
 const TENANT_ID = Deno.env.get('AZURE_TENANT_ID') ?? '';
 const CLIENT_ID = Deno.env.get('AZURE_CLIENT_ID') ?? '';
@@ -91,9 +92,7 @@ export async function graphFetch<T = unknown>(
     // Retry-After can be either delay-seconds or an HTTP-date; parseInt on an
     // HTTP-date yields NaN, which would otherwise produce an immediate
     // (delay(NaN) resolves right away) hot-retry loop against Graph.
-    const parsed = parseInt(res.headers.get('Retry-After') ?? '10', 10);
-    const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 10;
-    await delay(retryAfter * 1000);
+    await delay(retryAfterSeconds(res.headers.get('Retry-After')) * 1000);
     return graphFetch<T>(token, url, init, retryCount + 1);
   }
 
