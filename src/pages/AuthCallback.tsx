@@ -15,19 +15,27 @@ const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState<Status>('loading');
   const [rejectedEmail, setRejectedEmail] = useState<string | null>(null);
+  const [errorDescription, setErrorDescription] = useState<string | null>(null);
 
-  // Check URL on mount for cancellation or missing code
+  // supabase-js runs the IMPLICIT flow by default, so GoTrue returns here with
+  // #access_token=… (or #error=…&error_description=…) in the HASH. Reading only ?code=
+  // meant every result bounced to /auth before the domain check or the error cards could
+  // run, and a provider-side failure showed the three password-less Azure accounts a blank
+  // sign-in page with no message (audit A7/W1).
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hasCode = params.has('code');
-    const urlError = params.get('error');
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const urlError = search.get('error') || hash.get('error');
+    const description = search.get('error_description') || hash.get('error_description');
+    const hasResult = search.has('code') || hash.has('access_token');
 
     if (urlError) {
+      setErrorDescription(description);
       setStatus('cancelled');
       return;
     }
 
-    if (!hasCode) {
+    if (!hasResult) {
       navigate('/auth', { replace: true });
     }
   }, [navigate]);
@@ -99,6 +107,11 @@ const AuthCallback: React.FC = () => {
             <p className="text-sm text-center text-muted-foreground">
               Microsoft sign-in was cancelled.
             </p>
+            {errorDescription && (
+              <p className="text-xs text-center text-muted-foreground" data-testid="auth-callback-error">
+                {errorDescription}
+              </p>
+            )}
             <Button
               variant="outline"
               className="w-full"
