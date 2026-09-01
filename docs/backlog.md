@@ -69,6 +69,84 @@ condition left, `reviews_backup_20260731` waits on the reviews backfill.
 
 ---
 
+## B15 — WhatsApp auto-release has been dead since 2026-04-23 — DECIDED: stays off
+
+**Logged:** 2026-09-01 · **Found by** the security audit (finding L1 in
+`docs/superpowers/specs/2026-09-01-security-audit-report.md`).
+
+pg_cron job 2 `whatsapp-auto-release-every-minute` runs as `supabase_read_only_user`, which has no
+EXECUTE on `net.http_post`: 188,275 consecutive failures since 2026-04-23 18:39, none alerted. Five
+conversations were `is_human_controlled = true` on 2026-09-01, four of them idle for more than a day.
+The repo's `20260515151557_schedule_whatsapp_auto_release.sql` describes a *different* job (name,
+schedule, credential) — replaying git would create a second job.
+
+**Decision (Ahmed, 2026-09-01): leave it off.** Re-enabling changes operator behaviour (takeovers would
+start expiring after 30 idle minutes). The failing job is left in place so nothing about the WhatsApp
+automation changes. The edge function itself is being locked to service-role callers (hardening plan,
+Task 5), so if the job is ever repaired it must send the service key from Vault, not the anon literal.
+
+**Done** = an explicit decision to re-enable, with the job re-scheduled as `postgres` and the live
+definition committed to git.
+
+---
+
+## B16 — the 48 h guest-email purge has failed since 2026-05-19 — DEFERRED
+
+**Logged:** 2026-09-01 (audit finding L2). Job 1 `delete-old-email-threads-every-3-hours` targets
+`public.email_threads`, renamed to `2s_email_threads_24Hrs_Deleted`; 840 failures; 699 rows retained
+back to 2026-05-17. Three active n8n workflows read that table (Burst Email thread management,
+Sera Monitor watchdog, Sera + Vision Report via the `Supabase - Hostinger` credential), so purging is
+not provably safe for thread matching. **Deferred** until the email workflow owner confirms which rows
+it needs; then fix the table name or unschedule.
+
+---
+
+## B17 — `whatsapp-control-status` is public by contract; closing it needs a coordinated n8n edit
+
+**Logged:** 2026-09-01 (audit E5/D2). Two live n8n workflows (WhatsApp Live One, WhatsApp (DigitLab)
+Live Two) call it with a header-less GET and `onError=continue`; any auth added server-side alone
+silently disables human-takeover gating — the AI would reply during a takeover. Fix = add an
+httpHeaderAuth credential (`X-Webhook-Secret`) to both HTTP nodes in n8n, then require it in the
+function (constant-time compare, as `review-fetcher-ingest` does). Until then the per-number probe
+oracle stays open; the SECURITY DEFINER RPC behind it is revoked from anon.
+
+---
+
+## B18 — n8n-side findings the dashboard repo cannot fix
+
+**Logged:** 2026-09-01 by the read-only n8n dependency map (81 workflows inventoried, 40 read in full).
+(a) Plaintext secrets inside workflow JSON: a service_role JWT in *Vector Supabase V1*, Meta page/IG
+tokens, horizonqms/Galaxy/OpenClaw keys. (b) The `Supabase - Hostinger` credential is referenced by the
+live Sera email agent but is not listable — orphaned or owned by another n8n user. (c) `Postgres account`
+connects as `postgres` (BYPASSRLS) for 6 active workflows; every RLS policy is invisible to them by
+design. (d) Five inbound webhooks (`/webhook/Website`, `/webhook/11Labs`, VAPI, Meta DM, the public chat
+trigger) have no authentication. n8n is edited by hand in the UI by the operator; this entry is the
+hand-off.
+
+---
+
+## B19 — Sera's dashboard Q&A is written into the WhatsApp bot's `LongTermMemory`
+
+**Logged:** 2026-09-01 (audit E4). `chat-with-data` inserts every staff question + answer into
+`LongTermMemory` with no `user_id`; the WhatsApp Live One workflow *reads* that table as the guest
+bot's memory. The hardening plan removes Sera's *read* of it (the cross-staff leak) but keeps the
+write, because changing what Live One reads is a change to the running automation. **Decide** whether
+staff Q&A should feed the guest bot at all; if not, drop the insert in
+`supabase/functions/chat-with-data/conversation-session-manager.ts` (one statement).
+
+---
+
+## B20 — do not apply `20260831120000_whatsapp_chat_previews` until CR8 is fixed
+
+**Logged:** 2026-09-01 (audit CR8; raised again by the Codex plan review). The committed, unapplied
+migration's `unread_count` treats every non-empty `"Sender Message"` as a guest message, but
+`whatsapp-web-chat` writes the OPERATOR's AI-mode text into that column, so staff sends would
+increment every operator's unread badge; its `has_media` SQL also disagrees with `parseMediaColumn`
+on `{"url":""}` and arrays. Fix both in the migration file (and its rollback) before it is applied;
+nothing in `src/` calls the RPC yet, so there is no rush and no partial state.
+
+---
+
 ## B5 — clean-code findings in the $batch / participant-cap work
 
 **Logged:** 2026-08-01 · **Found by** a clean-code guard pass over the six
