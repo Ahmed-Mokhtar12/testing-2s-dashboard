@@ -1,5 +1,6 @@
 
 import { WebScraper } from './web-scraper.ts';
+import { getDubaiTimeISO } from './timezone-utils.ts';
 
 export class SearchService {
   private googleApiKey: string;
@@ -179,8 +180,8 @@ export class SearchService {
   }
 
   getCurrentDateTime(): string {
-    const now = new Date();
-    return now.toISOString();
+    // The system prompt tells the model it operates in Asia/Dubai; hand it Dubai time, not UTC.
+    return getDubaiTimeISO();
   }
 
   formatSearchResults(results: any[], query: string): string {

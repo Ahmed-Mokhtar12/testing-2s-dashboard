@@ -18,11 +18,10 @@ export interface DashboardSnapshot {
   competitorRates: DashboardDomain;
   social: DashboardDomain;
   welcome: DashboardDomain;
-  memory: DashboardDomain;
   errors: string[];
 }
 
-const CAPS = { reviews: 60, whatsapp: 200, seraEmails: 40, infoEmails: 40, competitorRates: 120, social: 40, welcome: 40, memory: 20 };
+const CAPS = { reviews: 60, whatsapp: 200, seraEmails: 40, infoEmails: 40, competitorRates: 120, social: 40, welcome: 40 };
 
 export function resolveDateBounds(qa: { startDate?: string; endDate?: string }) {
   if (!qa?.startDate && !qa?.endDate) return {};
@@ -55,7 +54,9 @@ function dateQuery(supabase: any, table: string, cols: string, dateCol: string, 
 
 export async function fetchDashboardSnapshot(supabase: any, qa: { startDate?: string; endDate?: string }): Promise<DashboardSnapshot> {
   const b = resolveDateBounds(qa);
-  const [reviews, whatsapp, seraEmails, infoEmails, competitorRates, social, welcome, memory] = await Promise.allSettled([
+  const [reviews, whatsapp, seraEmails, infoEmails, competitorRates, social, welcome] = await Promise.allSettled([
+    // LongTermMemory is deliberately NOT here: it has no user_id, is staff-wide, and reading it
+    // injected every colleague's Sera turns into every other user's prompt (audit E4).
     dateQuery(supabase, 'Two Seasons and Reviews', 'id,"Date","Hotel Name",Source,Language,Score,Author,Title,Text', 'Date', b, CAPS.reviews),
     tsQuery(supabase, 'Chat History', 'id,created_at,"Sender Number",Name,"Sender Message","Ai Reply",human_reply,is_human_controlled', 'created_at', b, CAPS.whatsapp),
     tsQuery(supabase, '2Seasons_Sera_Email_Log', 'id,sent_at,email_type,category,nature_of_request,guest_name,email_subject', 'sent_at', b, CAPS.seraEmails),
@@ -63,7 +64,6 @@ export async function fetchDashboardSnapshot(supabase: any, qa: { startDate?: st
     dateQuery(supabase, 'Two Seasons Competitor Hotel room Rates', 'id,report_date,hotel_name,checkin_date,converted_price_aed,status,is_lowest_for_day', 'report_date', b, CAPS.competitorRates).eq('dry_run', false).in('status', ['success', 'price_found']),
     tsQuery(supabase, 'social_engagement_logs', 'id,created_at,platform,channel,event_type,sender_name,guest_message_text,escalation_flag,status', 'created_at', b, CAPS.social),
     tsQuery(supabase, 'welcome_message_success_log', 'id,sent_at,sent_date,full_name,room_number,arrival_date,status', 'sent_at', b, CAPS.welcome),
-    tsQuery(supabase, 'LongTermMemory', 'id,created_at,message,sender,recipient', 'created_at', b, CAPS.memory),
   ]);
   const unwrap = (r: PromiseSettledResult<any>, label: string, errors: string[]) => {
     if (r.status === 'rejected') { errors.push(`${label}: ${r.reason}`); return { rows: [], count: null }; }
@@ -79,7 +79,6 @@ export async function fetchDashboardSnapshot(supabase: any, qa: { startDate?: st
     competitorRates: unwrap(competitorRates, 'competitorRates', errors),
     social: unwrap(social, 'social', errors),
     welcome: unwrap(welcome, 'welcome', errors),
-    memory: unwrap(memory, 'memory', errors),
     errors,
   };
 }

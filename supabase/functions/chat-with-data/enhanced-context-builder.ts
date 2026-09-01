@@ -34,8 +34,6 @@ const DOMAIN_SECTIONS: DomainRenderSpec[] = [
     `${r.created_at} | ${r.platform}/${r.channel} | ${r.event_type} | ${(r.guest_message_text ?? '').slice(0, 120)}${r.escalation_flag ? ' [ESCALATED]' : ''}` },
   { key: 'welcome', label: 'Welcome Messages', cap: 15, renderRow: (r) =>
     `${r.sent_date} | ${r.full_name ?? ''} | room ${r.room_number ?? ''} | ${r.status}` },
-  { key: 'memory', label: 'Memory', cap: 15, renderRow: (r) =>
-    `${r.created_at} | ${(r.message ?? '').slice(0, 200)}` },
 ];
 
 export class EnhancedContextBuilder {

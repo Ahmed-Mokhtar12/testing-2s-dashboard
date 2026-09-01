@@ -1,7 +1,22 @@
-import { SmartQueryAnalysis } from './types.ts';
+import type { SmartQueryAnalysis } from './types.ts';
+import { dubaiDateKey } from './whatsapp-aggregator.ts';
 
-export function analyzeQueryIntelligently(message: string): SmartQueryAnalysis {
+// All calendar arithmetic on Dubai date KEYS (CLAUDE.md, Scheduling): never on a Date's
+// local or UTC fields — between 20:00 and 23:59 UTC those are yesterday in Dubai (audit E8).
+// Date.UTC is used purely as a calendar calculator.
+const shiftKey = (key: string, days: number): string => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};
+const shiftMonths = (key: string, months: number): string => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 - months, d)).toISOString().slice(0, 10);
+};
+
+export function analyzeQueryIntelligently(message: string, now: Date = new Date()): SmartQueryAnalysis {
   const lowerMessage = message.toLowerCase();
+  const todayKey = dubaiDateKey(now.toISOString());
+  const dubaiYear = Number(todayKey.slice(0, 4));
   
   // Specific month patterns (June 2025, May 2024, etc.)
   const monthPattern = /(january|february|march|april|may|june|july|august|september|october|november|december)\s*,?\s*(\d{4})/i;
@@ -37,13 +52,11 @@ export function analyzeQueryIntelligently(message: string): SmartQueryAnalysis {
   
   if (daysMatch) {
     const days = parseInt(daysMatch[1]);
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
     return {
       type: 'recent_period',
       days,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: shiftKey(todayKey, -days),
+      endDate: todayKey,
       description: `past ${days} days`
     };
   }
@@ -51,44 +64,38 @@ export function analyzeQueryIntelligently(message: string): SmartQueryAnalysis {
   if (weeksMatch) {
     const weeks = parseInt(weeksMatch[1]);
     const days = weeks * 7;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
     return {
       type: 'recent_period',
       days,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: shiftKey(todayKey, -days),
+      endDate: todayKey,
       description: `past ${weeks} weeks`
     };
   }
   
   if (monthsMatch) {
     const months = parseInt(monthsMatch[1]);
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - months);
     return {
       type: 'recent_period',
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: shiftMonths(todayKey, months),
+      endDate: todayKey,
       description: `past ${months} months`
     };
   }
   
   // Recent/current patterns
   if (lowerMessage.includes('recent') || lowerMessage.includes('lately') || lowerMessage.includes('this month')) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 30);
     return {
       type: 'recent_period',
       days: 30,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: shiftKey(todayKey, -30),
+      endDate: todayKey,
       description: 'recent period (30 days)'
     };
   }
   
   if (lowerMessage.includes('this year')) {
-    const year = new Date().getFullYear();
+    const year = dubaiYear;
     return {
       type: 'date_range',
       startDate: `${year}-01-01`,
@@ -98,7 +105,7 @@ export function analyzeQueryIntelligently(message: string): SmartQueryAnalysis {
   }
   
   if (lowerMessage.includes('last year')) {
-    const year = new Date().getFullYear() - 1;
+    const year = dubaiYear - 1;
     return {
       type: 'date_range',
       startDate: `${year}-01-01`,

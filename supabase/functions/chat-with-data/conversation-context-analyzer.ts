@@ -23,7 +23,9 @@ export class ConversationContextAnalyzer {
     let conversationContext = '';
 
     if (userHistory && userHistory.length > 0) {
-      const recentExchanges = userHistory.slice(-5); // Last 5 conversation exchanges
+      // History is NEWEST FIRST (index.ts orders created_at desc, limit 30): take the head.
+      // slice(-5) took the five OLDEST turns and called them recent (audit E8).
+      const recentExchanges = userHistory.slice(0, 5);
       
       // Enhanced data point extraction with conversation memory from website_chats
       recentExchanges.forEach((exchange, index) => {

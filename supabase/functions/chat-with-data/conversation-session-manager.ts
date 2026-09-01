@@ -15,21 +15,21 @@ export class ConversationSessionManager {
         created_at: new Date().toISOString()
       };
 
-      const { error } = await supabase
-        .from('LongTermMemory')
-        .insert(conversationEntry);
-
-      if (error) {
-        console.error('💾 Failed to save conversation:', error);
-        return;
+      // The two saves are independent (audit E8): a LongTermMemory failure used to skip the
+      // per-user session save silently. LongTermMemory is also READ by the WhatsApp Live One
+      // n8n workflow — whether Sera should keep writing there is backlog B19; the write is
+      // kept unchanged here.
+      const memoryInsert = supabase.from('LongTermMemory').insert(conversationEntry);
+      const sessionSave = sessionId
+        ? this.saveToDashboardChat(supabase, userMessage, aiResponse, sessionId, userId)
+        : Promise.resolve();
+      const [mem, session] = await Promise.allSettled([memoryInsert, sessionSave]);
+      if (mem.status === 'rejected' || (mem.status === 'fulfilled' && mem.value?.error)) {
+        console.error('💾 LongTermMemory insert failed:', mem.status === 'rejected' ? mem.reason : mem.value.error);
+      } else {
+        console.log('💾 Conversation saved successfully with context');
       }
-
-      console.log('💾 Conversation saved successfully with context');
-
-      // Also save to 2s-dashboard_AI_Chat for session management
-      if (sessionId) {
-        await this.saveToDashboardChat(supabase, userMessage, aiResponse, sessionId, userId);
-      }
+      if (session.status === 'rejected') console.error('💾 2s-dashboard_AI_Chat save failed:', session.reason);
 
     } catch (error) {
       console.error('💾 Error in conversation saving:', error);
