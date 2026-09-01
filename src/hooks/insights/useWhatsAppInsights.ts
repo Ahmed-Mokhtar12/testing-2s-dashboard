@@ -16,25 +16,20 @@ export function useWhatsAppInsights() {
     staleTime: QUERY_STALE_TIME,
     gcTime: QUERY_GC_TIME,
     queryFn: async () => {
-      const [chats, bursts] = await Promise.all([
-        fetchAllRows((from, to) =>
-          supabase
-            .from('Chat History')
-            .select('id, created_at, "Sender Number", Name, "Sender Message", "Ai Reply", human_reply, is_human_controlled, is_archived')
-            .gte('created_at', fromISO)
-            .lte('created_at', toISO)
-            .order('created_at', { ascending: false })
-            .range(from, to)
-        ),
-        fetchAllRows((from, to) =>
-          supabase
-            .from('2s burst_messaging')
-            .select('id, created_at, sender_number, message_type')
-            .gte('created_at', fromISO)
-            .lte('created_at', toISO)
-            .range(from, to)
-        ),
-      ]);
+      // The "2s burst_messaging" fetch that used to run alongside is gone: the table is
+      // RESTRICTIVE-denied to authenticated, held 0 rows, and nothing consumed the result
+      // (audit A9/D11). The id tiebreaker keeps .range() paging stable across equal
+      // created_at values (36k rows, 30-day ranges exceed one page).
+      const chats = await fetchAllRows((from, to) =>
+        supabase
+          .from('Chat History')
+          .select('id, created_at, "Sender Number", Name, "Sender Message", "Ai Reply", human_reply, is_human_controlled, is_archived')
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      );
       const guestCounts = new Map<string, number>();
 
       const stats = chats.reduce(
@@ -73,7 +68,6 @@ export function useWhatsAppInsights() {
 
       return {
         chats,
-        bursts,
         kpis: {
           total: chats.length,
           uniqueGuests: stats.uniqueGuests.size,

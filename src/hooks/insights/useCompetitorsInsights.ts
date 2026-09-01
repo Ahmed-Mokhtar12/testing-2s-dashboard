@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
+import { averageAedPrice } from './definitions';
 import { safeNum, fetchAllRows } from './utils';
 
 const QUERY_STALE_TIME = 5 * 60 * 1000;
@@ -37,8 +38,10 @@ export function useCompetitorsInsights() {
       const ours = rows.filter((row) => isOurHotel(row.hotel_name));
       const comps = rows.filter((row) => !isOurHotel(row.hotel_name));
 
-      const ourAvg = ours.length ? ours.reduce((sum, row) => sum + safeNum(row.converted_price_aed), 0) / ours.length : 0;
-      const compAvg = comps.length ? comps.reduce((sum, row) => sum + safeNum(row.converted_price_aed), 0) / comps.length : 0;
+      // Null prices are excluded, not averaged as AED 0 (audit A10); shared with Sera via
+      // definitions.ts and pinned by the divergence test.
+      const ourAvg = averageAedPrice(ours) ?? 0;
+      const compAvg = averageAedPrice(comps) ?? 0;
       const diff = ourAvg - compAvg;
       const diffPct = compAvg ? (diff / compAvg) * 100 : 0;
 
@@ -49,9 +52,10 @@ export function useCompetitorsInsights() {
       rows.forEach((row) => {
         const hotelName = row.hotel_name;
         const reportDate = String(row.report_date);
-        const price = safeNum(row.converted_price_aed);
-
         dates.add(reportDate);
+        // A row without a numeric price contributes to the date axis only.
+        const price = Number(row.converted_price_aed);
+        if (row.converted_price_aed === null || row.converted_price_aed === undefined || !Number.isFinite(price)) return;
         const hotelRows = byHotel.get(hotelName) || [];
         hotelRows.push(price);
         byHotel.set(hotelName, hotelRows);
@@ -74,10 +78,11 @@ export function useCompetitorsInsights() {
       const trend = Array.from(dates)
         .sort()
         .map((date) => {
-          const row: Record<string, string | number> = { label: date.slice(5) };
+          const row: Record<string, string | number | null> = { label: date.slice(5) };
           const dateIndex = trendIndex.get(date);
           hotelNames.forEach((hotel) => {
-            row[hotel] = dateIndex?.get(hotel) ?? 0;
+            // null draws a gap in the line instead of a dive to zero (audit A10).
+            row[hotel] = dateIndex?.get(hotel) ?? null;
           });
           return row;
         });

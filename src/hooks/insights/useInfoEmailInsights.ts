@@ -21,6 +21,7 @@ export function useInfoEmailInsights() {
           .gte('created_at', fromISO)
           .lte('created_at', toISO)
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .range(from, to)
       );
       const stats = rows.reduce(

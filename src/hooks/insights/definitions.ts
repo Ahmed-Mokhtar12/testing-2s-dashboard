@@ -80,3 +80,19 @@ export function whatsappHumanControlledCount(rows: Array<{ is_human_controlled?:
 export function whatsappHumanReplyCount(rows: Array<{ human_reply?: unknown }>): number {
   return rows.filter((r) => isNonBlank(r.human_reply)).length;
 }
+
+/**
+ * Average AED price over rows that actually carry a numeric price. A null or unparseable
+ * converted_price_aed is EXCLUDED, never counted as 0 — the dashboard used to average it
+ * as AED 0 and drag every hotel average, rank and diff down (audit A10). Sera's
+ * rates-aggregator skips non-numbers the same way; the pair is pinned in
+ * tests/unit/definition-divergence.test.ts.
+ */
+export function averageAedPrice(rows: Array<{ converted_price_aed?: unknown }>): number | null {
+  const prices: number[] = [];
+  for (const r of rows) {
+    const n = typeof r.converted_price_aed === 'number' ? r.converted_price_aed : Number(r.converted_price_aed);
+    if (r.converted_price_aed !== null && r.converted_price_aed !== undefined && Number.isFinite(n)) prices.push(n);
+  }
+  return prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
+}

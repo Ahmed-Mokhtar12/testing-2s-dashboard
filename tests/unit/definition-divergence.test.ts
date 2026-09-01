@@ -15,8 +15,9 @@ import assert from 'node:assert/strict';
 
 import {
   reviewAverageScore, emailUniqueGuests,
-  whatsappHumanControlledCount, whatsappHumanReplyCount,
+  whatsappHumanControlledCount, whatsappHumanReplyCount, averageAedPrice,
 } from '../../src/hooks/insights/definitions.ts';
+import { aggregateRates } from '../../supabase/functions/chat-with-data/rates-aggregator.ts';
 import { aggregateReviews } from '../../supabase/functions/chat-with-data/reviews-aggregator.ts';
 import { aggregateEmails } from '../../supabase/functions/chat-with-data/emails-aggregator.ts';
 import { aggregateWhatsApp } from '../../supabase/functions/chat-with-data/whatsapp-aggregator.ts';
@@ -53,6 +54,15 @@ const WHATSAPP_ROWS = [
   // A human reply the flag never got set on (61 such rows existed live).
   { created_at: '2026-07-02T10:00:00Z', sender: 'b', name: null, is_human_controlled: false, human_reply: 'agent here', ai_reply: null },
 ];
+// One hotel, one null quote: the dashboard used to average the null as AED 0 (audit A10).
+const RATE_ROWS = [
+  { report_date: '2026-07-01', hotel: 'Two Seasons', price: 100 },
+  { report_date: '2026-07-02', hotel: 'Two Seasons', price: null },
+  { report_date: '2026-07-03', hotel: 'Two Seasons', price: 300 },
+];
+const rateRowsDashboard = RATE_ROWS.map((r) => ({ converted_price_aed: r.price }));
+const rateRowsSera = RATE_ROWS.map((r) => ({ report_date: r.report_date, hotel: r.hotel, price_aed: r.price }));
+
 const whatsappRowsSera = WHATSAPP_ROWS.map((r) => ({
   created_at: r.created_at, sender: r.sender, name: r.name,
   humanControlled: r.is_human_controlled,
@@ -106,6 +116,11 @@ const PAIRS: Pair[] = [
     metric: 'whatsapp.unique_guests',
     dashboard: () => new Set(WHATSAPP_ROWS.map((r) => String(r.sender))).size,
     sera: () => aggregateWhatsApp(whatsappRowsSera).unique_guests,
+  },
+  {
+    metric: 'competitors.average_aed',
+    dashboard: () => averageAedPrice(rateRowsDashboard),
+    sera: () => aggregateRates(rateRowsSera).hotels[0].avg_aed,
   },
   {
     metric: 'whatsapp.human_handled',
