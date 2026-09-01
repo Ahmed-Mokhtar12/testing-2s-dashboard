@@ -10,6 +10,7 @@
 //      served is retired; nothing in this repo has ever called it.
 
 import { resolveScrapeUrl } from './url-allowlist.ts';
+import { roleFromAuthorization } from './jwt-role.ts'; // sibling copy of _shared/jwt-role.ts, pinned by tests/unit/jwt-role-copies-agree.test.ts
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +20,15 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Service-role callers only (n8n / operator). No dashboard code calls this function and
+  // every request spends paid third-party credits (audit E11). verify_jwt = true makes the
+  // role claim trustworthy.
+  if (roleFromAuthorization(req.headers.get('Authorization')) !== 'service_role') {
+    return new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {

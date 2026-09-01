@@ -6,6 +6,7 @@
 // and an unknown `hotel` is a hard 400 — and set verify_jwt = true at the
 // gateway so the function can no longer be invoked anonymously.
 
+import { roleFromAuthorization } from './jwt-role.ts'; // sibling copy of _shared/jwt-role.ts, pinned by tests/unit/jwt-role-copies-agree.test.ts
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -273,6 +274,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Service-role callers only (n8n / operator). No dashboard code calls this function and
+  // every request spends paid third-party credits (audit E11). verify_jwt = true makes the
+  // role claim trustworthy.
+  if (roleFromAuthorization(req.headers.get('Authorization')) !== 'service_role') {
+    return new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const apiKey = Deno.env.get('BROWSERLESS_API_KEY');
   if (!apiKey) {
     return new Response(
@@ -292,7 +302,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const urlBuilder = HOTEL_URLS[hotel];
+    // Object.hasOwn: a plain-object lookup let hotel:"constructor" resolve to Object and turn
+    // checkIn into the target URL (audit E6).
+    const urlBuilder = Object.hasOwn(HOTEL_URLS, hotel) ? HOTEL_URLS[hotel] : undefined;
     if (!urlBuilder) {
       return new Response(
         JSON.stringify({ success: false, error: `Unknown hotel: ${hotel}. Use: ${Object.keys(HOTEL_URLS).join(', ')}` }),

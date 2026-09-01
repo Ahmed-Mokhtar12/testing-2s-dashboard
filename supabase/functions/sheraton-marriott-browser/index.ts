@@ -1,10 +1,12 @@
 // VENDORED from the deployed function (slug: sheraton-marriott-browser, version: 12) on 2026-07-31.
 // Recovered because the March revert left this function deployed with no repo
-// source. This file is a verbatim record of production, not a reviewed source
-// of truth — do NOT redeploy from it without reviewing it first.
+// source. Reviewed 2026-09-01: the deployed v15 code is byte-identical to this file
+// minus this header (diffed via the management API), so the file IS the live source; the
+// only changes since are the service-role gate and the timeoutMs ceiling below.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { chromium } from "npm:playwright-core";
+import { roleFromAuthorization } from "./jwt-role.ts"; // sibling copy of _shared/jwt-role.ts, pinned by tests/unit/jwt-role-copies-agree.test.ts
 
 type SheratonRequest = {
   checkIn?: string;
@@ -370,6 +372,16 @@ serve(async (req) => {
     });
   }
 
+  // Service-role callers only (n8n / operator). No dashboard code calls this function and
+  // every request holds a paid Browserless session (audit E11). verify_jwt = true makes the
+  // role claim trustworthy.
+  if (roleFromAuthorization(req.headers.get("Authorization")) !== "service_role") {
+    return new Response(JSON.stringify({ success: false, error: "Forbidden" }), {
+      status: 403,
+      headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" },
+    });
+  }
+
   let browser: any = null;
   let context: any = null;
   let page: any = null;
@@ -378,7 +390,9 @@ serve(async (req) => {
     const payload = (await req.json()) as SheratonRequest;
     const checkIn = String(payload.checkIn || "");
     const checkOut = String(payload.checkOut || "");
-    const timeoutMs = Math.max(30000, Number(payload.timeoutMs || DEFAULT_TIMEOUT_MS));
+    // Floor AND ceiling: timeoutMs had no upper bound, so one request could hold a Browserless
+    // session for as long as it liked (audit E14).
+    const timeoutMs = Math.min(120_000, Math.max(30_000, Number(payload.timeoutMs || DEFAULT_TIMEOUT_MS)));
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(checkIn) || !/^\d{4}-\d{2}-\d{2}$/.test(checkOut)) {
       return json({

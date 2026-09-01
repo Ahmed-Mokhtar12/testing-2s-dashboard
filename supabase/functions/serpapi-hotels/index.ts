@@ -8,6 +8,7 @@
 // The exposure that was closed was purely the anonymous-caller one (burning
 // SerpApi credits), not an arbitrary-target one.
 
+import { roleFromAuthorization } from './jwt-role.ts'; // sibling copy of _shared/jwt-role.ts, pinned by tests/unit/jwt-role-copies-agree.test.ts
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -139,6 +140,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Service-role callers only (n8n / operator). No dashboard code calls this function and
+  // every request spends paid third-party credits (audit E11). verify_jwt = true makes the
+  // role claim trustworthy.
+  if (roleFromAuthorization(req.headers.get('Authorization')) !== 'service_role') {
+    return new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const apiKey = Deno.env.get('SERPAPI_API_KEY')?.trim();
   console.log(`🔑 API key length: ${apiKey?.length}, starts with: ${apiKey?.substring(0, 4)}...`);
   if (!apiKey) {
@@ -167,10 +177,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    const hotelKeys: string[] = hotels || (hotel ? [hotel] : Object.keys(HOTEL_MAP));
+    const requested: unknown[] = Array.isArray(hotels) ? hotels : (hotel ? [hotel] : Object.keys(HOTEL_MAP));
+    // Dedupe and cap: hotels[] was unbounded, so one request could fan out into N paid
+    // SerpAPI calls (audit E11).
+    const hotelKeys: string[] = [...new Set(requested.filter((k): k is string => typeof k === 'string'))];
+    if (hotelKeys.length === 0 || hotelKeys.length > Object.keys(HOTEL_MAP).length) {
+      return new Response(
+        JSON.stringify({ success: false, error: `hotels must list 1..${Object.keys(HOTEL_MAP).length} known keys` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Validate hotel keys
-    const invalid = hotelKeys.filter((k: string) => !HOTEL_MAP[k]);
+    // Validate hotel keys (Object.hasOwn: no prototype keys — audit E6)
+    const invalid = hotelKeys.filter((k: string) => !Object.hasOwn(HOTEL_MAP, k));
     if (invalid.length > 0) {
       return new Response(
         JSON.stringify({ success: false, error: `Unknown hotels: ${invalid.join(', ')}. Available: ${Object.keys(HOTEL_MAP).join(', ')}` }),

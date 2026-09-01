@@ -8,7 +8,10 @@ import { readFileSync } from 'node:fs';
 const CANONICAL = 'supabase/functions/_shared/jwt-role.ts';
 const COPIES = [
   'supabase/functions/whatsapp-auto-release/jwt-role.ts',
-  // Task 10 adds: browserless-scrape, serpapi-hotels, sheraton-marriott-browser, firecrawl-scrape
+  'supabase/functions/browserless-scrape/jwt-role.ts',
+  'supabase/functions/serpapi-hotels/jwt-role.ts',
+  'supabase/functions/sheraton-marriott-browser/jwt-role.ts',
+  'supabase/functions/firecrawl-scrape/jwt-role.ts',
 ];
 
 test('every sibling copy of jwt-role.ts is byte-identical to _shared/jwt-role.ts', () => {
