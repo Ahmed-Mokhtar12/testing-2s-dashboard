@@ -49,7 +49,7 @@ port = 54332
 verify_jwt = true
 
 [functions.whatsapp-web-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.whatsapp-send-message]
 verify_jwt = true
@@ -80,11 +80,12 @@ verify_jwt = true
 # serpapi-hotels; sheraton-marriott-browser and instagram-token-service were
 # already verify_jwt = true in production and were not touched.
 #
-# NOTE: these six were the *unaccounted-for* public functions, not every public
-# function on the project. execute-n8n-action, whatsapp-web-chat,
-# whatsapp-auto-release and whatsapp-control-status are still verify_jwt = false
-# by design — they are called by n8n / pg_cron with no user JWT and carry their
-# own in-body auth. They are deliberate, not leftovers.
+# NOTE: these six were the *unaccounted-for* public functions. As of 2026-09-01 the only
+# function that is still verify_jwt = false BY CONTRACT is whatsapp-control-status: two live
+# n8n workflows call it with no headers and onError=continue (backlog B17). whatsapp-web-chat
+# and execute-n8n-action are staff-gated (getUser + is_hotel_staff); whatsapp-auto-release
+# accepts service_role JWTs only. None of them ever "carried its own in-body auth" before
+# 2026-09-01 — that earlier claim here was wrong (audit E1/E2/E5/E12).
 
 [functions.firecrawl-scrape]
 verify_jwt = true
