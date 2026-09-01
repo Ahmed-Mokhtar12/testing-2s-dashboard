@@ -24,6 +24,9 @@ export const DURATION_OPTIONS: { label: string; minutes: number }[] = [
   { label: '8 hours', minutes: 480 },
 ];
 
+// UI visibility only (which tabs render). The server checks user_roles via has_role in
+// sp-manage-colleague; this list is NOT an authorization boundary and no longer has a
+// server-side twin to keep in sync.
 export const ADMIN_EMAILS = [
   'ahmed.mokhtar@2seasonshotels.com',
   'amir.monir@2seasonshotels.com',

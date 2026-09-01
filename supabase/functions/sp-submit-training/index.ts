@@ -6,7 +6,7 @@ import {
   normalizeTrainerNames,
   trainerNamesTooLong,
 } from '../_shared/trainer-names.ts';
-import { getCallerEmail } from '../_shared/auth.ts';
+import { requireStaff } from '../_shared/auth.ts';
 import { writeParticipantsInBatches, type BatchResponse } from './participant-batch.ts';
 
 interface ParticipantRow {
@@ -90,10 +90,11 @@ Deno.serve(async (req) => {
     return json(req, { error: 'Missing Azure credentials: set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET as Supabase secrets.' }, 503);
   }
 
-  const caller = await getCallerEmail(req);
-  if (!caller) {
-    return json(req, { error: 'Not authenticated.' }, 401);
+  const gate = await requireStaff(req);
+  if (!gate.ok) {
+    return json(req, { error: gate.error }, gate.status);
   }
+  const caller = gate.caller.email;
 
   let body: SubmitBody;
   try {

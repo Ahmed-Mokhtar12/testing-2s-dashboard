@@ -14,7 +14,7 @@ import { PerformanceMonitor } from './performance-monitor.ts';
 import { SmartResponseValidator } from './smart-response-validator.ts';
 import { ResponseCompletenessEngine } from './response-completeness-engine.ts';
 import { DataAvailabilityChecker } from './data-availability-checker.ts';
-import { getCallerUser } from '../_shared/auth.ts';
+import { requireStaff } from '../_shared/auth.ts';
 import { QUERY_TOOL_NAMES } from './function-call-handler.ts';
 
 const corsHeaders = {
@@ -31,13 +31,14 @@ serve(async (req) => {
   // verify_jwt=true already rejects requests without a valid project JWT, but
   // the public anon key passes that check — this resolves the JWT to a real
   // auth user, exactly like the sp-* functions.
-  const caller = await getCallerUser(req);
-  if (!caller) {
-    return new Response(JSON.stringify({ error: 'Not authenticated.' }), {
-      status: 401,
+  const gate = await requireStaff(req);
+  if (!gate.ok) {
+    return new Response(JSON.stringify({ error: gate.error }), {
+      status: gate.status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
+  const caller = gate.caller;
 
   // Hoist these so they remain accessible in the catch block for error logging
   let message: string | undefined;
