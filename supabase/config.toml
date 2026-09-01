@@ -57,6 +57,9 @@ verify_jwt = true
 [functions.whatsapp-control-status]
 verify_jwt = false
 
+[functions.execute-n8n-action]
+verify_jwt = true
+
 [functions.sp-read-colleagues]
 verify_jwt = true
 

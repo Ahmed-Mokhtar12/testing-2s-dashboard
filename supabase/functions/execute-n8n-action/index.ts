@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -85,10 +86,35 @@ async function executeActionViaN8N(actionRequest: ActionRequest): Promise<any> {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^[0-9+\-\s]{7,20}$/;
 
+function deny(status: 401 | 403, error: string): Response {
+  return new Response(JSON.stringify({ success: false, error }), {
+    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Staff-only. This relay HMAC-signs whatever it is given and hands it to n8n's
+  // send-email/SMS/WhatsApp webhook, so n8n cannot tell a dashboard confirmation from an
+  // anonymous POST. Until 2026-09-01 there was no inbound authentication at all (audit E2).
+  // verify_jwt = true rejects unsigned tokens at the gateway; the anon key passes that, so
+  // resolve to a real user and check the role, like whatsapp-send-message.
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) return deny(401, 'Unauthorized');
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: userRes, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !userRes?.user) return deny(401, 'Unauthorized');
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: isStaff, error: staffErr } = await admin.rpc('is_hotel_staff', { _user_id: userRes.user.id });
+  if (staffErr || !isStaff) return deny(403, 'Forbidden');
 
   try {
     const actionRequest: ActionRequest = await req.json();
