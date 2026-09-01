@@ -25,7 +25,7 @@ const strengthToTone = {
 } as const;
 
 const ResetPasswordPage: React.FC = () => {
-  const { user, updatePassword } = useAuth();
+  const { user, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -151,7 +151,10 @@ const ResetPasswordPage: React.FC = () => {
       return;
     }
 
-    const { error: signOutError } = await supabase.auth.signOut({ scope: 'global' });
+    // The CONTEXT's signOut, not supabase.auth.signOut directly: it is the only thing that
+    // clears isRecovering, and with that flag still set /auth bounced straight back to
+    // /reset-password with "Reset link expired" until a hard reload (audit A6).
+    const { error: signOutError } = await signOut();
     setSubmitting(false);
 
     if (signOutError) {
