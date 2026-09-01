@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { roleFromAuthorization } from './jwt-role.ts'; // sibling copy of _shared/jwt-role.ts, pinned by tests/unit/jwt-role-copies-agree.test.ts
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,10 +7,22 @@ const corsHeaders = {
 };
 
 const IDLE_MINUTES = 30;
+const PAGE = 1000; // PostgREST api.max_rows — anything above is silently clamped (CLAUDE.md)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Service-role callers only (pg_cron with the service key from Vault, or an operator).
+  // The sweep flips every row of every idle human-controlled sender; before 2026-09-01
+  // anyone could trigger it (audit E12). verify_jwt = true makes the role claim trustworthy.
+  // The live cron job still sends the ANON literal and is failing before it reaches us
+  // (backlog B15) — when it is repaired it must send the service key.
+  if (roleFromAuthorization(req.headers.get('Authorization')) !== 'service_role') {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -18,24 +31,28 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // 1) Find all active human-controlled sender numbers
-    const { data: activeRows, error: activeErr } = await supabase
-      .from('Chat History')
-      .select('"Sender Number"')
-      .eq('is_human_controlled', true)
-      .not('Sender Number', 'is', null);
-
-    if (activeErr) {
-      console.error('❌ failed to fetch active human-controlled rows:', activeErr);
-      return new Response(JSON.stringify({ error: activeErr.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // 1) Every active human-controlled sender. A takeover flips EVERY row of a sender, so
+    // one long thread can exceed max_rows on its own and hide every other sender from an
+    // unpaged select — page with .range() until a short page.
+    const senders = new Set<string>();
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('Chat History')
+        .select('"Sender Number"')
+        .eq('is_human_controlled', true)
+        .not('Sender Number', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        console.error('❌ failed to fetch active human-controlled rows:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      for (const r of data ?? []) if (r['Sender Number']) senders.add(String(r['Sender Number']));
+      if (!data || data.length < PAGE) break;
     }
-
-    const senderNumbers = [
-      ...new Set((activeRows || []).map((r: any) => r['Sender Number']).filter(Boolean)),
-    ] as string[];
+    const senderNumbers = [...senders];
 
     if (senderNumbers.length === 0) {
       return new Response(JSON.stringify({ checked: 0, released: [] }), {
