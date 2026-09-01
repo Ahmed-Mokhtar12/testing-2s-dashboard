@@ -17,6 +17,7 @@
 // cleanup ships with the next change that actually needs deploying.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { csvCell } from "./csv.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,10 +61,6 @@ function classifyDuration(text: string): string {
   return "unclear booking inquiry";
 }
 
-function csvCell(v: any): string {
-  const s = (v ?? "").toString().replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
-  return `"${s.replace(/"/g, '""')}"`;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
