@@ -35,7 +35,17 @@ export interface TrainingDetailsValues {
 }
 
 export type WizardStep = 1 | 2 | 3;
-export type SuccessState = 'full' | 'partial' | null;
+export type SuccessState =
+  | 'full'
+  | 'partial'
+  | {
+      // Some participant rows never reached SharePoint. Terminal: the Confirm button must not
+      // come back, because a resubmission mints a new trainingId and duplicates the session.
+      kind: 'partial-participants';
+      trainingId: string;
+      failed: Array<{ name: string; employeeId: string; error: string }>;
+    }
+  | null;
 
 export interface HotelTrainingDraft {
   trainingDetails: Partial<TrainingDetailsValues> | null;

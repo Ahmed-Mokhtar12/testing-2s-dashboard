@@ -263,6 +263,19 @@ export default function HotelTraining() {
                 + 'are recorded for an admin to add.',
               { duration: 15000 },
             );
+            // A toast is not a guard: the Confirm button used to re-enable behind it and the
+            // autosaved draft survived a reload straight back to Confirm (audit A8). Enter a
+            // terminal state and clear the draft.
+            clearDraft();
+            setSuccessState({
+              kind: 'partial-participants',
+              trainingId: result.trainingId,
+              failed: result.failedParticipants.map((f) => ({
+                name: f.row.colleagueName,
+                employeeId: f.row.employeeId,
+                error: f.error,
+              })),
+            });
             return;
           }
 
@@ -279,7 +292,29 @@ export default function HotelTraining() {
   if (successState) {
     return (
       <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-10 text-center">
-        {successState === 'full' ? (
+        {typeof successState === 'object' && successState.kind === 'partial-participants' ? (
+          <>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-100 text-2xl text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">
+              !
+            </div>
+            <h2 className="text-xl font-semibold">
+              Training {successState.trainingId} saved with {successState.failed.length} participant
+              {successState.failed.length === 1 ? ' row' : ' rows'} missing
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              These rows did not reach SharePoint. Do NOT submit again — that would create a duplicate
+              session. An admin will add them.
+            </p>
+            <ul data-testid="partial-failed-rows" className="w-full max-w-md text-left text-sm">
+              {successState.failed.map((row) => (
+                <li key={`${row.employeeId}-${row.name}`} className="flex justify-between gap-3 border-b border-border py-1.5">
+                  <span>{row.name} <span className="text-muted-foreground">({row.employeeId})</span></span>
+                  <span className="text-muted-foreground truncate">{row.error}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : successState === 'full' ? (
           <>
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
               <Check className="h-8 w-8 text-green-600 dark:text-green-400" />

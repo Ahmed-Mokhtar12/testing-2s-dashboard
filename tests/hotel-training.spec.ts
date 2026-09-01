@@ -503,7 +503,14 @@ test.describe('Hotel Training', () => {
     // following it minted a new trainingId and duplicated the SharePoint session
     // — the session list item has no TrainingID field, so the function cannot
     // dedupe a resubmission.
-    await expect(page.getByText(/Do NOT submit again/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Do NOT submit again/).first()).toBeVisible({ timeout: 10_000 });
+
+    // The toast was the only guard: the Confirm button re-enabled behind it and the
+    // autosaved draft survived a reload straight back to Confirm (audit A8). Now a
+    // terminal state replaces the wizard and the draft is gone.
+    await expect(page.getByRole('button', { name: 'Confirm & Submit' })).toHaveCount(0);
+    await expect(page.getByTestId('partial-failed-rows')).toContainText('Bob Jones');
+    await expect.poll(async () => page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith('hotel-training-draft-')))).toBe(false);
 
     const posts = (table: string) =>
       writes.filter((write) => write.table === table && write.method === 'POST');
