@@ -7,7 +7,8 @@ import { type DateRangePreset } from '@/contexts/date-range-context';
 import { useDateRange } from '@/contexts/useDateRange';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
-import { getDubaiNow } from '@/utils/timezone';
+import { parseISO } from 'date-fns';
+import { dubaiDateKey } from '@/utils/timezone';
 
 const presets: { value: DateRangePreset; label: string }[] = [
   { value: 'yesterday', label: 'Yesterday' },
@@ -27,8 +28,11 @@ export const DateRangePicker: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>({ from, to });
 
-  const today = getDubaiNow();
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  // Dubai calendar day as a local wall-clock Date (labels/comparisons only) — the old
+  // getDubaiNow() double-shifted on non-+4 browsers (audit A4, Codex review).
+  const todayKey = dubaiDateKey(new Date());
+  const today = parseISO(todayKey);
+  const startOfMonth = parseISO(`${todayKey.slice(0, 7)}-01`);
 
   const mobilePresets: MobilePreset[] = [
     {

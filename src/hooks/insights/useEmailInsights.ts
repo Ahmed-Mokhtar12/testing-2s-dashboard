@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
-import { dailySeries, countBy, fetchAllRows } from './utils';
+import { dubaiDateKey } from '@/utils/timezone';
+import { dailySeriesByDateKey, countBy, fetchAllRows } from './utils';
 import { emailUniqueGuests } from './definitions';
 
 const QUERY_STALE_TIME = 5 * 60 * 1000;
 const QUERY_GC_TIME = 10 * 60 * 1000;
 
 export function useEmailInsights() {
-  const { from, to, fromISO, toISO } = useDateRange();
+  const { fromDateKey, toDateKey, fromISO, toISO } = useDateRange();
 
   return useQuery({
     queryKey: ['insights', 'sera-email', fromISO, toISO],
@@ -34,8 +35,9 @@ export function useEmailInsights() {
 
       const newRows = rows.filter((r) => r.email_type === 'new');
       const replyRows = rows.filter((r) => r.email_type === 'reply');
-      const newTrend = dailySeries(from, to, newRows, (r) => (r.sent_at ? new Date(r.sent_at) : null));
-      const replyTrend = dailySeries(from, to, replyRows, (r) => (r.sent_at ? new Date(r.sent_at) : null));
+      // Bucket by the Dubai calendar day, not the browser's (audit A5).
+      const newTrend = dailySeriesByDateKey(fromDateKey, toDateKey, newRows, (r) => (r.sent_at ? dubaiDateKey(r.sent_at) : null));
+      const replyTrend = dailySeriesByDateKey(fromDateKey, toDateKey, replyRows, (r) => (r.sent_at ? dubaiDateKey(r.sent_at) : null));
       const trend = newTrend.map((row, i) => ({
         label: row.label,
         new: row.value,

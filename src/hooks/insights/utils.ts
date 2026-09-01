@@ -1,17 +1,5 @@
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 
-/** Group rows by day key (yyyy-MM-dd) using a date accessor. */
-export function groupByDay<T>(rows: T[], getDate: (r: T) => Date | null | undefined): Record<string, T[]> {
-  const out: Record<string, T[]> = {};
-  for (const r of rows) {
-    const d = getDate(r);
-    if (!d) continue;
-    const key = format(d, 'yyyy-MM-dd');
-    (out[key] ||= []).push(r);
-  }
-  return out;
-}
-
 /** Group rows by an explicit date-key accessor (yyyy-MM-dd string) — no Date parsing. */
 export function groupByDayKey<T>(
   rows: T[],
@@ -25,21 +13,6 @@ export function groupByDayKey<T>(
     (out[key] ||= []).push(r);
   }
   return out;
-}
-
-/** Build a continuous daily series between from..to filling 0 for missing days. */
-export function dailySeries<T>(
-  from: Date,
-  to: Date,
-  rows: T[],
-  getDate: (r: T) => Date | null | undefined,
-  reducer: (bucket: T[]) => number = (b) => b.length
-): { date: string; label: string; value: number }[] {
-  const groups = groupByDay(rows, getDate);
-  return eachDayOfInterval({ start: from, end: to }).map((d) => {
-    const key = format(d, 'yyyy-MM-dd');
-    return { date: key, label: format(d, 'MMM d'), value: reducer(groups[key] || []) };
-  });
 }
 
 /**

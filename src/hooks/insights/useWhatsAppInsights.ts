@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
-import { dailySeries, countBy, fetchAllRows } from './utils';
+import { dubaiDateKey } from '@/utils/timezone';
+import { dailySeriesByDateKey, countBy, fetchAllRows } from './utils';
 import { whatsappHumanControlledCount, whatsappHumanReplyCount, isNonBlank } from './definitions';
 
 const QUERY_STALE_TIME = 5 * 60 * 1000;
 const QUERY_GC_TIME = 10 * 60 * 1000;
 
 export function useWhatsAppInsights() {
-  const { from, to, fromISO, toISO } = useDateRange();
+  const { fromDateKey, toDateKey, fromISO, toISO } = useDateRange();
 
   return useQuery({
     queryKey: ['insights', 'whatsapp', fromISO, toISO],
@@ -63,7 +64,8 @@ export function useWhatsAppInsights() {
         }
       );
 
-      const trend = dailySeries(from, to, chats, (row) => (row.created_at ? new Date(row.created_at) : null));
+      // Bucket by the Dubai calendar day, not the browser's (audit A5).
+      const trend = dailySeriesByDateKey(fromDateKey, toDateKey, chats, (row) => (row.created_at ? dubaiDateKey(row.created_at) : null));
       const topGuests = Array.from(guestCounts.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
