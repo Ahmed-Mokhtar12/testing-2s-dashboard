@@ -209,6 +209,7 @@ export const RightChatPanel: React.FC = () => {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open Sera AI chat"
+          data-testid="sera-toggle"
           className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary-gradient text-primary-foreground flex items-center justify-center shadow-card-soft glow-primary animate-pulse-glow hover:scale-105 transition-transform"
         >
           <MessageCircle className="h-6 w-6" />

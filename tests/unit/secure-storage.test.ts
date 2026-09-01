@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // secureStorage derives its key from window.location.origin; give node one.
-(globalThis as any).window ??= { location: { origin: 'http://test.local' } };
+(globalThis as unknown as { window?: unknown }).window ??= { location: { origin: 'http://test.local' } };
 const { encryptData, decryptData } = await import('../../src/utils/secureStorage.ts');
 
 // String.fromCharCode(...bytes) spread the whole ciphertext as call arguments and threw

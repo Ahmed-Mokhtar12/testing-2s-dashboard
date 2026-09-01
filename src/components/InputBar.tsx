@@ -82,6 +82,7 @@ const InputBar: React.FC<InputBarProps> = ({
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask Sera a follow up question..."
+          data-testid="sera-input"
           className="border-0 rounded-2xl resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none min-h-[36px] max-h-[160px] overflow-y-auto"
           disabled={isTyping}
         />
@@ -108,6 +109,7 @@ const InputBar: React.FC<InputBarProps> = ({
             <Button
               onClick={handleSendMessage}
               disabled={!canSend}
+              data-testid="sera-send"
               className="h-10 w-10 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center"
             >
               <ArrowUp size={16} />

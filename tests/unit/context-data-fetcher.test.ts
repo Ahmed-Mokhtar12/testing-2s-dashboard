@@ -28,6 +28,8 @@ import { fetchDashboardSnapshot } from '../../supabase/functions/chat-with-data/
 // by the WhatsApp Live One n8n workflow, so the WRITE stays (backlog B19); only this read goes.
 test('the snapshot never reads LongTermMemory', async () => {
   const tables: string[] = [];
+  // A self-returning proxy stands in for the query builder; `any` is the honest type of a fake.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: any = new Proxy({}, { get: (_t, prop) => prop === 'then'
     ? (resolve: (v: unknown) => void) => resolve({ data: [], count: 0, error: null })
     : () => chain });

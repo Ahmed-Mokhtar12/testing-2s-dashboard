@@ -32,11 +32,16 @@ export const useChat = ({
   const { handleActionConfirm, handleActionCancel } = useActionHandling();
   const { loadSessionMessages, clearMessages } = useSessionManagement();
 
+  // Mirror the PARENT's session id into local state only when the PROP changes. The
+  // previous effect also depended on currentSessionId, so a local change (the first send
+  // mints an id) was reverted here while the effect below was pushing it up — the two
+  // ping-ponged forever (audit A1: 42 renders in 300 ms, then React's update-depth guard).
+  const prevActiveSessionIdRef = useRef(activeSessionId);
   useEffect(() => {
-    if (activeSessionId !== undefined && activeSessionId !== currentSessionId) {
-      setCurrentSessionId(activeSessionId);
-    }
-  }, [activeSessionId, currentSessionId]);
+    if (prevActiveSessionIdRef.current === activeSessionId) return;
+    prevActiveSessionIdRef.current = activeSessionId;
+    setCurrentSessionId(activeSessionId ?? null);
+  }, [activeSessionId]);
 
   const lastNotifiedRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {

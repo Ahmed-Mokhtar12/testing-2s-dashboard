@@ -52,7 +52,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   }
 
   return (
-    <div className="flex items-start gap-3 py-3">
+    <div className="flex items-start gap-3 py-3" data-testid="sera-ai-message">
       <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5">
         <img src={twoSeasonsLogo} alt="Sera" className="w-full h-full object-cover" />
       </div>
