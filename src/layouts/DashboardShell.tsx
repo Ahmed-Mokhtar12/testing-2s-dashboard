@@ -35,6 +35,12 @@ export const DashboardShell: React.FC = () => {
       <RealtimeBridge />
       <SidebarProvider defaultOpen={true} className={legacy ? undefined : 'h-svh overflow-hidden'}>
         <div className={legacy ? 'min-h-screen flex w-full bg-background' : 'h-full flex w-full bg-background'}>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:text-primary-foreground"
+          >
+            Skip to main content
+          </a>
           <AppSidebar />
 
           <div className={legacy ? 'flex-1 flex flex-col min-w-0' : 'flex-1 flex flex-col min-w-0 min-h-0'}>
@@ -79,7 +85,7 @@ export const DashboardShell: React.FC = () => {
                   degrades gracefully to a scrollable <main> on a shorter real
                   viewport. Overflow the user can reach beats overflow that
                   vanishes. */}
-              <main className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 short:p-3'}>
+              <main id="main-content" tabIndex={-1} className={legacy ? 'flex-1 overflow-y-auto p-3 sm:p-6' : 'flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 short:p-3'}>
                 <Outlet />
               </main>
               <RightChatPanel />
