@@ -9,6 +9,10 @@ columns on the 2S table are `GENERATED ALWAYS … STORED`, which Rev 1's column
 check missed (correction record in §1.b); (3) this project's default
 privileges deliberately withhold `TRUNCATE` from `anon` on new tables — Rev 1's
 grant block would have re-granted it and is withdrawn.
+Rev 3 (operator correction): the Rev 2 §1 read policy is **withdrawn** —
+Al Khalidia is a separate hotel and must not be readable from the Two Seasons
+dashboard at all. RLS-on / zero-policies is the deliberate end state, and
+`is_hotel_staff()` must never be attached to the Khalidia table.
 Every fact below was established from the repo or a read-only query on
 2026-09-02; what could not be established that way is in §7.
 
@@ -125,8 +129,10 @@ What a read-only check can and cannot establish:
 
 ## Recommended execution order
 
-1. §1 — apply the read policy to the adopted Khalidia table (additive; the
-   n8n writer is unaffected either way, since `service_role` bypasses RLS).
+1. §1 — nothing to apply: the adopted Khalidia table is already in its
+   intended end state (RLS on, zero policies — deliberately unreadable by
+   `authenticated` and `anon`; the n8n writer is unaffected because
+   `service_role` bypasses RLS).
 2. *Operator*: repoint the Al Khaldia workflow at the adopted table, decide
    the §1 design-delta questions, and decide the fate of the experimental 2S
    monitor (n8n is out of scope for this spec).
@@ -139,7 +145,7 @@ What a read-only check can and cannot establish:
 
 ---
 
-## §1 (Rev 2) Adopt `public."Al Khalidia Competitor Hotel room Rates"`
+## §1 (Rev 3) Adopt `public."Al Khalidia Competitor Hotel room Rates"`
 
 **Decision: adopt.** Two live tables for the same purpose is how one of them
 gets forgotten (backlog B10's lesson, learned in this repo). The existing
@@ -149,45 +155,47 @@ table is also strictly better for the job than Rev 1's mirror: it carries the
 generated-columns error and its `anon` TRUNCATE grant — is **withdrawn in
 full** and appears nowhere below.
 
-### The one gap to close: a read policy
+### Read access: none — deliberately (Rev 3, operator decision)
 
-RLS is enabled with zero policies, so today **no user can read the table**
-(Studio/service_role excepted). The writer is unaffected — `service_role`
-bypasses RLS — so this is purely about readers.
+Rev 2 read "RLS enabled, zero policies" as a gap and specified a read policy
+using `is_hotel_staff()`. **The operator corrected that: Al Khalidia is a
+separate hotel and must not be readable from the Two Seasons dashboard at
+all.** The table's current state IS the intended end state:
 
-Migration `supabase/migrations/<ts>_al_khalidia_rates_read_policy.sql`
-(+ rollback sibling, repo convention; applied via MCP `apply_migration` when
-approved):
+- n8n writes as `service_role`, which bypasses RLS — the writer needs no
+  policy.
+- Every `authenticated` reader — which is to say, the entire Two Seasons
+  dashboard — sees **zero rows**: RLS enabled, no policy grants anything.
+  `anon` likewise.
+- **`is_hotel_staff()` must never be attached to this table.** It is the Two
+  Seasons roster; a policy built on it would put Al Khalidia data in front of
+  Two Seasons staff — the opposite of the separation goal.
+- If Al Khalidia ever needs human readers, that requires **its own roster
+  function** (backed by its own staff list or claim) in a new,
+  Khalidia-specific policy — not a reuse of the Two Seasons oracle.
 
-```sql
--- Mirror of the 2S table's read policy: same name, same shape, same oracle.
-create policy "Hotel staff can read competitor rates"
-  on public."Al Khalidia Competitor Hotel room Rates"
-  for select to authenticated
-  using (is_hotel_staff(auth.uid()));
-```
+§1 therefore prescribes **no migration**. Its deliverable is this recorded
+decision plus the verification below.
 
-Stated plainly: `is_hotel_staff()` is the **Two Seasons** staff oracle.
-Adopting it means 2S staff can read Al Khalidia rates — consistent with one
-operator running both hotels today, and with the audience of any future
-dashboard panel in this repo. If Al Khalidia ever gets its own user base,
-this policy is the seam to change; that decision cannot be made from the
-repo (§7).
-
-**Behaviour verification** (probes, not catalogue):
+**Behaviour verification** (probes, not catalogue — proving the
+*unreadability* is the point):
 
 ```sql
--- as service_role: writer path still works, probe invisible to readers later
+-- as service_role: the writer path works with zero policies (RLS bypass)
 insert into public."Al Khalidia Competitor Hotel room Rates"
   (workflow_id, generated_at, report_date, hotel_name, checkin_date, status, dry_run)
 values ('probe', now(), current_date, 'Probe Hotel', current_date, 'review_needed', true);
--- anon must see nothing (RLS deny-by-default; no policy names anon):
-select set_config('role', 'anon', true);
-select count(*) = 0 as anon_sees_nothing from public."Al Khalidia Competitor Hotel room Rates";
+-- authenticated must see NOTHING — no staff account, no JWT claim, no
+-- exception; with zero policies this holds regardless of who the user is:
+select set_config('role', 'authenticated', true);
+select count(*) = 0 as authenticated_sees_nothing
+from public."Al Khalidia Competitor Hotel room Rates";
 reset role;
--- positive read check: as a signed-in hotel-staff user (dashboard or Studio
--- impersonation) the probe row must be visible. [Not drivable from this
--- session: no staff JWT — repo constraint, see CLAUDE.md on admin-JWT gates.]
+-- anon likewise:
+select set_config('role', 'anon', true);
+select count(*) = 0 as anon_sees_nothing
+from public."Al Khalidia Competitor Hotel room Rates";
+reset role;
 -- cleanup:
 delete from public."Al Khalidia Competitor Hotel room Rates" where workflow_id = 'probe';
 ```
@@ -204,7 +212,7 @@ privilege the defaults leave in place:
 | Grantee | Privileges (live) | Why it stays |
 |---|---|---|
 | `service_role` | all 7 | the writer path (n8n) and maintenance; RLS-exempt by role attribute, but the privilege check still applies |
-| `authenticated` | all 7 | **SELECT is the only one with effect** — it is what the new policy gates. The write privileges are inert: RLS is on and no write policy exists, so PostgREST refuses user writes at the policy layer. Revoking them per-table would diverge from every other table; that is a project-wide default-privileges decision, already made once on 09-01 for TRUNCATE |
+| `authenticated` | all 7 | **all inert by design (Rev 3)** — RLS is on and zero policies exist, so PostgREST refuses every authenticated read and write at the policy layer; this is the mechanism that keeps Al Khalidia data out of the Two Seasons dashboard. Revoking the grants per-table would add nothing and diverge from every other table; that is a project-wide default-privileges decision, already made once on 09-01 for TRUNCATE |
 | `anon` | 6 (no TRUNCATE) | all inert — RLS deny-by-default and no policy names anon; kept for uniformity with the project's default posture |
 | `postgres` | all 7, grantable | owner |
 | sequence `…_id_seq` | USAGE ×4 roles | identity assignment needs it on the writer path; harmless elsewhere |
@@ -235,14 +243,11 @@ four differences from the 2S table have operational consequences:
 
 ### Rollback
 
-```sql
-drop policy "Hotel staff can read competitor rates"
-  on public."Al Khalidia Competitor Hotel room Rates";
-```
-
-**Cost:** readers lose access; the writer is unaffected. The **table itself is
-not this spec's to roll back** — it belongs to migration `20260902162424`,
-which has no rollback sibling anywhere on disk (§6).
+Nothing to roll back — Rev 3's §1 changes nothing in the database; it records
+the zero-policy state as deliberate. (The **table itself is not this spec's to
+roll back** — it belongs to migration `20260902162424`, which has no rollback
+sibling anywhere on disk, §6.) If a future decision adds a Khalidia-specific
+read policy, that policy's own migration carries its own rollback.
 
 ### §1.b Correction record (Rev 2) — the generated-columns miss and its blast radius
 
@@ -494,7 +499,7 @@ client with any workflow identity — the exact state that produced this inciden
 
 | Item | Rollback | Cost |
 |---|---|---|
-| §1 read policy | drop the policy | readers lose access; writer unaffected. The adopted table itself belongs to migration `20260902162424`, which has **no rollback sibling on disk** (§6) |
+| §1 | nothing to roll back — no DB change; the deliberate zero-policy state is recorded, not created | the adopted table itself belongs to migration `20260902162424`, which has **no rollback sibling on disk** (§6) |
 | §2 quarantine | the reverse UPDATE (expected 105) | none; byte-exact while the guard/redirect holds |
 | §3 dashboard pin | `git revert` | page is again exposed to any writer in the table |
 | §4 guard | drop trigger + function | table is again open to any service-role writer |
@@ -521,8 +526,10 @@ client with any workflow identity — the exact state that produced this inciden
   determinable (§0.b). Likewise whether its version stamp is UTC or local.
 - Whether the Al Khalidia workflow's INSERT expects upsert semantics (the
   adopted table has none — flagged as a §1 design delta).
-- Whether Al Khalidia's readers should be the same `is_hotel_staff()` roster
-  (§1 adopts it and marks the seam).
+- The shape of a future Al Khalidia roster function, if human readers are
+  ever wanted — decided only in the negative (§1: it must NOT be
+  `is_hotel_staff()`; the table stays unreadable until Khalidia has its own
+  oracle).
 - Anything inside the n8n workflows themselves (ids/names above are taken from
   what the workflows wrote into the table).
 - Why the Pro scraper stopped after 08-27, and why its competitor rows on
