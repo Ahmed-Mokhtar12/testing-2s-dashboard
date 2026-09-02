@@ -49,34 +49,36 @@ export function AppSidebar() {
           )}
         </div>
 
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel className="text-[10px] tracking-widest uppercase text-muted-foreground/70">Dashboard</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const active = isActive(item.url);
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={item.title}>
-                      <NavLink
-                        to={item.url}
-                        end={item.url === '/'}
-                        className={
-                          active
-                            ? 'bg-sidebar-accent text-primary font-medium border-l-2 border-primary'
-                            : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
-                        }
-                      >
-                        <item.icon className={active ? 'text-primary' : ''} />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <nav aria-label="Main">
+          <SidebarGroup>
+            {!collapsed && <SidebarGroupLabel className="text-[10px] tracking-widest uppercase text-muted-foreground/70">Dashboard</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {items.map((item) => {
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild tooltip={item.title}>
+                        <NavLink
+                          to={item.url}
+                          end={item.url === '/'}
+                          className={
+                            active
+                              ? 'bg-sidebar-accent text-primary font-medium border-l-2 border-primary'
+                              : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
+                          }
+                        >
+                          <item.icon className={active ? 'text-primary' : ''} />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </nav>
       </SidebarContent>
     </Sidebar>
   );
