@@ -152,6 +152,62 @@ nothing in `src/` calls the RPC yet, so there is no rush and no partial state.
 
 ---
 
+## B21 — RealtimeBridge invalidation coalescing (2026-09-02 audit B/C — DEFERRED by decision)
+
+**Logged:** 2026-09-02 (external E2E audit finding B; deferral decided in the Codex
+plan debate). Identical Supabase queries fire 2–3× per page load because
+`src/components/dashboard/RealtimeBridge.tsx` calls `invalidateQueries` on ANY
+realtime event across 8 tables mapping to 6 query keys — Chat History inserts
+arrive continuously, so refetches bypass the 5-minute staleTime. Roughly triple
+the egress actually needed; users see nothing wrong, which is why this was
+deferred rather than shipped with the remediation: it is a freshness-semantics
+change on a healthy live system.
+
+**Design (from the executed plan's draft spec):** pure `makeTrailingCoalescer(delayMs, fn)`
+in `src/lib/coalesce.ts`; RealtimeBridge coalesces per query key
+(`queryKey.join('|')`, 3 s trailing); cleanup clears timers. In-repo precedent:
+`scheduleRefetch` in `WhatsAppChat.tsx`. NOT bugs, do not "fix": `retry: 1`, and
+the two sharepoint_mirror queries (`key=eq.colleagues` vs `key=eq.columns` are
+legitimately distinct).
+
+**What "done" looks like.** A before/after measurement of duplicate-request
+volume (or Supabase egress) on `/dashboard`, the coalescer unit-tested with mock
+timers (burst→one call; refire after the window; cancel clears), and a one-commit
+rollback documented in the commit body. Audit C (the 5.4 s `/whatsapp` load)
+gets re-measured here too — it likely follows from this and the now-shipped
+preview-query cap.
+
+---
+
+## B22 — the conversation list needs a server-side DISTINCT ON view, not a bigger row window
+
+**Logged:** 2026-09-02 (follow-on from audit finding A). The WhatsApp preview
+query now reads named columns with an explicit `.limit(1000)` (commit 14b68ad) —
+but 1000 *messages* is not 1000 *conversations*: one chatty guest can push older
+conversations out of the window entirely. The real fix is a
+`DISTINCT ON ("Sender Number") … ORDER BY "Sender Number", created_at DESC`
+view or RPC so the database returns one newest row per conversation. Note B20
+first: the committed-but-unapplied `whatsapp_chat_previews` migration in this
+area must not be applied until CR8 is fixed — fold these together.
+
+---
+
+## B23 — the dead client-side document upload: delete it or revive it
+
+**Logged:** 2026-09-02 (the former `'unsafe-eval'` consumer, removed from the CSP
+by commit 3b13b56). The paperclip document-upload path
+(`clientSideDocumentProcessor`: mammoth + pdfjs + bluebird) has been dead since
+the 2026-09-01 audit found it has no INSERT policy (W5). With `'unsafe-eval'`
+gone, `.docx` parsing now THROWS inside that dead path if anyone revives it
+without re-adding the directive. Decide: delete the feature (drops three
+dependencies and the lazy chunk), or revive it properly — INSERT policy, a
+bundled pdf worker via `?url` import (the cdnjs worker URL 404s on pdf.js 5.x,
+W9), and `'unsafe-eval'` re-added to BOTH CSP copies (csp-header-meta-agree
+pins them; it currently also forbids `'unsafe-eval'`, so that pin is the
+reminder that this is a decision, not a tweak).
+
+---
+
 ## B5 — clean-code findings in the $batch / participant-cap work
 
 **Logged:** 2026-08-01 · **Found by** a clean-code guard pass over the six
@@ -862,6 +918,16 @@ dead panel.
 declares on testing. **It must go in CloudPanel's stored template, not the file**, or B11
 reverts it at the next renewal. Worth pairing with a served-header assertion, for the same
 reason B11 gives.
+
+**2026-09-02 addendum — the CSP header belongs in the same handoff.** Testing now
+delivers the Content-Security-Policy as an HTTP header from `public/serve.json`
+(commit 3b13b56); on production, `serve.json` is inert, so production's only CSP
+is the `<meta>` mirror — which deliberately omits `frame-ancestors` (browsers
+ignore it in `<meta>`). Until the CloudPanel template carries the header,
+production's clickjacking protection is only `X-Frame-Options: SAMEORIGIN` from
+`/etc/nginx/global_settings`. Hand the operator the exact header value from
+`public/serve.json` (`/index.html` entry, key `Content-Security-Policy`) —
+copy it verbatim, it is pinned by `tests/unit/csp-header-meta-agree.test.ts`.
 
 ---
 
