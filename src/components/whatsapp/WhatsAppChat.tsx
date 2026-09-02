@@ -186,9 +186,12 @@ const WhatsAppChat: React.FC = () => {
     };
 
     return (
-      <div data-testid="whatsapp-chat-shell" className="flex flex-col h-full w-full bg-white overflow-hidden">
+      <main data-testid="whatsapp-chat-shell" className="flex flex-col h-full w-full bg-white overflow-hidden">
         {mobileView === 'chat' ? (
           <div className="flex-1 min-h-0 flex flex-col">
+            {/* List view has a visible h1 in WhatsAppMobileSidebar; the chat
+                view otherwise has only the guest-name h2. */}
+            <h1 className="sr-only">WhatsApp conversations</h1>
             <WhatsAppChatPanel
               messages={messages}
               senderNumber={senderNumber}
@@ -223,12 +226,13 @@ const WhatsAppChat: React.FC = () => {
             <WhatsAppMobileTabBar active="chats" />
           </>
         )}
-      </div>
+      </main>
     );
   }
 
   return (
-    <div data-testid="whatsapp-chat-shell" className="flex h-full w-full bg-[#111B21] overflow-hidden">
+    <main data-testid="whatsapp-chat-shell" className="flex h-full w-full bg-[#111B21] overflow-hidden">
+      <h1 className="sr-only">WhatsApp conversations</h1>
       <WhatsAppNavRail />
 
       <div className="w-[30%] min-w-[300px] max-w-[500px] h-full shrink-0">
@@ -265,7 +269,7 @@ const WhatsAppChat: React.FC = () => {
         />
         )}
       </div>
-    </div>
+    </main>
   );
 };
 
