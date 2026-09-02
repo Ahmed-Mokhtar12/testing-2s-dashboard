@@ -203,7 +203,7 @@ export function TrainingDetailsForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>
+        <Label id="department-label">
           Department <span className="text-destructive">*</span>
         </Label>
         <Controller
@@ -211,7 +211,7 @@ export function TrainingDetailsForm({
           control={control}
           render={({ field }) => (
             <Select onValueChange={field.onChange} value={field.value}>
-              <SelectTrigger>
+              <SelectTrigger id="department-trigger" aria-labelledby="department-label department-trigger">
                 <SelectValue placeholder="Select department" />
               </SelectTrigger>
               <SelectContent>
@@ -228,7 +228,7 @@ export function TrainingDetailsForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>
+        <Label id="duration-label">
           Training Duration <span className="text-destructive">*</span>
         </Label>
         <Controller
@@ -236,7 +236,7 @@ export function TrainingDetailsForm({
           control={control}
           render={({ field }) => (
             <Select onValueChange={(value) => field.onChange(Number(value))} value={field.value?.toString()}>
-              <SelectTrigger>
+              <SelectTrigger id="duration-trigger" aria-labelledby="duration-label duration-trigger">
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
               <SelectContent>
@@ -273,7 +273,7 @@ export function TrainingDetailsForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>
+        <Label id="date-label">
           Date <span className="text-destructive">*</span>
         </Label>
         <Controller
@@ -285,6 +285,8 @@ export function TrainingDetailsForm({
                 <Button
                   type="button"
                   variant="outline"
+                  id="date-trigger"
+                  aria-labelledby="date-label date-trigger"
                   className={cn('w-full justify-start text-left font-normal', !field.value && 'text-muted-foreground')}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -310,7 +312,7 @@ export function TrainingDetailsForm({
             control={control}
             render={({ field }) => (
               <Select onValueChange={(value) => field.onChange(Number(value))} value={field.value?.toString()}>
-                <SelectTrigger className="w-28">
+                <SelectTrigger className="w-28" aria-label="Hour">
                   <SelectValue placeholder="Hour" />
                 </SelectTrigger>
                 <SelectContent>
@@ -329,7 +331,7 @@ export function TrainingDetailsForm({
             control={control}
             render={({ field }) => (
               <Select onValueChange={(value) => field.onChange(Number(value))} value={field.value?.toString()}>
-                <SelectTrigger className="w-28">
+                <SelectTrigger className="w-28" aria-label="Minute">
                   <SelectValue placeholder="Min" />
                 </SelectTrigger>
                 <SelectContent>
@@ -346,7 +348,7 @@ export function TrainingDetailsForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>
+        <Label id="trainers-label">
           Trainer Name <span className="text-destructive">*</span>
         </Label>
         <Controller
@@ -354,6 +356,7 @@ export function TrainingDetailsForm({
           control={control}
           render={({ field }) => (
             <TrainerPicker
+              ariaLabelledby="trainers-label"
               value={field.value ?? []}
               allColleagues={allColleagues}
               status={colleaguesStatus}

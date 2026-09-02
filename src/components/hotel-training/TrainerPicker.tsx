@@ -35,6 +35,8 @@ interface Props {
   /** Employee ids already taken by a participant row. */
   unavailableEmployeeIds: ReadonlySet<string>;
   onChange: (next: Colleague[]) => void;
+  /** id of the visible label element naming this picker. */
+  ariaLabelledby?: string;
 }
 
 export function TrainerPicker({
@@ -43,6 +45,7 @@ export function TrainerPicker({
   status,
   unavailableEmployeeIds,
   onChange,
+  ariaLabelledby,
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -90,6 +93,8 @@ export function TrainerPicker({
           type="button"
           variant="outline"
           role="combobox"
+          id="trainer-select"
+          aria-labelledby={ariaLabelledby ? `${ariaLabelledby} trainer-select` : undefined}
           data-testid="trainer-select"
           className="h-auto min-h-9 w-full justify-between gap-1 whitespace-normal"
         >
