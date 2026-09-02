@@ -13,6 +13,13 @@ Rev 3 (operator correction): the Rev 2 §1 read policy is **withdrawn** —
 Al Khalidia is a separate hotel and must not be readable from the Two Seasons
 dashboard at all. RLS-on / zero-policies is the deliberate end state, and
 `is_hotel_staff()` must never be attached to the Khalidia table.
+Rev 4 (operator decision): the Rev 2 finding "no unique report-row key, no
+upsert trigger" was never withdrawn (it stayed flagged in §1's design deltas
+through Rev 3) and is now **promoted from flagged to prescribed**: §1A adds
+the unique key + upsert trigger to the Khalidia table, and it must be applied
+**before** the workflow is repointed. Unreadability (separation) and
+duplicate-on-rerun (data integrity inside Khalidia's own table) are
+independent concerns; Rev 3 settled the first, §1A settles the second.
 Every fact below was established from the repo or a read-only query on
 2026-09-02; what could not be established that way is in §7.
 
@@ -130,18 +137,22 @@ What a read-only check can and cannot establish:
 ## Recommended execution order
 
 1. §1 — nothing to apply: the adopted Khalidia table is already in its
-   intended end state (RLS on, zero policies — deliberately unreadable by
-   `authenticated` and `anon`; the n8n writer is unaffected because
-   `service_role` bypasses RLS).
-2. *Operator*: repoint the Al Khaldia workflow at the adopted table, decide
-   the §1 design-delta questions, and decide the fate of the experimental 2S
-   monitor (n8n is out of scope for this spec).
-3. §4 — install the writer guard on the 2S table. If installed **before** the
+   intended end state for *access* (RLS on, zero policies — deliberately
+   unreadable by `authenticated` and `anon`; the n8n writer is unaffected
+   because `service_role` bypasses RLS).
+2. §1A — unique report-row key + upsert trigger on the Khalidia table.
+   **MUST precede step 3**: on the still-empty table the constraint applies
+   unconditionally; once the repointed workflow has written duplicates, the
+   same ALTER can fail and would first need a manual dedup.
+3. *Operator*: repoint the Al Khaldia workflow at the adopted table, decide
+   the remaining §1 design deltas (2–4), and decide the fate of the
+   experimental 2S monitor (n8n is out of scope for this spec).
+4. §4 — install the writer guard on the 2S table. If installed **before** the
    Khaldia workflow is repointed, that workflow's inserts will fail loudly in
-   n8n until step 2 happens — acceptable, but it is a choice; this order avoids it.
-4. §2 — quarantine the 105 rows (after the guard, nothing can re-pollute or
+   n8n until step 3 happens — acceptable, but it is a choice; this order avoids it.
+5. §2 — quarantine the 105 rows (after the guard, nothing can re-pollute or
    un-flip them).
-5. §3 — dashboard pin (any time; defense in depth).
+6. §3 — dashboard pin (any time; defense in depth).
 
 ---
 
@@ -230,9 +241,8 @@ four differences from the 2S table have operational consequences:
 1. **No unique `(workflow_id, report_date, hotel_name, checkin_date)` key and
    no insert-as-upsert trigger** → a re-run of the same scrape **appends
    duplicates** instead of updating in place. That is the same duplication
-   class that just polluted the 2S page. If idempotent re-runs are wanted, add
-   the unique key plus either the 2S upsert-trigger pattern or `ON CONFLICT`
-   in the writer.
+   class that just polluted the 2S page. **Decided in Rev 4: prescribed in
+   §1A, to be applied before the workflow is repointed.**
 2. `hotel_name`, `checkin_date`, `status` are NULLable and there is no status
    CHECK — nothing refuses a malformed row.
 3. No `updated_at` column.
@@ -274,6 +284,170 @@ quarantine flips `dry_run` (a plain column), the dashboard pin filters
 columns (nor does the existing upsert trigger, which is itself consistent with
 them being unassignable). The withdrawn mirror DDL was the only artifact
 carrying the error.
+
+---
+
+## §1A (Rev 4) Khalidia report-row idempotency: unique key + upsert trigger
+
+Promoted from §1's design-delta item 1 (flagged in Rev 2, never withdrawn,
+decided by the operator in Rev 4). This is a **data-integrity concern inside
+Khalidia's own table**, independent of the Rev 3 unreadability decision:
+verified live, the table has only `PRIMARY KEY (id)` and zero triggers, so a
+re-run of the same scrape appends duplicates — the same failure class that
+polluted the 2S page.
+
+**Ordering is part of the spec: apply BEFORE the workflow is repointed.** The
+table has 0 rows today, so the unique constraint installs unconditionally.
+Once the repointed workflow has written a duplicate, the same ALTER fails
+until someone hand-dedups — the cheap moment is now.
+
+Migration `supabase/migrations/<ts>_khalidia_rates_idempotency.sql`
+(+ rollback sibling, repo convention; via MCP `apply_migration` when approved):
+
+```sql
+-- Precondition: the constraint must land on the empty table. Abort the
+-- migration if scraping has already started.
+do $$
+begin
+  if (select count(*) from public."Al Khalidia Competitor Hotel room Rates") > 0 then
+    raise exception 'table is no longer empty — dedup before adding the unique key';
+  end if;
+end $$;
+
+alter table public."Al Khalidia Competitor Hotel room Rates"
+  add constraint khalidia_rates_unique_report_row
+  unique (workflow_id, report_date, hotel_name, checkin_date);
+
+-- Same INSERT-becomes-UPDATE contract as the 2S table, ported to this
+-- table's full column set. Key columns (workflow_id, report_date,
+-- hotel_name, checkin_date) and id/created_at are not updated; every other
+-- writable column takes the incoming value. There is no updated_at column
+-- on this table (§1 delta 3), so unlike the 2S version nothing records the
+-- overwrite time.
+create or replace function public.khalidia_rates_insert_as_upsert()
+returns trigger
+language plpgsql
+set search_path to 'public'
+as $function$
+begin
+  update public."Al Khalidia Competitor Hotel room Rates"
+  set
+    workflow_name = new.workflow_name,
+    execution_id = new.execution_id,
+    generated_at = new.generated_at,
+    dry_run = new.dry_run,
+    source_group = new.source_group,
+    checkout_date = new.checkout_date,
+    status = new.status,
+    confidence = new.confidence,
+    original_price = new.original_price,
+    original_currency = new.original_currency,
+    converted_price_aed = new.converted_price_aed,
+    price_source = new.price_source,
+    source_kind = new.source_kind,
+    rate_basis = new.rate_basis,
+    tax_basis = new.tax_basis,
+    member_rate_excluded = new.member_rate_excluded,
+    comparable_for_lowest = new.comparable_for_lowest,
+    displayed_price = new.displayed_price,
+    promotional_price = new.promotional_price,
+    source_original_price = new.source_original_price,
+    comparison_price = new.comparison_price,
+    comparison_eligible = new.comparison_eligible,
+    comparison_exclusion_reason = new.comparison_exclusion_reason,
+    rate_classification = new.rate_classification,
+    rate_conditions = new.rate_conditions,
+    promotion_name = new.promotion_name,
+    discount_percent = new.discount_percent,
+    restrictions = new.restrictions,
+    payment_conditions = new.payment_conditions,
+    cancellation_conditions = new.cancellation_conditions,
+    board_basis = new.board_basis,
+    room_type = new.room_type,
+    taxes_type_raw = new.taxes_type_raw,
+    is_club = new.is_club,
+    confidential = new.confidential,
+    requested_occupancy = new.requested_occupancy,
+    occupancy_verification = new.occupancy_verification,
+    property_token = new.property_token,
+    property_identity_verification = new.property_identity_verification,
+    request_country = new.request_country,
+    signature_status = new.signature_status,
+    taxes_amount = new.taxes_amount,
+    fees_amount = new.fees_amount,
+    booking_url = new.booking_url,
+    source_url = new.source_url,
+    error_message = new.error_message,
+    request_id = new.request_id,
+    is_lowest_for_day = new.is_lowest_for_day,
+    lowest_price_for_day_aed = new.lowest_price_for_day_aed,
+    summary = new.summary,
+    parser_debug = new.parser_debug,
+    raw_result = new.raw_result
+  where workflow_id = new.workflow_id
+    and report_date = new.report_date
+    and hotel_name = new.hotel_name
+    and checkin_date = new.checkin_date;
+
+  if found then
+    return null;
+  end if;
+
+  return new;
+end;
+$function$;
+
+create trigger trg_khalidia_rates_insert_as_upsert
+  before insert on public."Al Khalidia Competitor Hotel room Rates"
+  for each row execute function public.khalidia_rates_insert_as_upsert();
+```
+
+**NULL-key caveat, stated plainly.** `hotel_name` and `checkin_date` are
+NULLable on this table (§1 delta 2; NOT NULL on the 2S table). Both the
+constraint (default `NULLS DISTINCT`) and the trigger's `=` matching treat a
+NULL key as never-equal, so **rows with a NULL hotel_name or checkin_date fall
+outside the idempotency net** — they insert as new rows on every re-run. This
+mirrors the 2S semantics exactly rather than inventing new ones
+(`NULLS NOT DISTINCT` / `IS NOT DISTINCT FROM` would instead make distinct
+failure rows overwrite each other). If the scraper never legitimately writes
+NULL keys, the clean follow-up is `SET NOT NULL` on both columns — an operator
+decision, since only the workflow's author knows whether failure rows carry
+them (§7).
+
+**Trigger-ordering note:** this is currently the only trigger on the table.
+If a writer guard is ever added here too, the §4 rule applies — the guard's
+name must sort before `trg_khalidia_rates_insert_as_upsert`, because this
+trigger returns NULL on its UPDATE path and suppresses later triggers.
+
+**Behaviour verification** (service_role; probes clean up after themselves):
+
+```sql
+-- same key twice: second insert must become an UPDATE, not a second row
+insert into public."Al Khalidia Competitor Hotel room Rates"
+  (workflow_id, workflow_name, generated_at, report_date, hotel_name, checkin_date, status, dry_run)
+values ('probe', 'first-write', now(), current_date, 'Probe Hotel', current_date, 'review_needed', true);
+insert into public."Al Khalidia Competitor Hotel room Rates"
+  (workflow_id, workflow_name, generated_at, report_date, hotel_name, checkin_date, status, dry_run)
+values ('probe', 'second-write', now(), current_date, 'Probe Hotel', current_date, 'review_needed', true);
+select count(*) = 1 as upsert_worked,
+       bool_and(workflow_name = 'second-write') as update_path_ran
+from public."Al Khalidia Competitor Hotel room Rates" where workflow_id = 'probe';
+-- cleanup:
+delete from public."Al Khalidia Competitor Hotel room Rates" where workflow_id = 'probe';
+```
+
+**Rollback** (`_rollback.sql` sibling):
+
+```sql
+drop trigger if exists trg_khalidia_rates_insert_as_upsert
+  on public."Al Khalidia Competitor Hotel room Rates";
+drop function if exists public.khalidia_rates_insert_as_upsert();
+alter table public."Al Khalidia Competitor Hotel room Rates"
+  drop constraint if exists khalidia_rates_unique_report_row;
+```
+
+**What rolling back costs:** no data is lost; re-runs append duplicates again,
+and any INSERT built to rely on the upsert contract starts double-writing.
 
 ---
 
@@ -500,6 +674,7 @@ client with any workflow identity — the exact state that produced this inciden
 | Item | Rollback | Cost |
 |---|---|---|
 | §1 | nothing to roll back — no DB change; the deliberate zero-policy state is recorded, not created | the adopted table itself belongs to migration `20260902162424`, which has **no rollback sibling on disk** (§6) |
+| §1A | drop trigger + function + unique constraint | no data lost; re-runs append duplicates again, and a writer relying on the upsert contract double-writes |
 | §2 quarantine | the reverse UPDATE (expected 105) | none; byte-exact while the guard/redirect holds |
 | §3 dashboard pin | `git revert` | page is again exposed to any writer in the table |
 | §4 guard | drop trigger + function | table is again open to any service-role writer |
@@ -510,9 +685,10 @@ client with any workflow identity — the exact state that produced this inciden
   experimental `2S Comp-Set Rate Monitor`, and why the Pro workflow has
   written nothing since 08-27 (six days of silence as of today — worth a look
   while in there).
-- The §1 design-delta decisions on the adopted table — above all whether
-  re-runs should upsert (unique key + trigger/`ON CONFLICT`) instead of
-  appending duplicates.
+- The remaining §1 design-delta decisions on the adopted table (deltas 2–4:
+  NULLable key columns / no status CHECK, no `updated_at`, plain vs generated
+  source columns). Delta 1 — duplicates on re-run — is decided and prescribed
+  in §1A.
 - A `*_rollback.sql` sibling for migration `20260902162424` — the repo
   convention says every migration gets one; whoever applied it owes it.
 - Aligning the 2S table with the hardened default posture
@@ -524,8 +700,10 @@ client with any workflow identity — the exact state that produced this inciden
 - **Who applied migration `20260902162424`** — the ledger records no user
   identity; only "not from either checkout, via the migrations pathway" is
   determinable (§0.b). Likewise whether its version stamp is UTC or local.
-- Whether the Al Khalidia workflow's INSERT expects upsert semantics (the
-  adopted table has none — flagged as a §1 design delta).
+- Whether the Al Khalidia scraper ever writes rows with NULL `hotel_name` or
+  `checkin_date`. §1A's idempotency deliberately excludes NULL-keyed rows
+  (mirroring 2S semantics); if the scraper never writes them, `SET NOT NULL`
+  on both columns is the clean follow-up — only the workflow's author knows.
 - The shape of a future Al Khalidia roster function, if human readers are
   ever wanted — decided only in the negative (§1: it must NOT be
   `is_hotel_staff()`; the table stays unreadable until Khalidia has its own
