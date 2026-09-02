@@ -168,15 +168,15 @@ const ResetPasswordPage: React.FC = () => {
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <main className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      </main>
     );
   }
 
   if (!sessionReady && !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <main className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md p-8 text-center">
           <h2 className="font-display font-semibold mb-2">Reset link expired</h2>
           <p className="text-sm text-muted-foreground mb-6">
@@ -203,12 +203,12 @@ const ResetPasswordPage: React.FC = () => {
             Back to sign in
           </button>
         </Card>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md p-8 bg-card-gradient border-border/60">
         <h1 className="font-display font-semibold text-xl mb-2">Set a new password</h1>
         <p className="text-sm text-muted-foreground mb-6">Choose a strong password to secure your account.</p>
@@ -261,7 +261,7 @@ const ResetPasswordPage: React.FC = () => {
           </Button>
         </form>
       </Card>
-    </div>
+    </main>
   );
 };
 

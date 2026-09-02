@@ -227,7 +227,7 @@ const AuthPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md p-8 bg-card-gradient border-border/60">
         <div className="flex flex-col items-center mb-6">
           <div className="h-14 w-14 rounded-2xl bg-white flex items-center justify-center overflow-hidden ring-1 ring-border mb-3">
@@ -389,7 +389,7 @@ const AuthPage: React.FC = () => {
           Access is invitation-only. Contact your administrator for an account.
         </p>
       </Card>
-    </div>
+    </main>
   );
 };
 
