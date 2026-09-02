@@ -310,24 +310,24 @@ fi
 - [ ] **Step 12:** Serve `dist-test` on a spare port with the PM2 command line (`npx serve dist-test -l 3999 -s`) and curl `-sI` `/`, `/dashboard/reviews`, one `/assets/*.js`, `/robots.txt`, `/sitemap.xml` — verify the CSP header on the HTML responses, `no-cache` on `/`, XML (not HTML) for the sitemap. Kill the spare server.
 - [ ] **Step 13:** Commit: `security(csp): deliver the CSP as an HTTP header, meta as production mirror; drop unsafe-eval, dev origins, dead cdnjs worker-src (audit #3/#8/#9)`
 
-### Task 11: Deploy + live verification
+### Task 11: Deploy + live verification — ✅ DONE (deploy run by the operator)
 
-- [ ] **Step 1:** Full battery: `npm run typecheck && npm run lint && npm run test:unit && npx playwright test && PW_BUILD=1 npx playwright test --workers=1` → all green.
-- [ ] **Step 2:** `bash scripts/deploy-frontend.sh` — self-verifying (now including the CSP assertion); exits non-zero on any miss.
-- [ ] **Step 3:** Live curls: `curl -sI https://testing-2s-dashboard.digitlab.ai/` (CSP + no-cache), a deep link (CSP), `/robots.txt` (Disallow), `/sitemap.xml` (XML), the new hashed asset (immutable).
-- [ ] **Step 4:** Acceptance — re-run the independent kit: `cd /root/projects/e2e-kit && npx playwright test --project=chromium`. Expected: the 7 previously red tests all green → **36 executed / 0 failed / 13 skipped**. Visual baselines must NOT diff (div→main is pixel-inert) — a visual failure means investigate, not blind-update. `/whatsapp` load re-measured only if the operator supplies QA credentials in the kit's `.env` (signed-in flows exist in `tests/flows/dashboard.spec.js` and skip without them).
+- [x] **Step 1:** Full battery: typecheck, lint, test:unit 289 pass, full default suite **134 passed / 0 failed** (12.6m), `PW_BUILD=1 --workers=1` green (after updating manual-checklist's stale meta-CSP expectation to the new contract).
+- [x] **Step 2:** `bash scripts/deploy-frontend.sh` — run by the operator 2026-09-02 15:52 (+04) (Claude's invocation was permission-blocked; the pre-deploy tree is `dist.bak-20260902-155210`). The CSP assertion gated it: fail() exits before DEPLOY OK. Follow-up `393c756` makes the DEPLOY OK line *name* the CSP check.
+- [x] **Step 3:** Live curls verified: `/` and a deep link serve the full CSP header with `frame-ancestors 'none'`; `cache-control: no-cache` on `/`; robots.txt Disallow; sitemap.xml real XML.
+- [x] **Step 4:** Acceptance — the independent kit: **36 passed / 0 failed / 13 skipped** (was 29/7/13). Visual baselines matched with NO update — div→main confirmed pixel-inert. `/whatsapp` load re-measurement still owed a QA credential (signed-in flows skip; recorded in B21).
 
-### Task 12: Docs + backlog (final commit)
+### Task 12: Docs + backlog — ✅ DONE, commit `5cb657f`
 
 **Files:** Modify: `docs/backlog.md`, `docs/superpowers/specs/2026-09-02-e2e-audit-remediation-plan.md` (status header only)
 
-- [ ] **Step 1:** `docs/backlog.md` — highest existing item is B20, so add:
+- [x] **Step 1:** `docs/backlog.md` — highest existing item is B20, so add:
   - **B21 — RealtimeBridge invalidation coalescing (audit B/C, DEFERRED by debate):** identical queries fire 2–3× per load because `RealtimeBridge` calls `invalidateQueries` on ANY event across 8 tables/6 query keys. Design (from the draft spec): pure `makeTrailingCoalescer(delayMs, fn)` in `src/lib/coalesce.ts`, coalesce per query key (`queryKey.join('|')`, 3s trailing), cleanup clears timers; in-repo precedent `scheduleRefetch` (`WhatsAppChat.tsx`). Done = duplicate-request volume measurably down AND a documented rollback (revert one commit); require a before/after egress or request-count measurement.
   - **B22 — server-side conversation-list RPC/view:** the preview query's explicit 1000-row cap is a *message* window, not a *conversation* window; a `DISTINCT ON ("Sender Number") … ORDER BY created_at DESC` view/RPC is the real fix.
   - **B23 — the dead client-side document upload (mammoth/pdfjs/bluebird):** former `'unsafe-eval'` consumer; W5 found it dead (no INSERT policy). Delete it, or revive with an INSERT policy + bundled pdf worker (`?url` import — the cdnjs URL 404s on pdf.js 5.x, W9) + re-add `'unsafe-eval'`. Until then `.docx` parsing throws if the paperclip path is revived.
   - Append to **B12**: the production CSP header belongs in CloudPanel's stored vhost template (B11 reverts hand-edits at cert renewal); hand over the exact header value from `public/serve.json`. Until then the meta CSP (minus frame-ancestors) is production's only CSP, and production's clickjacking protection is `X-Frame-Options: SAMEORIGIN` from `/etc/nginx/global_settings`.
-- [ ] **Step 2:** In the spec's Status header, replace `DRAFT — awaiting review` with `EXECUTED 2026-09-02 as amended by the Codex debate — see docs/superpowers/plans/2026-09-02-e2e-audit-remediation.md`, and record the audit corrections (audit #1 does not reproduce — the checkbox is label-wrapped; the audit's "zero console errors" was false in Chrome; the e2e-kit `tests/flows/` dir is not empty).
-- [ ] **Step 3:** Commit: `docs: E2E-audit closeout — B21-B23, B12 handoff, audit corrections`
+- [x] **Step 2:** In the spec's Status header, replace `DRAFT — awaiting review` with `EXECUTED 2026-09-02 as amended by the Codex debate — see docs/superpowers/plans/2026-09-02-e2e-audit-remediation.md`, and record the audit corrections (audit #1 does not reproduce — the checkbox is label-wrapped; the audit's "zero console errors" was false in Chrome; the e2e-kit `tests/flows/` dir is not empty).
+- [x] **Step 3:** Commit: `docs: E2E-audit closeout — B21-B23, B12 handoff, audit corrections` (landed as `5cb657f`)
 
 ## Verification (end-to-end)
 
