@@ -30,7 +30,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({ title, description, childr
     >
       <div className={cn('flex items-start justify-between gap-3', fill ? 'mb-4 short:mb-2' : 'mb-4', fill && 'shrink-0')}>
         <div>
-          <h3 className="font-display font-semibold text-base">{title}</h3>
+          <h2 className="font-display font-semibold text-base">{title}</h2>
           {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
         </div>
         {action}

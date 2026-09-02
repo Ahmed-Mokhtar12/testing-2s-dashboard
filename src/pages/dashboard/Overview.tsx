@@ -127,7 +127,7 @@ const Overview: React.FC = () => {
       </div>
 
       <Card className="bg-card-gradient border-border/60 p-5 short:p-3 shrink-0">
-        <h3 className="font-display font-semibold mb-3 short:mb-2">Quick links</h3>
+        <h2 className="font-display font-semibold mb-3 short:mb-2">Quick links</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
           {tiles.map((currentTile) => (
             <Link key={`${currentTile.to}-l`} to={currentTile.to} className="flex items-center justify-between gap-2 px-3 py-2.5 short:py-1.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors text-sm min-w-0">
