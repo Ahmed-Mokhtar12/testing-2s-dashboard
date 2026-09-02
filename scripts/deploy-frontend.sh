@@ -236,7 +236,7 @@ elif [ "$PRUNED" -gt 0 ]; then
   OVERLAY_NOTE="RETAIN_DAYS=$RETAIN_DAYS pruned every stale asset — pages loaded before this deploy WILL fail on a lazy import"
 fi
 
-echo "DEPLOY OK — $NEW_ASSET immutable, / no-cache, deep links rewrite, $OVERLAY_NOTE."
+echo "DEPLOY OK — $NEW_ASSET immutable, / no-cache + CSP header (frame-ancestors), deep links rewrite, $OVERLAY_NOTE."
 
 # Housekeeping, last: only the dist.bak-* trees THIS script creates. dist.old-*,
 # dist-test and anything else were made by hand or by PW_BUILD, and deleting a
