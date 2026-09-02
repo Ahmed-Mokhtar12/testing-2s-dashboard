@@ -280,7 +280,8 @@ export const useWhatsAppChat = () => {
         .eq('Sender Number', sanitizedSenderNumber)
         .eq('is_archived', false)
         .gt('created_at', lastMessageTsRef.current)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .limit(1000);
 
       if (error || !data || data.length === 0) {
         return;

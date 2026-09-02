@@ -55,11 +55,18 @@ const WhatsAppChat: React.FC = () => {
       setIsLoadingChats(true);
       setLoadError(false);
       try {
+        // Named columns (exactly what the preview builder below reads) and an
+        // explicit cap: PostgREST clamps every response to 1000 rows anyway,
+        // so the limit makes today's window deterministic (id tiebreak) rather
+        // than changing behaviour. Realtime INSERTs are merged into state in
+        // place, so a capped initial read does not affect liveness.
         const { data, error } = await supabase
           .from('Chat History')
-          .select('*')
+          .select('id, created_at, Name, human_reply, Media, "Sender Number", "Ai Reply", "Sender Message"')
           .eq('is_archived', false)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(1000);
 
         if (error) {
           if (import.meta.env.DEV) console.error('Error loading chats:', error);
