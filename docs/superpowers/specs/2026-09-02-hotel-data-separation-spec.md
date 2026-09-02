@@ -1,8 +1,16 @@
 # Spec: hard hotel-data separation for competitor rates
 
-Status: SPEC ONLY — written 2026-09-02, nothing executed. Every fact below was
-established from the repo or a read-only query on 2026-09-02; anything that
-could not be established that way is listed in §7.
+Status: SPEC ONLY — Rev 2, 2026-09-02, nothing executed.
+Rev 2 incorporates three operator findings from a read-only check of the live
+project: (1) `"Al Khalidia Competitor Hotel room Rates"` already exists
+(migration `20260902162424`, applied outside both repo checkouts) — Rev 1's
+§1 mirror table is **withdrawn** and the live table is **adopted**; (2) three
+columns on the 2S table are `GENERATED ALWAYS … STORED`, which Rev 1's column
+check missed (correction record in §1.b); (3) this project's default
+privileges deliberately withhold `TRUNCATE` from `anon` on new tables — Rev 1's
+grant block would have re-granted it and is withdrawn.
+Every fact below was established from the repo or a read-only query on
+2026-09-02; what could not be established that way is in §7.
 
 ## Goal
 
@@ -10,7 +18,10 @@ Two hotels share one Supabase project. Hard separation:
 
 - **Two Seasons** → `public."Two Seasons Competitor Hotel room Rates"`, written
   ONLY by the n8n workflow **`2S Competitor Hotel Price Monitor Pro`**.
-- **Al Khaldia** → new table `public.khaldia_competitor_hotel_rates`.
+- **Al Khalidia** → the already-created
+  `public."Al Khalidia Competitor Hotel room Rates"` (adopted; the
+  `khaldia_competitor_hotel_rates` name from the original request is
+  superseded by the table that exists).
 - Experimental scrapers must never reach a production table.
 
 ## §0 Verified facts this spec rests on
@@ -38,33 +49,87 @@ Writers observed in `"Two Seasons Competitor Hotel room Rates"` (2,835 rows):
   `context-data-fetcher.ts`). Both filter `dry_run = false` and
   `status in ('success','price_found')` — so the §2 quarantine cleans **both**;
   the §3 pin protects only the dashboard.
-- Table shape: PK `id` (bigserial-style sequence default), CHECK
+- 2S table shape (re-verified column by column for Rev 2, including
+  `is_generated` — see §1.b): PK `id` (sequence default, not identity), CHECK
   `status in ('price_found','sold_out','price_not_found','scrape_failed','review_needed')`
   (note: the readers' `'success'` filter value is impossible under this CHECK —
   dead value, harmless, out of scope), UNIQUE
   `(workflow_id, report_date, hotel_name, checkin_date)`, five secondary
-  indexes, and a **BEFORE INSERT trigger**
+  indexes, a **BEFORE INSERT trigger**
   `trg_two_seasons_competitor_rates_insert_as_upsert` that converts a
-  conflicting INSERT into an UPDATE of the matching row (manual upsert).
-- RLS enabled; the ONLY policy is
+  conflicting INSERT into an UPDATE of the matching row (returning NULL on the
+  update path), and **three STORED generated columns**:
+  `price_source = (raw_result ->> 'price_source')`,
+  `source_kind = (raw_result ->> 'source_kind')`,
+  `source_label = (raw_result ->> 'source_label')`.
+- 2S RLS: enabled, not forced; the ONLY policy is
   `"Hotel staff can read competitor rates"` — PERMISSIVE, FOR SELECT, TO
   `authenticated`, `USING (is_hotel_staff(auth.uid()))`. No write policies:
-  writes work only as `service_role` (bypasses RLS).
-- Grants on the table are the **Supabase platform defaults**: all seven
-  privileges (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER) to
-  each of `anon`, `authenticated`, `postgres`, `service_role`, plus USAGE on
-  the id sequence to the same four roles. Effective access is constrained by
-  RLS deny-by-default, not by the grants. §1 mirrors these grants **exactly, as
-  instructed** — the observation that they are blanket defaults is recorded
-  here, and hardening them (on either table) is deliberately out of scope.
-- An empty `public.competitor_hotel_rates` (0 rows) already exists. This spec
-  does **not** reuse it (unknown owner/purpose) and does not touch it.
+  writes work only as `service_role`.
+- 2S grants are the **pre-hardening** platform defaults: all seven privileges
+  (incl. TRUNCATE) to `anon`, `authenticated`, `postgres`, `service_role` —
+  the table predates the 2026-09-01 default-privilege hardening (next bullet)
+  and was grandfathered. Effective access is constrained by RLS, not grants.
+- **Default privileges are hardened** (verified in `pg_default_acl`): for
+  postgres-created tables in `public`, `anon = arwdxt` — every privilege
+  **except `D` = TRUNCATE** — while `authenticated` and `service_role` get the
+  full `arwdDxt`. New tables inherit this automatically; the live Khalidia
+  table's grants match it exactly. Sequences default to `rwU` for all four
+  roles.
+- **`public."Al Khalidia Competitor Hotel room Rates"` exists** (0 rows):
+  ledger row `20260902162424 · create_al_khalidia_competitor_hotel_room_rates`
+  (1 statement). Purpose-built, richer schema than the 2S table (~56 columns:
+  `confidence`, `rate_basis`, `tax_basis`, `member_rate_excluded`,
+  `comparable_for_lowest`, `displayed_price`, `promotional_price`,
+  `comparison_price`, `comparison_eligible`, `comparison_exclusion_reason`,
+  `rate_classification`, `rate_conditions`, `restrictions`,
+  `payment_conditions`, `cancellation_conditions`, `board_basis`, `room_type`,
+  `is_club`, `confidential`, `requested_occupancy`, `property_token`,
+  `taxes_amount`, `fees_amount`, `source_url`, …). `id` is
+  `GENERATED BY DEFAULT AS IDENTITY`. `price_source`/`source_kind` are plain
+  columns here (no `source_label`, no `accor_tax_type`, no `updated_at`).
+  `hotel_name`, `checkin_date`, `status` are NULLable. Constraints: **PK only**
+  — no status CHECK, no unique report-row key, no triggers. Two indexes
+  (`report_date DESC`; `(source_group, checkin_date)`). RLS enabled, not
+  forced, **zero policies**. Grants = the hardened defaults above.
+- Neither table is in any publication (no realtime), neither has a comment,
+  both have default replica identity, owner `postgres` on both, and only
+  `postgres` holds grantable privileges.
+- The legacy empty `public.competitor_hotel_rates` (0 rows) is untouched and
+  out of scope.
+
+### §0.b Provenance of migration 20260902162424 (asked in the Rev 2 review)
+
+What a read-only check can and cannot establish:
+
+- It is in the remote ledger (`supabase_migrations.schema_migrations`) with a
+  descriptive snake_case name, the style the MCP `apply_migration` pathway
+  produces.
+- It is in **neither checkout**: this repo's `supabase/migrations/` ends at
+  `20260901100401…`, the production checkout's at `20260804110000…`, the
+  string "khalidia" appears nowhere in either tree (outside this spec), and
+  this repo has no git activity under `supabase/migrations` since 09-01.
+  **So: it did not come from this repo.**
+- Ledger-version ≠ repo-filename is normal here (the 09-01 hardening
+  migrations sit in the ledger as `202609011350xx` while their repo files are
+  `202609011003xx–1004xx`) — but those exist as files; this one exists nowhere
+  on disk, **including no `*_rollback.sql` sibling**, which the repo convention
+  requires (flagged in §6).
+- **Who ran it is not determinable read-only**: the ledger stores no user
+  identity. The version stamp reads 2026-09-02 16:24:24; whether that stamp is
+  UTC or local depends on the client that generated it, also not determinable.
+  It was applied through the migrations pathway (MCP/CLI) by someone with
+  access to the project outside both checkouts — consistent with the operator
+  or a concurrent session, and with its timing shortly after the incident
+  report that named Al Khaldia.
 
 ## Recommended execution order
 
-1. §1 — create the Khaldia table (purely additive, inert until written to).
-2. *Operator*: repoint the Al Khaldia workflow at it, and decide the fate of
-   the experimental 2S monitor (n8n is out of scope for this spec).
+1. §1 — apply the read policy to the adopted Khalidia table (additive; the
+   n8n writer is unaffected either way, since `service_role` bypasses RLS).
+2. *Operator*: repoint the Al Khaldia workflow at the adopted table, decide
+   the §1 design-delta questions, and decide the fate of the experimental 2S
+   monitor (n8n is out of scope for this spec).
 3. §4 — install the writer guard on the 2S table. If installed **before** the
    Khaldia workflow is repointed, that workflow's inserts will fail loudly in
    n8n until step 2 happens — acceptable, but it is a choice; this order avoids it.
@@ -74,167 +139,136 @@ Writers observed in `"Two Seasons Competitor Hotel room Rates"` (2,835 rows):
 
 ---
 
-## §1 New table: `public.khaldia_competitor_hotel_rates`
+## §1 (Rev 2) Adopt `public."Al Khalidia Competitor Hotel room Rates"`
 
-Migration file: `supabase/migrations/<ts>_khaldia_competitor_hotel_rates.sql`
-with a `<ts>_khaldia_competitor_hotel_rates_rollback.sql` sibling (repo
-convention). Applied via MCP `apply_migration` when approved.
+**Decision: adopt.** Two live tables for the same purpose is how one of them
+gets forgotten (backlog B10's lesson, learned in this repo). The existing
+table is also strictly better for the job than Rev 1's mirror: it carries the
+~26 richer columns the Al Khalidia scraper actually emits. Rev 1's
+`create table public.khaldia_competitor_hotel_rates …` DDL — including its
+generated-columns error and its `anon` TRUNCATE grant — is **withdrawn in
+full** and appears nowhere below.
+
+### The one gap to close: a read policy
+
+RLS is enabled with zero policies, so today **no user can read the table**
+(Studio/service_role excepted). The writer is unaffected — `service_role`
+bypasses RLS — so this is purely about readers.
+
+Migration `supabase/migrations/<ts>_al_khalidia_rates_read_policy.sql`
+(+ rollback sibling, repo convention; applied via MCP `apply_migration` when
+approved):
 
 ```sql
--- Same shape as "Two Seasons Competitor Hotel room Rates", verified column by
--- column against information_schema on 2026-09-02.
-create table public.khaldia_competitor_hotel_rates (
-  id                        bigserial primary key,
-  workflow_id               text not null,
-  workflow_name             text,
-  execution_id              text,
-  generated_at              timestamptz not null,
-  report_date               date not null,
-  dry_run                   boolean not null default false,
-  hotel_name                text not null,
-  source_group              text,
-  checkin_date              date not null,
-  checkout_date             date,
-  status                    text not null,
-  original_price            numeric,
-  original_currency         text,
-  converted_price_aed       numeric,
-  accor_tax_type            text,
-  booking_url               text,
-  error_message             text,
-  request_id                text,
-  is_lowest_for_day         boolean not null default false,
-  lowest_price_for_day_aed  numeric,
-  summary                   jsonb,
-  parser_debug              jsonb,
-  raw_result                jsonb,
-  created_at                timestamptz not null default now(),
-  updated_at                timestamptz not null default now(),
-  price_source              text,
-  source_kind               text,
-  source_label              text,
-  constraint khaldia_competitor_rates_status_check check (
-    status = any (array['price_found'::text, 'sold_out'::text,
-                        'price_not_found'::text, 'scrape_failed'::text,
-                        'review_needed'::text])),
-  constraint khaldia_competitor_rates_unique_report_row
-    unique (workflow_id, report_date, hotel_name, checkin_date)
-);
-
-create index khaldia_competitor_rates_checkin_date_idx
-  on public.khaldia_competitor_hotel_rates (checkin_date);
-create index khaldia_competitor_rates_hotel_date_idx
-  on public.khaldia_competitor_hotel_rates (hotel_name, checkin_date);
-create index khaldia_competitor_rates_report_date_idx
-  on public.khaldia_competitor_hotel_rates (report_date);
-create index khaldia_competitor_rates_source_group_idx
-  on public.khaldia_competitor_hotel_rates (source_group);
-create index khaldia_competitor_rates_status_idx
-  on public.khaldia_competitor_hotel_rates (status);
-
--- The 2S table converts INSERT into UPDATE on its unique key via a BEFORE
--- INSERT trigger; the writers were built against that behaviour, so the
--- Khaldia table gets an identical (table-specific) copy.
-create or replace function public.khaldia_competitor_rates_insert_as_upsert()
-returns trigger
-language plpgsql
-set search_path to 'public'
-as $function$
-begin
-  update public.khaldia_competitor_hotel_rates
-  set
-    workflow_name = new.workflow_name,
-    execution_id = new.execution_id,
-    generated_at = new.generated_at,
-    dry_run = new.dry_run,
-    source_group = new.source_group,
-    checkout_date = new.checkout_date,
-    status = new.status,
-    original_price = new.original_price,
-    original_currency = new.original_currency,
-    converted_price_aed = new.converted_price_aed,
-    accor_tax_type = new.accor_tax_type,
-    booking_url = new.booking_url,
-    error_message = new.error_message,
-    request_id = new.request_id,
-    is_lowest_for_day = new.is_lowest_for_day,
-    lowest_price_for_day_aed = new.lowest_price_for_day_aed,
-    summary = new.summary,
-    parser_debug = new.parser_debug,
-    raw_result = new.raw_result,
-    updated_at = now()
-  where workflow_id = new.workflow_id
-    and report_date = new.report_date
-    and hotel_name = new.hotel_name
-    and checkin_date = new.checkin_date;
-
-  if found then
-    return null;
-  end if;
-
-  return new;
-end;
-$function$;
-
-create trigger trg_khaldia_competitor_rates_insert_as_upsert
-  before insert on public.khaldia_competitor_hotel_rates
-  for each row execute function public.khaldia_competitor_rates_insert_as_upsert();
-
--- RLS: enabled, read-only for authenticated hotel staff, no write policies —
--- writes happen only as service_role, exactly like the 2S table.
-alter table public.khaldia_competitor_hotel_rates enable row level security;
-
+-- Mirror of the 2S table's read policy: same name, same shape, same oracle.
 create policy "Hotel staff can read competitor rates"
-  on public.khaldia_competitor_hotel_rates
+  on public."Al Khalidia Competitor Hotel room Rates"
   for select to authenticated
   using (is_hotel_staff(auth.uid()));
-
--- Grants: byte-for-byte what the 2S table carries today (the platform default
--- set — see §0). Explicit rather than left to default privileges, so the
--- posture is stated in the migration and not an accident of role defaults.
-grant select, insert, update, delete, truncate, references, trigger
-  on public.khaldia_competitor_hotel_rates to anon, authenticated, service_role;
-grant usage on sequence public.khaldia_competitor_hotel_rates_id_seq
-  to anon, authenticated, service_role;
 ```
 
-**Behaviour verification** (repo convention: prove it by probes, not the
-catalogue; run as service_role, then clean up):
+Stated plainly: `is_hotel_staff()` is the **Two Seasons** staff oracle.
+Adopting it means 2S staff can read Al Khalidia rates — consistent with one
+operator running both hotels today, and with the audience of any future
+dashboard panel in this repo. If Al Khalidia ever gets its own user base,
+this policy is the seam to change; that decision cannot be made from the
+repo (§7).
+
+**Behaviour verification** (probes, not catalogue):
 
 ```sql
--- 1. Writable by service_role, upsert dedupes on the unique key:
-insert into public.khaldia_competitor_hotel_rates
-  (workflow_id, workflow_name, generated_at, report_date, hotel_name, checkin_date, status, dry_run)
-values ('probe', 'probe', now(), current_date, 'Probe Hotel', current_date, 'review_needed', true);
-insert into public.khaldia_competitor_hotel_rates
-  (workflow_id, workflow_name, generated_at, report_date, hotel_name, checkin_date, status, dry_run)
-values ('probe', 'probe-renamed', now(), current_date, 'Probe Hotel', current_date, 'review_needed', true);
-select count(*) = 1 as upsert_worked,
-       bool_and(workflow_name = 'probe-renamed') as update_path_ran
-from public.khaldia_competitor_hotel_rates where workflow_id = 'probe';
--- 2. Invisible to anon (RLS deny-by-default despite the INSERT/SELECT grants):
+-- as service_role: writer path still works, probe invisible to readers later
+insert into public."Al Khalidia Competitor Hotel room Rates"
+  (workflow_id, generated_at, report_date, hotel_name, checkin_date, status, dry_run)
+values ('probe', now(), current_date, 'Probe Hotel', current_date, 'review_needed', true);
+-- anon must see nothing (RLS deny-by-default; no policy names anon):
 select set_config('role', 'anon', true);
-select count(*) = 0 as anon_sees_nothing from public.khaldia_competitor_hotel_rates;
+select count(*) = 0 as anon_sees_nothing from public."Al Khalidia Competitor Hotel room Rates";
 reset role;
--- 3. Clean up:
-delete from public.khaldia_competitor_hotel_rates where workflow_id = 'probe';
+-- positive read check: as a signed-in hotel-staff user (dashboard or Studio
+-- impersonation) the probe row must be visible. [Not drivable from this
+-- session: no staff JWT — repo constraint, see CLAUDE.md on admin-JWT gates.]
+-- cleanup:
+delete from public."Al Khalidia Competitor Hotel room Rates" where workflow_id = 'probe';
 ```
 
-(Probe rows use `dry_run = true` + `status = 'review_needed'` so that even a
-forgotten cleanup is invisible to every reader.)
+### Grants: none. (Rev 1's grant block is withdrawn.)
 
-**Rollback** (`_rollback.sql` sibling):
+The live table proves the project's default privileges already produce the
+intended posture — including the deliberate absence of `anon` TRUNCATE
+(`pg_default_acl`: `anon=arwdxt` on new public tables). The spec therefore
+issues **no GRANT statements at all**; issuing them is how Rev 1 nearly
+re-granted what the 2026-09-01 hardening removed. Justification of each
+privilege the defaults leave in place:
+
+| Grantee | Privileges (live) | Why it stays |
+|---|---|---|
+| `service_role` | all 7 | the writer path (n8n) and maintenance; RLS-exempt by role attribute, but the privilege check still applies |
+| `authenticated` | all 7 | **SELECT is the only one with effect** — it is what the new policy gates. The write privileges are inert: RLS is on and no write policy exists, so PostgREST refuses user writes at the policy layer. Revoking them per-table would diverge from every other table; that is a project-wide default-privileges decision, already made once on 09-01 for TRUNCATE |
+| `anon` | 6 (no TRUNCATE) | all inert — RLS deny-by-default and no policy names anon; kept for uniformity with the project's default posture |
+| `postgres` | all 7, grantable | owner |
+| sequence `…_id_seq` | USAGE ×4 roles | identity assignment needs it on the writer path; harmless elsewhere |
+
+Observation, out of scope but cheap: the **2S** table still grants `anon`
+TRUNCATE (grandfathered from before the 09-01 hardening). A one-line
+`revoke truncate on public."Two Seasons Competitor Hotel room Rates" from anon;`
+would align it with the project posture — operator's call (§6).
+
+### Design deltas the operator should confirm as intentional
+
+Flagged, not prescribed — the table looks deliberately designed, but these
+four differences from the 2S table have operational consequences:
+
+1. **No unique `(workflow_id, report_date, hotel_name, checkin_date)` key and
+   no insert-as-upsert trigger** → a re-run of the same scrape **appends
+   duplicates** instead of updating in place. That is the same duplication
+   class that just polluted the 2S page. If idempotent re-runs are wanted, add
+   the unique key plus either the 2S upsert-trigger pattern or `ON CONFLICT`
+   in the writer.
+2. `hotel_name`, `checkin_date`, `status` are NULLable and there is no status
+   CHECK — nothing refuses a malformed row.
+3. No `updated_at` column.
+4. `price_source`/`source_kind` are **plain** columns here (the scraper writes
+   them directly), unlike the 2S table where they are STORED generated columns
+   off `raw_result` (and there is no `source_label` at all). Any future shared
+   tooling must not assume the two tables agree on this.
+
+### Rollback
 
 ```sql
-drop trigger if exists trg_khaldia_competitor_rates_insert_as_upsert
-  on public.khaldia_competitor_hotel_rates;
-drop function if exists public.khaldia_competitor_rates_insert_as_upsert();
-drop table if exists public.khaldia_competitor_hotel_rates;
+drop policy "Hotel staff can read competitor rates"
+  on public."Al Khalidia Competitor Hotel room Rates";
 ```
 
-**What rolling back costs:** every Al Khaldia rate row written after the
-workflow was repointed is destroyed with the table. Export first if any real
-scraping has happened.
+**Cost:** readers lose access; the writer is unaffected. The **table itself is
+not this spec's to roll back** — it belongs to migration `20260902162424`,
+which has no rollback sibling anywhere on disk (§6).
+
+### §1.b Correction record (Rev 2) — the generated-columns miss and its blast radius
+
+Rev 1's column check selected only `column_name, data_type, is_nullable,
+column_default, is_identity` from `information_schema.columns`; every property
+outside those five was implicitly assumed not to exist. That assumption
+covered, and hid: **generated columns** (the actual miss —
+`price_source`, `source_kind`, `source_label` on the 2S table are
+`GENERATED ALWAYS AS (raw_result ->> '<key>') STORED`), plus collations,
+comments, replica identity, publication membership, FORCE RLS, sequence
+parameters, and privilege grantability.
+
+Re-verified 2026-09-02 (read-only), both tables: generated columns — exactly
+the three above on 2S, none on Khalidia; collations — all default; comments —
+none; replica identity — default on both; publications — neither table in
+any (no realtime dependency); FORCE RLS — off on both; owner — `postgres`
+both; grantable privileges — `postgres` only. Still unchecked, accepted as
+immaterial for this spec: per-column storage/compression attributes and
+sequence increment/cache parameters.
+
+Blast radius on the rest of Rev 1: **§2, §3, §4 are untouched** — the
+quarantine flips `dry_run` (a plain column), the dashboard pin filters
+`hotel_name` (plain), and the §4 guard and probes never assign the generated
+columns (nor does the existing upsert trigger, which is itself consistent with
+them being unassignable). The withdrawn mirror DDL was the only artifact
+carrying the error.
 
 ---
 
@@ -395,7 +429,9 @@ create trigger trg_aa_two_seasons_competitor_rates_writer_guard
   for each row execute function public.two_seasons_competitor_rates_writer_guard();
 ```
 
-**Behaviour verification** (service_role; probes clean up after themselves):
+**Behaviour verification** (service_role; probes clean up after themselves;
+note the probes deliberately do not assign the three generated columns — they
+are unassignable):
 
 ```sql
 -- must FAIL with the guard's exception:
@@ -458,7 +494,7 @@ client with any workflow identity — the exact state that produced this inciden
 
 | Item | Rollback | Cost |
 |---|---|---|
-| §1 new table | drop trigger + function + table | destroys any real Khaldia data written after repointing — export first |
+| §1 read policy | drop the policy | readers lose access; writer unaffected. The adopted table itself belongs to migration `20260902162424`, which has **no rollback sibling on disk** (§6) |
 | §2 quarantine | the reverse UPDATE (expected 105) | none; byte-exact while the guard/redirect holds |
 | §3 dashboard pin | `git revert` | page is again exposed to any writer in the table |
 | §4 guard | drop trigger + function | table is again open to any service-role writer |
@@ -469,17 +505,24 @@ client with any workflow identity — the exact state that produced this inciden
   experimental `2S Comp-Set Rate Monitor`, and why the Pro workflow has
   written nothing since 08-27 (six days of silence as of today — worth a look
   while in there).
+- The §1 design-delta decisions on the adopted table — above all whether
+  re-runs should upsert (unique key + trigger/`ON CONFLICT`) instead of
+  appending duplicates.
+- A `*_rollback.sql` sibling for migration `20260902162424` — the repo
+  convention says every migration gets one; whoever applied it owes it.
+- Aligning the 2S table with the hardened default posture
+  (`revoke truncate … from anon` — grandfathered pre-09-01 grant).
 - The empty legacy `public.competitor_hotel_rates` table (unknown purpose).
-- Hardening the blanket default grants on either table.
 
 ## §7 What could NOT be determined from the repo or a read-only query
 
-- Whether the Al Khaldia workflow relies on the insert-as-upsert trigger
-  semantics. It wrote through a table that has it; §1 mirrors the trigger as
-  the safe default.
-- Whether Al Khaldia's readers should be the same `is_hotel_staff()` roster.
-  §1 mirrors the policy exactly as instructed; if Khaldia data needs a
-  different audience, that is a policy decision on the new table.
+- **Who applied migration `20260902162424`** — the ledger records no user
+  identity; only "not from either checkout, via the migrations pathway" is
+  determinable (§0.b). Likewise whether its version stamp is UTC or local.
+- Whether the Al Khalidia workflow's INSERT expects upsert semantics (the
+  adopted table has none — flagged as a §1 design delta).
+- Whether Al Khalidia's readers should be the same `is_hotel_staff()` roster
+  (§1 adopts it and marks the seam).
 - Anything inside the n8n workflows themselves (ids/names above are taken from
   what the workflows wrote into the table).
 - Why the Pro scraper stopped after 08-27, and why its competitor rows on
