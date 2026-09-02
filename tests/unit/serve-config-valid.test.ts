@@ -93,3 +93,15 @@ test('the hashed assets are immutable and index.html is not cached', () => {
   // hashed script tags. Cached, a browser keeps loading the previous deploy.
   assert.match(find('/index.html'), /^no-cache$/);
 });
+
+test('index.html carries the Content-Security-Policy header', () => {
+  const config = loadConfig();
+  const entry = (config.headers ?? []).find((candidate) => candidate.source === '/index.html');
+  assert.ok(entry, 'no headers entry for /index.html');
+  const csp = entry.headers?.find((header) => header.key === 'Content-Security-Policy');
+  assert.ok(csp, '/index.html has no Content-Security-Policy header');
+  // The header is the ONLY effective carrier of frame-ancestors — browsers
+  // ignore the directive in <meta>. csp-header-meta-agree.test.ts pins the
+  // full policy; this asserts the header exists where serve will read it.
+  assert.match(csp.value ?? '', /frame-ancestors 'none'/);
+});

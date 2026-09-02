@@ -55,8 +55,14 @@ test.describe('Phase 5 browser checks we can automate safely', () => {
     const csp = page.locator('meta[http-equiv="Content-Security-Policy"]');
     await expect(csp).toHaveCount(1);
     await expect(csp).toHaveAttribute('content', /default-src 'self';/);
-    await expect(csp).toHaveAttribute('content', /frame-ancestors 'none';/);
     await expect(csp).toHaveAttribute('content', /connect-src 'self' https:\/\/\*\.supabase\.co/);
+    // frame-ancestors is deliberately ABSENT from the meta: browsers ignore the
+    // directive there (Chrome logs a console error about it), so it is delivered
+    // only as an HTTP header from public/serve.json. The two copies are pinned
+    // to each other by tests/unit/csp-header-meta-agree.test.ts.
+    await expect(csp).not.toHaveAttribute('content', /frame-ancestors/);
+    // Removed by the 2026-09-02 audit remediation; reappearance is a regression.
+    await expect(csp).not.toHaveAttribute('content', /unsafe-eval|localhost|127\.0\.0\.1/);
   });
 
   test('sign-in form locks after 5 failed attempts', async ({ page }) => {

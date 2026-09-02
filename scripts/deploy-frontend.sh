@@ -213,6 +213,8 @@ grep -qi 'max-age=31536000' <<<"$ASSET_HEADERS" || fail "$NEW_ASSET has the wron
 
 INDEX_HEADERS=$(curl -fsSI "$PUBLIC_URL/") || fail "/ did not respond"
 grep -qi 'cache-control: *no-cache' <<<"$INDEX_HEADERS" || fail "/ is missing 'Cache-Control: no-cache'; a cached index.html keeps loading the previous deploy's assets"
+grep -qi 'content-security-policy:.*frame-ancestors' <<<"$INDEX_HEADERS" \
+  || fail "/ is missing the Content-Security-Policy header; browsers ignore frame-ancestors in <meta>, so without this header the app ships no effective clickjacking CSP"
 
 # --single must still rewrite unknown paths to index.html. serve APPENDS its
 # rewrite to the config rather than replacing it, but a future serve.json that

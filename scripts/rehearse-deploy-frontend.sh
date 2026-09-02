@@ -93,6 +93,10 @@ EOF
 # Answers from the sandbox's live dist with the headers public/serve.json declares,
 # including serve's --single rewrite, so the deploy's four public-URL checks are
 # exercised rather than stubbed out.
+# The CSP is read from the REAL repo's serve.json at generation time, so the
+# rehearsal stays faithful: if the header ever leaves serve.json, the rehearsal
+# fails exactly like the real deploy would.
+CSP_HEADER=$(node -e 'const c=require(process.argv[1]);const e=(c.headers||[]).find(x=>x.source==="/index.html");const h=((e||{}).headers||[]).find(x=>x.key==="Content-Security-Policy");process.stdout.write(h?h.value:"")' "$REAL_REPO/public/serve.json")
 cat > "$BIN/curl" <<EOF
 #!/usr/bin/env bash
 DIST="$REPO/dist"
@@ -120,7 +124,11 @@ else
 fi
 [ -f "\$F" ] || exit 22
 if [ "\$HEAD" = 1 ]; then
-  printf 'HTTP/1.1 200 OK\r\nContent-Type: %s\r\nCache-Control: %s\r\n\r\n' "\$CT" "\$CC"
+  if [ "\$CT" = "text/html" ] && [ -n "$CSP_HEADER" ]; then
+    printf 'HTTP/1.1 200 OK\r\nContent-Type: %s\r\nCache-Control: %s\r\nContent-Security-Policy: %s\r\n\r\n' "\$CT" "\$CC" "$CSP_HEADER"
+  else
+    printf 'HTTP/1.1 200 OK\r\nContent-Type: %s\r\nCache-Control: %s\r\n\r\n' "\$CT" "\$CC"
+  fi
 fi
 exit 0
 EOF

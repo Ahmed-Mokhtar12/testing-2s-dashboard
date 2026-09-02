@@ -45,28 +45,53 @@ npm run preview
 
 ## Security Notes
 
-The app uses a document-level Content Security Policy in `index.html` with these core directives:
+The Content Security Policy is delivered two ways, pinned to each other by
+`tests/unit/csp-header-meta-agree.test.ts`:
+
+- **On testing** it is an HTTP response header from `public/serve.json`
+  (nginx proxies to `serve`, which emits it for `/index.html` and, via the
+  `--single` rewrite, every deep link). The deploy script asserts the served
+  header or fails the deploy.
+- **In `index.html`** a `<meta http-equiv>` mirror carries the same policy
+  **minus `frame-ancestors`** — browsers ignore that directive in `<meta>`, so
+  it lives in the header only. The meta matters because production nginx serves
+  `dist/` directly (no `serve`, `serve.json` inert — backlog B12), making the
+  meta production's only CSP until the CloudPanel vhost template carries the
+  header.
+
+Core directives:
 
 - `default-src 'self'`
   Restricts all unspecified resource types to the same origin by default.
-- `script-src 'self' 'unsafe-eval'`
-  Allows local scripts and the current Vite/Recharts toolchain behavior. `unsafe-eval` is retained for current build/runtime compatibility and should be revisited if dependencies change.
+- `script-src 'self'`
+  Local scripts only. `'unsafe-eval'` was removed 2026-09-02: its only real
+  consumer was bluebird (via mammoth) in the client-side document-upload path,
+  which is dead (no INSERT policy — 2026-09-01 audit W5); the earlier claim
+  that Recharts needed it was wrong (no eval in recharts). If that upload path
+  is ever revived, `.docx` parsing throws until the directive is re-added —
+  see the backlog item covering deletion or revival of that feature.
 - `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
   Allows app styles plus Google Fonts stylesheets.
 - `font-src 'self' https://fonts.gstatic.com data:`
   Allows locally bundled fonts, Google-hosted font files, and data URLs when needed.
-- `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://login.microsoftonline.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*`
-  Permits Supabase API/realtime traffic, Microsoft sign-in (identity only — no Graph calls originate in the browser), and local development servers.
+- `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://login.microsoftonline.com`
+  Permits Supabase API/realtime traffic and Microsoft sign-in (identity only —
+  no Graph calls originate in the browser). The former `localhost`/`127.0.0.1`
+  entries are gone: in dev the page origin *is* localhost, so `'self'` already
+  covers the dev server and HMR; production had no business allowing them.
 - `img-src 'self' data: blob: https://*.supabase.co https://2s-dashboard.digitlab.ai`
   Allows app images, uploaded blobs, Supabase-hosted assets, and the app's own hosted Open Graph image.
-- `worker-src 'self' blob: https://cdnjs.cloudflare.com`
-  Supports browser workers used by document-processing dependencies.
-- `frame-ancestors 'none'`
-  Prevents this app from being embedded in other sites.
+- `worker-src 'self' blob:`
+  Supports browser workers. The former `https://cdnjs.cloudflare.com` entry was
+  dead weight — pdf.js 5.x 404s on that worker URL (audit W9).
 - `object-src 'none'`
   Disables legacy plugin/object embedding.
 - `base-uri 'self'`
   Prevents hostile `<base>` tag injection from changing relative URL resolution.
+- `form-action 'self'`
+  Restricts form submission targets; all app forms are JS-handled same-origin.
+- `frame-ancestors 'none'` *(HTTP header only)*
+  Prevents this app from being embedded in other sites.
 
 ## Quality Checks
 

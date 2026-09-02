@@ -3,19 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Production mirror of the Content-Security-Policy HTTP header that
+         public/serve.json emits on testing (production nginx serves dist/
+         directly, so this meta is production's only CSP — backlog B12).
+         frame-ancestors is deliberately absent here: browsers ignore it in
+         <meta>, so it lives in the header only. The two copies are pinned to
+         each other by tests/unit/csp-header-meta-agree.test.ts. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self';
-               script-src 'self' 'unsafe-eval';
+               script-src 'self';
                style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
                font-src 'self' https://fonts.gstatic.com data:;
-               connect-src 'self' https://*.supabase.co wss://*.supabase.co https://login.microsoftonline.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;
+               connect-src 'self' https://*.supabase.co wss://*.supabase.co https://login.microsoftonline.com;
                img-src 'self' data: blob: https://*.supabase.co https://2s-dashboard.digitlab.ai;
                media-src 'self' blob: https://*.supabase.co;
-               worker-src 'self' blob: https://cdnjs.cloudflare.com;
-               frame-ancestors 'none';
+               worker-src 'self' blob:;
                object-src 'none';
-               base-uri 'self';"
+               base-uri 'self';
+               form-action 'self';"
     />
     <title>Two Seasons Insights</title>
     <meta name="description" content="Real-time insights dashboard for Two Seasons Hotel" />
