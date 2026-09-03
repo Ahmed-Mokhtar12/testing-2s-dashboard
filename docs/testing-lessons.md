@@ -604,3 +604,64 @@ and body — and never let a comment stand in for a request. For gates: capture
 `${PIPESTATUS[0]}` and branch on it explicitly (`if [ "$PW" != 0 ]; then …; exit 1; fi`), or
 run the gate un-piped. A green line you did not read is the shape of every entry in this file.
 
+
+---
+
+## 16. `nginx -t` validates grammar, not consequences — and one keyword made a rollback impossible
+
+**Found:** 2026-09-03, writing the production vhost that closed B12.
+
+The change was small and well understood: add the CSP and cache headers to production's
+CloudPanel template. I wrote it, expanded the six `{{placeholders}}` exactly as CloudPanel
+does, ran `nginx -t` on the result, and got `test is successful`. The diff against the live
+config was purely additive — nothing removed, nothing reordered. By every check available it
+was ready.
+
+It contained a defect that no amount of re-reading the diff would have surfaced, because the
+defect was not in what the config *said*. It was in what nginx *does* with it.
+
+```
+location /assets/ {
+  add_header Cache-Control "public, max-age=31536000, immutable" always;
+  try_files $uri =404;
+}
+```
+
+`always` means "attach this header to every response, whatever the status". `try_files
+$uri =404` is the thing in that same block that *manufactures* 404s. So a request for a chunk
+that is not on disk would answer **404 with a one-year `immutable` caching directive**, and
+`immutable` instructs the browser not to revalidate even on an ordinary reload.
+
+**Why this one is worse than an outage.** Every other mistake in this file is recoverable by
+putting the old config back. This one is not. The wrong answer is written into the user's
+browser cache, where no server-side change can reach it. Restore the file, redeploy, fix the
+chunk — that browser still believes the file does not exist, for a year. The blast radius is
+"whoever loaded the site during the bad window", and there is no way to find or fix them.
+
+**What caught it.** Not `nginx -t`, which passed. Not the diff, which looked clean. Not my
+own re-reading, which had already happened twice. It was four independent reviewers, each
+given a different lens and told to find defects — and three of the four found this same one,
+independently. One went further and *reproduced* it: stood up an isolated nginx, requested a
+missing asset, and pasted back the 404 carrying `Cache-Control: public, max-age=31536000,
+immutable`. That is the difference between a plausible objection and a settled fact.
+
+The fix is deleting one word. The header list is unchanged, real assets and 304s still cache
+for a year, and only the 404 loses it — confirmed the same way, on a sandbox, before the
+template went anywhere near CloudPanel.
+
+**The generalisation.** A syntax check answers "will this parse". It cannot answer "what does
+this do on the paths I did not think about". For config that decides what a *browser* commits
+to its own storage, the question to ask is not "is it valid" but **"what is the worst response
+this can attach this header to, and can I take it back?"** Enumerate the status codes, not just
+the happy path. If the answer to "can I take it back" is no, that line deserves a review that
+tries to break it, not a review that reads it.
+
+A second, quieter trap in the same file, found by the same pass and worth stating because it
+fails silently rather than loudly: **nginx's `add_header` does not merge across levels, it
+replaces.** A `location` block that sets one header of its own drops *every* header inherited
+from the server block. Production inherits seven from a file shared by six sites. Adding only
+the CSP would have removed HSTS, `X-Frame-Options` and five others from 100% of traffic, with
+nothing visibly broken and no test watching. The correct move is to `include` the shared file
+again inside the location — re-including keeps one source of truth, hand-copying forks it.
+
+See `docs/backlog.md` B12 for the closed item and B24 for what is still unpinned.

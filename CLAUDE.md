@@ -123,6 +123,17 @@ running it from the production checkout deploys the *wrong site*. Deploy product
 Promotions use `git read-tree -u --reset testing/main` — the histories are unrelated — and
 `supabase/functions/process-document` must be hand-restored afterwards.
 
+Since 2026-09-03 production's **response headers come from CloudPanel's stored vhost
+template**, not from `serve.json`: the CSP and the `no-cache`/`immutable` `Cache-Control`
+pair are `add_header` lines in that template (B12, closed). Two things about it bite
+silently. An `add_header` anywhere inside a `location` **drops every header inherited from
+the server block**, so each location re-`include`s `/etc/nginx/global_settings` instead of
+copying it. And `always` must **never** appear on the `/assets/` `Cache-Control`: that
+block's `try_files $uri =404` produces 404s, and `always` would cache a missing chunk as
+`immutable` for a year in the user's browser, which no server-side rollback can undo.
+Copies of the before and after templates are in `/root/backups/vhost/`; the template is not
+in git, so nothing compares its CSP to `serve.json` (B24).
+
 **PRODUCTION WHITE-SCREENED AFTER AN SSL RENEWAL? Recover with this.** CloudPanel
 regenerates the vhost during `lets-encrypt:install:certificate`. On 2026-08-04 that reverted
 `root` from `dist` to the site root and served the Vite *source* `index.html` for `/` and

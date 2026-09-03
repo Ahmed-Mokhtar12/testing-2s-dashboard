@@ -335,3 +335,23 @@ fi
 2. Task 10 is the only serve.json change → `PW_BUILD=1 … --workers=1` there and again in Task 11.
 3. The deploy script's own assertions (now incl. CSP) gate Task 11; live curls after.
 4. Final acceptance is the independent kit at `/root/projects/e2e-kit`: 36 executed / 0 failed / 13 skipped, no visual diffs.
+
+---
+
+## Follow-on — 2026-09-03 (appended; the plan above is the 2026-09-02 record)
+
+This plan's Task 11 deployed to **testing** only. The same tree was promoted to production on
+2026-09-03 (`ab2d88b`, from staging `d42e448`), and the operator handoff this plan left open —
+"the production CSP header belongs in the CloudPanel template" — was completed the same day.
+
+Production now serves the CSP as an HTTP header plus the `no-cache` / `immutable` cache pair,
+from CloudPanel's stored per-site template. The e2e kit against `https://2s-dashboard.digitlab.ai`
+went from 32 passed / 2 failed to **34 passed / 0 failed**; the two tests that flipped are
+`tests/api/headers.spec.js` "frame-ancestors is delivered as an HTTP header" and
+`tests/api/spa-routing.spec.js` "index.html is served with a no-cache policy".
+
+The vhost's first draft passed `nginx -t` and still carried a blocker — `always` on the
+`/assets/` `Cache-Control`, which would have cached 404s as `immutable` for a year in users'
+browsers. Adversarial review caught it and reproduced it on a sandbox nginx. Written up as
+`docs/testing-lessons.md` §16 and `docs/backlog.md` B12; the remaining gap, that the vhost copy of
+the CSP is not in git and nothing compares it to `serve.json`, is B24.

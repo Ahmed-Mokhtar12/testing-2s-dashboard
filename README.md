@@ -45,19 +45,26 @@ npm run preview
 
 ## Security Notes
 
-The Content Security Policy is delivered two ways, pinned to each other by
-`tests/unit/csp-header-meta-agree.test.ts`:
+The Content Security Policy is delivered as an HTTP header on **both** sites, plus
+a `<meta>` mirror in the page. The two in-repo copies are pinned to each other by
+`tests/unit/csp-header-meta-agree.test.ts`; the third is not — see backlog B24.
 
-- **On testing** it is an HTTP response header from `public/serve.json`
-  (nginx proxies to `serve`, which emits it for `/index.html` and, via the
-  `--single` rewrite, every deep link). The deploy script asserts the served
-  header or fails the deploy.
+- **On testing** the header comes from `public/serve.json` (nginx proxies to
+  `serve`, which emits it for `/index.html` and, via the `--single` rewrite,
+  every deep link). The deploy script asserts the served header or fails the
+  deploy.
+- **On production** it comes from two `add_header` lines in CloudPanel's stored
+  per-site vhost template (2026-09-03, closing B12). `serve.json` is inert there
+  — production has no `serve` and no PM2, nginx serves `dist/` from disk — so
+  nginx must carry the value itself. **That copy is not in git**, so nothing
+  compares it to `serve.json`; B24 is the gap. Two traps live in that template:
+  an `add_header` inside a `location` drops every header inherited from the
+  server block, and `always` on the `/assets/` `Cache-Control` would stamp
+  one-year `immutable` onto 404s. Read B12 before editing it.
 - **In `index.html`** a `<meta http-equiv>` mirror carries the same policy
   **minus `frame-ancestors`** — browsers ignore that directive in `<meta>`, so
-  it lives in the header only. The meta matters because production nginx serves
-  `dist/` directly (no `serve`, `serve.json` inert — backlog B12), making the
-  meta production's only CSP until the CloudPanel vhost template carries the
-  header.
+  it lives in the header only. Both sites now enforce header and meta together,
+  and the browser applies their intersection.
 
 Core directives:
 

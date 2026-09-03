@@ -893,41 +893,120 @@ that matters. Assert what is **served**.
 ## B12 — production serves no cache headers at all, and testing's cache discipline does not apply there
 
 **Logged:** 2026-08-04, established while verifying the promotion from the public URL.
+**CLOSED:** 2026-09-03. Both halves — cache headers and the CSP header — now ship from
+CloudPanel's stored per-site template. Measured on the public URL after the change:
 
-`public/serve.json` is **inert on production.** It is read by `serve`, and production has no
-`serve` and no PM2 process — nginx serves `dist/` directly. `nginx/global_settings` sets
-security headers only. Measured the same minute:
+| | hashed asset | `/` | CSP header |
+|---|---|---|---|
+| testing | `public, max-age=31536000, immutable` | `no-cache` | yes (from `serve.json`) |
+| production, before | none | none | none |
+| **production, after** | **`public, max-age=31536000, immutable`** | **`no-cache`** | **yes, byte-identical** |
 
-| | hashed asset | `/` |
-|---|---|---|
-| testing | `public, max-age=31536000, immutable` | `no-cache` |
-| **production** | **none** | **none** |
+The e2e kit against production went from 32 passed / 2 failed to **34 passed / 0 failed**; the
+two tests that flipped are `tests/api/headers.spec.js` "frame-ancestors is delivered as an HTTP
+header" and `tests/api/spa-routing.spec.js` "index.html is served with a no-cache policy".
 
-Both sites do send `ETag`, so this is not a correctness bug — a browser revalidates and gets
-a 304. The costs are real but bounded: content-hashed assets that could be cached forever
-are revalidated on every navigation, and `index.html` has no `no-cache`, so a browser is
-free to apply heuristic freshness to the one file that must never be stale — which can defer
-a deploy being picked up for an interval nobody controls.
+`public/serve.json` is still **inert on production** — production has no `serve` and no PM2, so
+nginx must carry these headers itself. That has not changed and is not a bug; it is why the
+values now live in two places.
 
-**Why this is not urgent.** The overlay deploy means a stale `index.html` still references
-chunks that are still on disk, so the failure mode is "sees the old app for a while", not a
-dead panel.
+### The original finding, preserved
 
-**What "done" looks like.** `Cache-Control` set in the production vhost —
-`immutable` for `/assets/*`, `no-cache` for `index.html` — mirroring what `serve.json`
-declares on testing. **It must go in CloudPanel's stored template, not the file**, or B11
-reverts it at the next renewal. Worth pairing with a served-header assertion, for the same
-reason B11 gives.
+`nginx/global_settings` sets security headers only. Both sites do send `ETag`, so this was never
+a correctness bug — a browser revalidates and gets a 304. The costs were real but bounded:
+content-hashed assets that could be cached forever were revalidated on every navigation, and
+`index.html` had no `no-cache`, so a browser was free to apply heuristic freshness to the one
+file that must never be stale. The overlay deploy meant a stale `index.html` still referenced
+chunks still on disk, so the failure mode was "sees the old app for a while", not a dead panel.
+That is why this sat open for a month.
 
-**2026-09-02 addendum — the CSP header belongs in the same handoff.** Testing now
-delivers the Content-Security-Policy as an HTTP header from `public/serve.json`
-(commit 3b13b56); on production, `serve.json` is inert, so production's only CSP
-is the `<meta>` mirror — which deliberately omits `frame-ancestors` (browsers
-ignore it in `<meta>`). Until the CloudPanel template carries the header,
-production's clickjacking protection is only `X-Frame-Options: SAMEORIGIN` from
-`/etc/nginx/global_settings`. Hand the operator the exact header value from
-`public/serve.json` (`/index.html` entry, key `Content-Security-Policy`) —
-copy it verbatim, it is pinned by `tests/unit/csp-header-meta-agree.test.ts`.
+### Two traps in the vhost, both found by adversarial review, neither by `nginx -t`
+
+The first draft of the template passed `nginx -t` and still contained a blocker. Both traps are
+worth knowing before anyone edits that template again.
+
+**1. `add_header` does not merge across levels — it replaces.** The moment a `location` block
+sets any header of its own, *every* header inherited from the server block is dropped. Production
+inherits seven from `/etc/nginx/global_settings`, a file shared by six sites on the box. Adding
+only the CSP would have silently removed HSTS, `X-Frame-Options` and five others from 100% of
+user traffic, with nothing broken on screen to show it. The fix is to `include
+/etc/nginx/global_settings;` **again inside each location**, not to hand-copy its directives —
+a copy forks a shared file and the divergence is silent and untested.
+
+**2. Never put `always` on the `immutable` `Cache-Control` in `location /assets/`.** That block's
+`try_files $uri =404` is what produces 404s, and `always` attaches the header to *every* status
+including those. A missing chunk would answer 404 with `public, max-age=31536000, immutable`, and
+the browser would cache that negative answer for a year and refuse to revalidate it even on a
+hard reload. **No server-side rollback can undo that** — the wrong answer lives in the user's
+browser. It is the one mistake in this file that is not recoverable. Verified empirically on a
+sandbox nginx: without `always`, 200 and 304 keep the header and 404 does not.
+
+### Correction to the 2026-09-02 addendum
+
+That addendum said the header value "is pinned by `tests/unit/csp-header-meta-agree.test.ts`".
+**That was false.** The test reads `public/serve.json` and the repo's `index.html`; it cannot see
+the vhost, which lives in CloudPanel's store and not in git. The addendum also called the `<meta>`
+production's "only CSP" — after this change production enforces **two** policies and the browser
+applies their intersection. They agree today, and the `<meta>` deliberately omits `frame-ancestors`
+because browsers ignore it there, so the header is what makes `frame-ancestors` effective.
+
+**Still owed, and the reason this entry is closed rather than deleted (see B24).** Nothing in CI
+compares the vhost's CSP against `serve.json`. The template is not in git, so a drift between the
+three copies — `serve.json`, `index.html`'s `<meta>`, and the two `add_header` lines — is
+currently invisible.
+
+**Accepted, not a defect.** `no-cache` from `location /` also lands on `og-image.png`, the
+favicons, `robots.txt` and `sitemap.xml`, which is wider than `serve.json`'s `/index.html` scope.
+`no-cache` means revalidate, not do-not-store, and nginx sends `ETag`, so these become 304s. The
+cost is one conditional request on a handful of small files; the alternative was another location
+block and more chances to get `root` wrong.
+
+**Copies of both templates** are at `/root/backups/vhost/` — `...ORIGINAL-20260903.conf` is the
+pre-change template, verified authentic by expanding its six `{{placeholders}}` and diffing
+against the live generated vhost, and `...CSP-20260903.conf` is what is live now. B11 still
+applies: the edit was made in the stored template, so a certificate renewal regenerates it intact.
+
+---
+
+## B24 — the production CSP now has three copies and nothing compares them
+
+**Logged:** 2026-09-03, on closing B12.
+
+The Content-Security-Policy for production now exists in three places that must agree, and no
+gate checks any pair of them end to end:
+
+| copy | lives in | who reads it | in git? |
+|---|---|---|---|
+| `public/serve.json`, `/index.html` entry | repo | `serve`, i.e. **testing only** | yes |
+| `<meta http-equiv>` in `index.html` | repo | every browser, both sites | yes |
+| two `add_header` lines in the vhost | **CloudPanel's template store** | nginx, **production only** | **no** |
+
+`tests/unit/csp-header-meta-agree.test.ts` pins the first two to each other. Nothing reads the
+third — it is not in the repository, so no test can open it. `e2e-kit`'s
+`tests/api/headers.spec.js` asserts a CSP header merely *exists* on production and contains
+`frame-ancestors`; it does not compare the value.
+
+**How this bites.** Someone adds a source to `serve.json` — a new storage host in `img-src`,
+say — and updates the `<meta>` to match. `npm run test:unit` passes. Playwright against testing
+passes, because `serve` emits the new policy there. The e2e kit passes, because production still
+sends *a* CSP with `frame-ancestors`. Production silently keeps the old policy and the feature is
+blocked on the live site only, with a console CSP violation and nothing red anywhere in CI. The
+reverse is worse: a directive tightened for a real security reason on testing never reaches
+production, and everyone believes it did.
+
+**What "done" looks like.** Commit the template to the repo — `deploy/nginx/2s-dashboard.digitlab.ai.template.conf`,
+with CloudPanel's store understood as a copy of it — and extend
+`tests/unit/csp-header-meta-agree.test.ts` to extract every
+`add_header Content-Security-Policy "([^"]*)"` from that file and assert each is byte-equal to
+`serve.json`'s `/index.html` value. Then tighten the e2e kit to compare production's served
+header against the same source rather than just checking it is present. The repo copy does not
+deploy anything by itself, which is the point: it makes drift a failing test instead of an
+invisible difference. A copy of the live template is at
+`/root/backups/vhost/2s-dashboard.digitlab.ai.template.CSP-20260903.conf`.
+
+**Cost.** Small — one file moved into git and roughly twenty lines of test. The judgement call is
+accepting a file in the repo that is not the deployment source; B11 means CloudPanel's store is
+authoritative and always will be.
 
 ---
 

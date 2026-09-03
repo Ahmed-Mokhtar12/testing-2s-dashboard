@@ -300,3 +300,27 @@ Grouped so each phase is one commit + one deploy/migration, in dependency order.
 20. nginx `user www-data`, PM2 as the site user (I1/I9); deploy scripts: `read -rs` token + `curl --config`, drop `--update-env`, pin `npx supabase@<ver>` (I2/I4/I5); make the overlay probe assert `content-type`/`immutable` (I3); CSP as a real header via CloudPanel's template + remove `unsafe-eval`/localhost entries (W10/I7); `npm audit fix` then a separate Vite-major PR verified with `PW_BUILD=1` (I6); remove the prod `.bak` from `dist/` (I10).
 
 **Phase 9 — drift and hygiene:** pull the 16 platform-only migrations and 2 functions into git (L5); B2 edge type-check; advisor perf items (D12); the CR12–CR15 maintainability findings.
+
+---
+
+## Status addendum — 2026-09-03 (appended; the findings above are the 2026-09-01 record and are not rewritten)
+
+Two findings in this report are now closed on production, both while promoting the testing tree
+to `2s-dashboard.digitlab.ai`:
+
+- **W10 — "CSP is `<meta>` only ... No CSP/Permissions-Policy header from nginx."** Closed for
+  the CSP half. Production now sends the policy as an HTTP header from two `add_header` lines in
+  CloudPanel's stored per-site vhost template, byte-identical to `public/serve.json`'s
+  `/index.html` value, so `frame-ancestors 'none'` is finally effective rather than spec-ignored
+  in `<meta>`. `'unsafe-eval'` and the `localhost`/`127.0.0.1` `connect-src` entries were removed
+  on 2026-09-02 and reached production with the same promotion; `form-action` was added.
+  **Permissions-Policy is still absent** and remains open.
+- **I10 — prod `dist/index.html.bak-20260804-182234` web-reachable.** Closed. The file was moved
+  out of `dist/` during the 2026-09-03 deploy; the path now returns the SPA fallback rather than a
+  stale document, and hand-deploy rollback copies are written to `/root/backups/` outside the web
+  root so the pattern does not recur.
+
+Line 228's measurement ("Production sends the same nginx set and no `cache-control`") is now
+historical: production sends `no-cache` on HTML and `public, max-age=31536000, immutable` on
+`/assets/*`. See `docs/backlog.md` B12 (closed, with the two vhost traps written up) and B24 (the
+new gap: the vhost CSP is a third copy that no test compares to `serve.json`).
