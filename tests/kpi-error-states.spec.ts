@@ -31,7 +31,7 @@ async function openWith(page: Page, route: string, mode: 'fail' | 'empty') {
 const kpis = (page: Page, state: 'error' | 'loading' | 'ready') =>
   page.locator(`main [data-kpi-state="${state}"]`);
 
-for (const route of ['/dashboard', '/dashboard/reviews', '/dashboard/social', '/dashboard/welcome', '/dashboard/info-email', '/dashboard/competitors']) {
+for (const route of ['/dashboard', '/dashboard/reviews', '/dashboard/social', '/dashboard/welcome', '/dashboard/info-email', '/dashboard/competitors', '/dashboard/sera-voice']) {
   test(`a failed insights query never renders a number on ${route}`, async ({ page }) => {
     await openWith(page, route, 'fail');
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Star, MessageCircle, Mail, TrendingUp, Inbox, Share2, Send, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, Star, MessageCircle, Mail, TrendingUp, Inbox, Share2, Send, GraduationCap, PhoneCall } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Sidebar,
@@ -24,6 +24,7 @@ const items = [
   { title: 'Social Engagement', url: '/dashboard/social', icon: Share2 },
   { title: 'Welcome Messages', url: '/dashboard/welcome', icon: Send },
   { title: 'Hotel Training', url: '/dashboard/hotel-training', icon: GraduationCap },
+  { title: 'Sera Voice', url: '/dashboard/sera-voice', icon: PhoneCall },
 ];
 
 export function AppSidebar() {
