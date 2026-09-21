@@ -245,6 +245,189 @@ export type Database = {
         }
         Relationships: []
       }
+      "Al Khalidia Competitor Hotel room Rates": {
+        Row: {
+          board_basis: string | null
+          booking_url: string | null
+          cancellation_conditions: Json | null
+          checkin_date: string | null
+          checkout_date: string | null
+          comparable_for_lowest: boolean | null
+          comparison_eligible: boolean | null
+          comparison_exclusion_reason: string | null
+          comparison_price: number | null
+          confidence: string | null
+          confidential: boolean | null
+          converted_price_aed: number | null
+          created_at: string
+          discount_percent: number | null
+          displayed_price: number | null
+          dry_run: boolean
+          error_message: string | null
+          execution_id: string | null
+          fees_amount: number | null
+          generated_at: string
+          hotel_name: string | null
+          id: number
+          is_club: boolean | null
+          is_lowest_for_day: boolean
+          lowest_price_for_day_aed: number | null
+          member_rate_excluded: boolean | null
+          occupancy_verification: string | null
+          original_currency: string | null
+          original_price: number | null
+          parser_debug: Json | null
+          payment_conditions: Json | null
+          price_source: string | null
+          promotion_name: string | null
+          promotional_price: number | null
+          property_identity_verification: string | null
+          property_token: string | null
+          rate_basis: string | null
+          rate_classification: string | null
+          rate_conditions: Json | null
+          raw_result: Json | null
+          report_date: string
+          request_country: string | null
+          request_id: string | null
+          requested_occupancy: Json | null
+          restrictions: Json | null
+          room_type: string | null
+          signature_status: string | null
+          source_group: string | null
+          source_kind: string | null
+          source_original_price: number | null
+          source_url: string | null
+          status: string | null
+          summary: Json | null
+          tax_basis: string | null
+          taxes_amount: number | null
+          taxes_type_raw: string | null
+          workflow_id: string
+          workflow_name: string | null
+        }
+        Insert: {
+          board_basis?: string | null
+          booking_url?: string | null
+          cancellation_conditions?: Json | null
+          checkin_date?: string | null
+          checkout_date?: string | null
+          comparable_for_lowest?: boolean | null
+          comparison_eligible?: boolean | null
+          comparison_exclusion_reason?: string | null
+          comparison_price?: number | null
+          confidence?: string | null
+          confidential?: boolean | null
+          converted_price_aed?: number | null
+          created_at?: string
+          discount_percent?: number | null
+          displayed_price?: number | null
+          dry_run?: boolean
+          error_message?: string | null
+          execution_id?: string | null
+          fees_amount?: number | null
+          generated_at: string
+          hotel_name?: string | null
+          id?: number
+          is_club?: boolean | null
+          is_lowest_for_day?: boolean
+          lowest_price_for_day_aed?: number | null
+          member_rate_excluded?: boolean | null
+          occupancy_verification?: string | null
+          original_currency?: string | null
+          original_price?: number | null
+          parser_debug?: Json | null
+          payment_conditions?: Json | null
+          price_source?: string | null
+          promotion_name?: string | null
+          promotional_price?: number | null
+          property_identity_verification?: string | null
+          property_token?: string | null
+          rate_basis?: string | null
+          rate_classification?: string | null
+          rate_conditions?: Json | null
+          raw_result?: Json | null
+          report_date: string
+          request_country?: string | null
+          request_id?: string | null
+          requested_occupancy?: Json | null
+          restrictions?: Json | null
+          room_type?: string | null
+          signature_status?: string | null
+          source_group?: string | null
+          source_kind?: string | null
+          source_original_price?: number | null
+          source_url?: string | null
+          status?: string | null
+          summary?: Json | null
+          tax_basis?: string | null
+          taxes_amount?: number | null
+          taxes_type_raw?: string | null
+          workflow_id: string
+          workflow_name?: string | null
+        }
+        Update: {
+          board_basis?: string | null
+          booking_url?: string | null
+          cancellation_conditions?: Json | null
+          checkin_date?: string | null
+          checkout_date?: string | null
+          comparable_for_lowest?: boolean | null
+          comparison_eligible?: boolean | null
+          comparison_exclusion_reason?: string | null
+          comparison_price?: number | null
+          confidence?: string | null
+          confidential?: boolean | null
+          converted_price_aed?: number | null
+          created_at?: string
+          discount_percent?: number | null
+          displayed_price?: number | null
+          dry_run?: boolean
+          error_message?: string | null
+          execution_id?: string | null
+          fees_amount?: number | null
+          generated_at?: string
+          hotel_name?: string | null
+          id?: number
+          is_club?: boolean | null
+          is_lowest_for_day?: boolean
+          lowest_price_for_day_aed?: number | null
+          member_rate_excluded?: boolean | null
+          occupancy_verification?: string | null
+          original_currency?: string | null
+          original_price?: number | null
+          parser_debug?: Json | null
+          payment_conditions?: Json | null
+          price_source?: string | null
+          promotion_name?: string | null
+          promotional_price?: number | null
+          property_identity_verification?: string | null
+          property_token?: string | null
+          rate_basis?: string | null
+          rate_classification?: string | null
+          rate_conditions?: Json | null
+          raw_result?: Json | null
+          report_date?: string
+          request_country?: string | null
+          request_id?: string | null
+          requested_occupancy?: Json | null
+          restrictions?: Json | null
+          room_type?: string | null
+          signature_status?: string | null
+          source_group?: string | null
+          source_kind?: string | null
+          source_original_price?: number | null
+          source_url?: string | null
+          status?: string | null
+          summary?: Json | null
+          tax_basis?: string | null
+          taxes_amount?: number | null
+          taxes_type_raw?: string | null
+          workflow_id?: string
+          workflow_name?: string | null
+        }
+        Relationships: []
+      }
       alembic_version: {
         Row: {
           version_num: string
@@ -316,8 +499,10 @@ export type Database = {
       }
       "Chat History": {
         Row: {
+          agent_output_raw: string | null
           "Ai Reply": string | null
           created_at: string
+          guard_flags: Json | null
           handled_by: string | null
           human_reply: string | null
           id: number
@@ -332,8 +517,10 @@ export type Database = {
           "Sender Number": string | null
         }
         Insert: {
+          agent_output_raw?: string | null
           "Ai Reply"?: string | null
           created_at: string
+          guard_flags?: Json | null
           handled_by?: string | null
           human_reply?: string | null
           id?: number
@@ -348,8 +535,10 @@ export type Database = {
           "Sender Number"?: string | null
         }
         Update: {
+          agent_output_raw?: string | null
           "Ai Reply"?: string | null
           created_at?: string
+          guard_flags?: Json | null
           handled_by?: string | null
           human_reply?: string | null
           id?: number
@@ -458,6 +647,48 @@ export type Database = {
         }
         Relationships: []
       }
+      integrity_check_history: {
+        Row: {
+          checked_at: string
+          checks: Json | null
+          counts: Json | null
+          email_reason: string | null
+          failing: Json
+          id: number
+          metrics: Json | null
+          overall_status: string
+          previous_status: string | null
+          should_email: boolean
+          target_workflow_id: string
+        }
+        Insert: {
+          checked_at?: string
+          checks?: Json | null
+          counts?: Json | null
+          email_reason?: string | null
+          failing?: Json
+          id?: number
+          metrics?: Json | null
+          overall_status: string
+          previous_status?: string | null
+          should_email?: boolean
+          target_workflow_id: string
+        }
+        Update: {
+          checked_at?: string
+          checks?: Json | null
+          counts?: Json | null
+          email_reason?: string | null
+          failing?: Json
+          id?: number
+          metrics?: Json | null
+          overall_status?: string
+          previous_status?: string | null
+          should_email?: boolean
+          target_workflow_id?: string
+        }
+        Relationships: []
+      }
       khaldia_reviews: {
         Row: {
           Author: string | null
@@ -558,6 +789,48 @@ export type Database = {
         Relationships: []
       }
       n8n_chat_histories: {
+        Row: {
+          Date: string | null
+          id: number
+          message: Json
+          session_id: string
+        }
+        Insert: {
+          Date?: string | null
+          id?: number
+          message: Json
+          session_id: string
+        }
+        Update: {
+          Date?: string | null
+          id?: number
+          message?: Json
+          session_id?: string
+        }
+        Relationships: []
+      }
+      n8n_chat_histories_backup_20260820: {
+        Row: {
+          Date: string | null
+          id: number | null
+          message: Json | null
+          session_id: string | null
+        }
+        Insert: {
+          Date?: string | null
+          id?: number | null
+          message?: Json | null
+          session_id?: string | null
+        }
+        Update: {
+          Date?: string | null
+          id?: number | null
+          message?: Json | null
+          session_id?: string | null
+        }
+        Relationships: []
+      }
+      n8n_chat_histories_backup_serafix_20260824: {
         Row: {
           Date: string | null
           id: number
@@ -713,6 +986,63 @@ export type Database = {
           target_workflow_id?: string | null
           target_workflow_name?: string | null
           validation_output?: Json | null
+        }
+        Relationships: []
+      }
+      qms_request_log: {
+        Row: {
+          created_at: string
+          department_to: string | null
+          email_status: string
+          error: string | null
+          guest_name: string | null
+          http_status: number | null
+          id: number
+          job_code: string | null
+          job_name: string | null
+          qms_status: string
+          raw: Json | null
+          request_id: string | null
+          request_text: string | null
+          reservation_id: string | null
+          room_number: string | null
+          sender_number: string | null
+        }
+        Insert: {
+          created_at?: string
+          department_to?: string | null
+          email_status: string
+          error?: string | null
+          guest_name?: string | null
+          http_status?: number | null
+          id?: number
+          job_code?: string | null
+          job_name?: string | null
+          qms_status: string
+          raw?: Json | null
+          request_id?: string | null
+          request_text?: string | null
+          reservation_id?: string | null
+          room_number?: string | null
+          sender_number?: string | null
+        }
+        Update: {
+          created_at?: string
+          department_to?: string | null
+          email_status?: string
+          error?: string | null
+          guest_name?: string | null
+          http_status?: number | null
+          id?: number
+          job_code?: string | null
+          job_name?: string | null
+          qms_status?: string
+          raw?: Json | null
+          request_id?: string | null
+          request_text?: string | null
+          reservation_id?: string | null
+          room_number?: string | null
+          sender_number?: string | null
         }
         Relationships: []
       }
@@ -917,6 +1247,99 @@ export type Database = {
           Text?: string | null
           Title?: string | null
           URL?: string | null
+        }
+        Relationships: []
+      }
+      rls_sentinel_allowlist: {
+        Row: {
+          added_at: string
+          added_by: string
+          reason: string
+          table_name: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string
+          reason: string
+          table_name: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string
+          reason?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
+      rls_sentinel_log: {
+        Row: {
+          action: string
+          detail: string | null
+          id: number
+          occurred_at: string
+          table_name: string
+        }
+        Insert: {
+          action: string
+          detail?: string | null
+          id?: number
+          occurred_at?: string
+          table_name: string
+        }
+        Update: {
+          action?: string
+          detail?: string | null
+          id?: number
+          occurred_at?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
+      rls_sentinel_state: {
+        Row: {
+          key: string
+          value: string | null
+        }
+        Insert: {
+          key: string
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          value?: string | null
+        }
+        Relationships: []
+      }
+      sera_change_log: {
+        Row: {
+          author: string | null
+          id: number
+          landed_at: string
+          release: string | null
+          summary: string
+          version_id: string | null
+          workflow_id: string
+          workflow_name: string | null
+        }
+        Insert: {
+          author?: string | null
+          id?: number
+          landed_at?: string
+          release?: string | null
+          summary: string
+          version_id?: string | null
+          workflow_id: string
+          workflow_name?: string | null
+        }
+        Update: {
+          author?: string | null
+          id?: number
+          landed_at?: string
+          release?: string | null
+          summary?: string
+          version_id?: string | null
+          workflow_id?: string
+          workflow_name?: string | null
         }
         Relationships: []
       }
@@ -1219,6 +1642,7 @@ export type Database = {
           rec_hash: string
           resolved: boolean
           resolved_at: string | null
+          resolved_reason: string | null
           score_first_seen: number | null
           score_last_seen: number | null
           section: string | null
@@ -1239,6 +1663,7 @@ export type Database = {
           rec_hash: string
           resolved?: boolean
           resolved_at?: string | null
+          resolved_reason?: string | null
           score_first_seen?: number | null
           score_last_seen?: number | null
           section?: string | null
@@ -1259,6 +1684,7 @@ export type Database = {
           rec_hash?: string
           resolved?: boolean
           resolved_at?: string | null
+          resolved_reason?: string | null
           score_first_seen?: number | null
           score_last_seen?: number | null
           section?: string | null
@@ -1463,6 +1889,432 @@ export type Database = {
           subject_clean?: string | null
           thread_key?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sera_gate_fixtures: {
+        Row: {
+          active: boolean
+          bcc_emails: string | null
+          cc_emails: string | null
+          conversation_id: string | null
+          created_at: string
+          expected_action: string | null
+          expected_gate_flags: Json | null
+          expected_latest_visible_text: string | null
+          expected_recipients: Json | null
+          expected_send_gate_allowed: boolean | null
+          from_email: string | null
+          from_name: string | null
+          id: number
+          inbox_log_id: string | null
+          label: string | null
+          message_id: string | null
+          notes: string | null
+          observed_action: string | null
+          raw_body_content_type: string | null
+          raw_body_html: string | null
+          received_at: string | null
+          sera_recipient_role: string | null
+          subject: string | null
+          suite_name: string
+          to_emails: string | null
+        }
+        Insert: {
+          active?: boolean
+          bcc_emails?: string | null
+          cc_emails?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          expected_action?: string | null
+          expected_gate_flags?: Json | null
+          expected_latest_visible_text?: string | null
+          expected_recipients?: Json | null
+          expected_send_gate_allowed?: boolean | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: number
+          inbox_log_id?: string | null
+          label?: string | null
+          message_id?: string | null
+          notes?: string | null
+          observed_action?: string | null
+          raw_body_content_type?: string | null
+          raw_body_html?: string | null
+          received_at?: string | null
+          sera_recipient_role?: string | null
+          subject?: string | null
+          suite_name?: string
+          to_emails?: string | null
+        }
+        Update: {
+          active?: boolean
+          bcc_emails?: string | null
+          cc_emails?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          expected_action?: string | null
+          expected_gate_flags?: Json | null
+          expected_latest_visible_text?: string | null
+          expected_recipients?: Json | null
+          expected_send_gate_allowed?: boolean | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: number
+          inbox_log_id?: string | null
+          label?: string | null
+          message_id?: string | null
+          notes?: string | null
+          observed_action?: string | null
+          raw_body_content_type?: string | null
+          raw_body_html?: string | null
+          received_at?: string | null
+          sera_recipient_role?: string | null
+          subject?: string | null
+          suite_name?: string
+          to_emails?: string | null
+        }
+        Relationships: []
+      }
+      sera_gate_harness_runs: {
+        Row: {
+          code_version: string | null
+          details: Json | null
+          id: number
+          label: string | null
+          mismatches: number | null
+          rows_replayed: number | null
+          run_at: string
+          summary: Json | null
+        }
+        Insert: {
+          code_version?: string | null
+          details?: Json | null
+          id?: number
+          label?: string | null
+          mismatches?: number | null
+          rows_replayed?: number | null
+          run_at?: string
+          summary?: Json | null
+        }
+        Update: {
+          code_version?: string | null
+          details?: Json | null
+          id?: number
+          label?: string | null
+          mismatches?: number | null
+          rows_replayed?: number | null
+          run_at?: string
+          summary?: Json | null
+        }
+        Relationships: []
+      }
+      sera_runtime_flags: {
+        Row: {
+          dept_assert: boolean
+          empty_reply_ack: boolean
+          harmonise_dept_name: boolean
+          id: string
+          keep_model_reply: boolean
+          no_human_hold: boolean
+          notes: string | null
+          scrub_apology: boolean
+          sticky_department: boolean
+          strip_claims: boolean
+          updated_at: string
+          use_latest_text: boolean
+          wa_thread_rescue: boolean
+        }
+        Insert: {
+          dept_assert?: boolean
+          empty_reply_ack?: boolean
+          harmonise_dept_name?: boolean
+          id?: string
+          keep_model_reply?: boolean
+          no_human_hold?: boolean
+          notes?: string | null
+          scrub_apology?: boolean
+          sticky_department?: boolean
+          strip_claims?: boolean
+          updated_at?: string
+          use_latest_text?: boolean
+          wa_thread_rescue?: boolean
+        }
+        Update: {
+          dept_assert?: boolean
+          empty_reply_ack?: boolean
+          harmonise_dept_name?: boolean
+          id?: string
+          keep_model_reply?: boolean
+          no_human_hold?: boolean
+          notes?: string | null
+          scrub_apology?: boolean
+          sticky_department?: boolean
+          strip_claims?: boolean
+          updated_at?: string
+          use_latest_text?: boolean
+          wa_thread_rescue?: boolean
+        }
+        Relationships: []
+      }
+      sera_voice_call_payloads: {
+        Row: {
+          conversation_id: string
+          fetched_at: string
+          payload: Json
+        }
+        Insert: {
+          conversation_id: string
+          fetched_at?: string
+          payload: Json
+        }
+        Update: {
+          conversation_id?: string
+          fetched_at?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sera_voice_call_payloads_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "sera_voice_calls"
+            referencedColumns: ["conversation_id"]
+          },
+          {
+            foreignKeyName: "sera_voice_call_payloads_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "sera_voice_calls_v"
+            referencedColumns: ["conversation_id"]
+          },
+        ]
+      }
+      sera_voice_call_tool_events: {
+        Row: {
+          conversation_id: string
+          event_index: number
+          id: number
+          is_error: boolean
+          latency_secs: number | null
+          params: Json | null
+          request_id: string | null
+          result_excerpt: string | null
+          result_status: string | null
+          tool_name: string
+          turn_index: number
+        }
+        Insert: {
+          conversation_id: string
+          event_index: number
+          id?: never
+          is_error?: boolean
+          latency_secs?: number | null
+          params?: Json | null
+          request_id?: string | null
+          result_excerpt?: string | null
+          result_status?: string | null
+          tool_name: string
+          turn_index: number
+        }
+        Update: {
+          conversation_id?: string
+          event_index?: number
+          id?: never
+          is_error?: boolean
+          latency_secs?: number | null
+          params?: Json | null
+          request_id?: string | null
+          result_excerpt?: string | null
+          result_status?: string | null
+          tool_name?: string
+          turn_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sera_voice_call_tool_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "sera_voice_calls"
+            referencedColumns: ["conversation_id"]
+          },
+          {
+            foreignKeyName: "sera_voice_call_tool_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "sera_voice_calls_v"
+            referencedColumns: ["conversation_id"]
+          },
+        ]
+      }
+      sera_voice_call_turns: {
+        Row: {
+          conversation_id: string
+          interrupted: boolean
+          llm_usage: Json | null
+          message: string | null
+          role: string
+          time_in_call_secs: number | null
+          tool_calls: Json | null
+          tool_results: Json | null
+          turn_index: number
+        }
+        Insert: {
+          conversation_id: string
+          interrupted?: boolean
+          llm_usage?: Json | null
+          message?: string | null
+          role: string
+          time_in_call_secs?: number | null
+          tool_calls?: Json | null
+          tool_results?: Json | null
+          turn_index: number
+        }
+        Update: {
+          conversation_id?: string
+          interrupted?: boolean
+          llm_usage?: Json | null
+          message?: string | null
+          role?: string
+          time_in_call_secs?: number | null
+          tool_calls?: Json | null
+          tool_results?: Json | null
+          turn_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sera_voice_call_turns_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "sera_voice_calls"
+            referencedColumns: ["conversation_id"]
+          },
+          {
+            foreignKeyName: "sera_voice_call_turns_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "sera_voice_calls_v"
+            referencedColumns: ["conversation_id"]
+          },
+        ]
+      }
+      sera_voice_calls: {
+        Row: {
+          accepted_at: string | null
+          agent_id: string
+          analysis_ready: boolean
+          answer_delay_secs: number | null
+          archive_state: string
+          branch_id: string | null
+          call_date: string
+          call_success_score: number | null
+          call_successful: string | null
+          caller_extension: string | null
+          charging: Json | null
+          conversation_id: string
+          cost_credits: number | null
+          cost_usd: number | null
+          direction: string | null
+          duration_secs: number
+          ended_at: string | null
+          error: string | null
+          fetched_at: string
+          interruption_count: number
+          llm_cost_usd: number | null
+          main_language: string | null
+          message_count: number | null
+          retry_count: number
+          sentiment: Json | null
+          sip_call_time: string | null
+          sip_caller_type: string | null
+          started_at: string
+          status: string
+          summary: string | null
+          summary_title: string | null
+          termination_reason: string | null
+          tool_error_count: number
+          tools_used: string[] | null
+          updated_at: string
+          version_id: string | null
+          warnings: Json | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          agent_id: string
+          analysis_ready?: boolean
+          answer_delay_secs?: number | null
+          archive_state: string
+          branch_id?: string | null
+          call_date: string
+          call_success_score?: number | null
+          call_successful?: string | null
+          caller_extension?: string | null
+          charging?: Json | null
+          conversation_id: string
+          cost_credits?: number | null
+          cost_usd?: number | null
+          direction?: string | null
+          duration_secs?: number
+          ended_at?: string | null
+          error?: string | null
+          fetched_at?: string
+          interruption_count?: number
+          llm_cost_usd?: number | null
+          main_language?: string | null
+          message_count?: number | null
+          retry_count?: number
+          sentiment?: Json | null
+          sip_call_time?: string | null
+          sip_caller_type?: string | null
+          started_at: string
+          status: string
+          summary?: string | null
+          summary_title?: string | null
+          termination_reason?: string | null
+          tool_error_count?: number
+          tools_used?: string[] | null
+          updated_at?: string
+          version_id?: string | null
+          warnings?: Json | null
+        }
+        Update: {
+          accepted_at?: string | null
+          agent_id?: string
+          analysis_ready?: boolean
+          answer_delay_secs?: number | null
+          archive_state?: string
+          branch_id?: string | null
+          call_date?: string
+          call_success_score?: number | null
+          call_successful?: string | null
+          caller_extension?: string | null
+          charging?: Json | null
+          conversation_id?: string
+          cost_credits?: number | null
+          cost_usd?: number | null
+          direction?: string | null
+          duration_secs?: number
+          ended_at?: string | null
+          error?: string | null
+          fetched_at?: string
+          interruption_count?: number
+          llm_cost_usd?: number | null
+          main_language?: string | null
+          message_count?: number | null
+          retry_count?: number
+          sentiment?: Json | null
+          sip_call_time?: string | null
+          sip_caller_type?: string | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          summary_title?: string | null
+          termination_reason?: string | null
+          tool_error_count?: number
+          tools_used?: string[] | null
+          updated_at?: string
+          version_id?: string | null
+          warnings?: Json | null
         }
         Relationships: []
       }
@@ -1769,6 +2621,7 @@ export type Database = {
         Row: {
           Author: string | null
           Date: string | null
+          dedupeKey: string | null
           "Hotel Name": string | null
           id: number
           Language: string | null
@@ -1782,6 +2635,7 @@ export type Database = {
         Insert: {
           Author?: string | null
           Date?: string | null
+          dedupeKey?: string | null
           "Hotel Name"?: string | null
           id?: number
           Language?: string | null
@@ -1795,6 +2649,7 @@ export type Database = {
         Update: {
           Author?: string | null
           Date?: string | null
+          dedupeKey?: string | null
           "Hotel Name"?: string | null
           id?: number
           Language?: string | null
@@ -1826,10 +2681,13 @@ export type Database = {
           original_currency: string | null
           original_price: number | null
           parser_debug: Json | null
+          price_source: string | null
           raw_result: Json | null
           report_date: string
           request_id: string | null
           source_group: string | null
+          source_kind: string | null
+          source_label: string | null
           status: string
           summary: Json | null
           updated_at: string
@@ -1854,10 +2712,13 @@ export type Database = {
           original_currency?: string | null
           original_price?: number | null
           parser_debug?: Json | null
+          price_source?: string | null
           raw_result?: Json | null
           report_date: string
           request_id?: string | null
           source_group?: string | null
+          source_kind?: string | null
+          source_label?: string | null
           status: string
           summary?: Json | null
           updated_at?: string
@@ -1882,10 +2743,13 @@ export type Database = {
           original_currency?: string | null
           original_price?: number | null
           parser_debug?: Json | null
+          price_source?: string | null
           raw_result?: Json | null
           report_date?: string
           request_id?: string | null
           source_group?: string | null
+          source_kind?: string | null
+          source_label?: string | null
           status?: string
           summary?: Json | null
           updated_at?: string
@@ -2184,6 +3048,141 @@ export type Database = {
         }
         Relationships: []
       }
+      sera_voice_calls_v: {
+        Row: {
+          accepted_at: string | null
+          agent_id: string | null
+          analysis_ready: boolean | null
+          answer_delay_secs: number | null
+          archive_state: string | null
+          branch_id: string | null
+          call_date: string | null
+          call_success_score: number | null
+          call_successful: string | null
+          caller_extension: string | null
+          conversation_id: string | null
+          cost_credits: number | null
+          cost_per_minute_usd: number | null
+          cost_usd: number | null
+          direction: string | null
+          duration_minutes: number | null
+          duration_secs: number | null
+          ended_at: string | null
+          error: string | null
+          fetched_at: string | null
+          interruption_count: number | null
+          is_answered: boolean | null
+          llm_cost_usd: number | null
+          main_language: string | null
+          message_count: number | null
+          qms_request: boolean | null
+          retry_count: number | null
+          room_rate_quoted: boolean | null
+          sentiment: Json | null
+          sip_call_time: string | null
+          sip_caller_type: string | null
+          started_at: string | null
+          status: string | null
+          summary: string | null
+          summary_title: string | null
+          termination_reason: string | null
+          tool_error_count: number | null
+          tools_used: string[] | null
+          transferred_to: string | null
+          updated_at: string | null
+          version_id: string | null
+          warnings: Json | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          agent_id?: string | null
+          analysis_ready?: boolean | null
+          answer_delay_secs?: number | null
+          archive_state?: string | null
+          branch_id?: string | null
+          call_date?: string | null
+          call_success_score?: number | null
+          call_successful?: string | null
+          caller_extension?: string | null
+          conversation_id?: string | null
+          cost_credits?: number | null
+          cost_per_minute_usd?: never
+          cost_usd?: number | null
+          direction?: string | null
+          duration_minutes?: never
+          duration_secs?: number | null
+          ended_at?: string | null
+          error?: string | null
+          fetched_at?: string | null
+          interruption_count?: number | null
+          is_answered?: never
+          llm_cost_usd?: number | null
+          main_language?: string | null
+          message_count?: number | null
+          qms_request?: never
+          retry_count?: number | null
+          room_rate_quoted?: never
+          sentiment?: Json | null
+          sip_call_time?: string | null
+          sip_caller_type?: string | null
+          started_at?: string | null
+          status?: string | null
+          summary?: string | null
+          summary_title?: string | null
+          termination_reason?: string | null
+          tool_error_count?: number | null
+          tools_used?: string[] | null
+          transferred_to?: never
+          updated_at?: string | null
+          version_id?: string | null
+          warnings?: Json | null
+        }
+        Update: {
+          accepted_at?: string | null
+          agent_id?: string | null
+          analysis_ready?: boolean | null
+          answer_delay_secs?: number | null
+          archive_state?: string | null
+          branch_id?: string | null
+          call_date?: string | null
+          call_success_score?: number | null
+          call_successful?: string | null
+          caller_extension?: string | null
+          conversation_id?: string | null
+          cost_credits?: number | null
+          cost_per_minute_usd?: never
+          cost_usd?: number | null
+          direction?: string | null
+          duration_minutes?: never
+          duration_secs?: number | null
+          ended_at?: string | null
+          error?: string | null
+          fetched_at?: string | null
+          interruption_count?: number | null
+          is_answered?: never
+          llm_cost_usd?: number | null
+          main_language?: string | null
+          message_count?: number | null
+          qms_request?: never
+          retry_count?: number | null
+          room_rate_quoted?: never
+          sentiment?: Json | null
+          sip_call_time?: string | null
+          sip_caller_type?: string | null
+          started_at?: string | null
+          status?: string | null
+          summary?: string | null
+          summary_title?: string | null
+          termination_reason?: string | null
+          tool_error_count?: number | null
+          tools_used?: string[] | null
+          transferred_to?: never
+          updated_at?: string | null
+          version_id?: string | null
+          warnings?: Json | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       chat_history_derive_handled_by: {
@@ -2194,6 +3193,7 @@ export type Database = {
         }
         Returns: string
       }
+      enforce_rls_on_public_tables: { Args: never; Returns: number }
       get_recent_document_context: {
         Args: { limit_count?: number }
         Returns: {
@@ -2238,6 +3238,11 @@ export type Database = {
           similarity: number
         }[]
       }
+      rls_sentinel_check_last_push: { Args: never; Returns: string }
+      rls_sentinel_notify: {
+        Args: { p_body: string; p_priority?: number; p_title: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "staff"
@@ -2256,12 +3261,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2285,11 +3290,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2310,11 +3315,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2335,11 +3340,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2352,11 +3357,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
