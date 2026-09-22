@@ -251,3 +251,17 @@ test('opens on Today (Dubai) when the user has not picked a range', async ({ pag
   expect(params).toEqual(['gte.2026-09-20', 'lte.2026-09-20']);
   await expect(page.getByRole('button', { name: 'Today' }).first()).toBeVisible();
 });
+
+test('re-queries the view every minute without dropping the KPIs', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-20T08:00:00Z') });
+  const viewRequests: string[] = [];
+  await openSeraVoice(page, { rows: ROWS, viewRequests });
+  await expect(kpiValue(page, 'Calls answered')).toHaveText('2', { timeout: 15_000 });
+  const before = viewRequests.length;
+  await page.clock.runFor(61_000);
+  await expect.poll(() => viewRequests.length, { timeout: 10_000 }).toBeGreaterThan(before);
+  await expect(kpiValue(page, 'Calls answered')).toHaveText('2');
+  await expect(kpis(page, 'loading')).toHaveCount(0);
+  await expect(page.getByText(/auto-refresh/i)).toBeVisible();
+});
+

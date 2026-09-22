@@ -23,6 +23,11 @@ export function useSeraVoiceInsights() {
     queryKey: ['insights', 'sera-voice', fromDateKey, toDateKey],
     staleTime: QUERY_STALE_TIME,
     gcTime: QUERY_GC_TIME,
+    // Live page: the archive workflow lands a call ≤ 2 min after it ends; poll while the tab is
+    // visible and on focus so a new call shows within ~3 min with no reload (Codex C3).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: 'always',
     queryFn: async () => {
       const rows = await fetchAllRows<SeraVoiceCallRow>((from, to) =>
         supabase

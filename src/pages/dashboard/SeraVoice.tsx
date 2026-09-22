@@ -65,31 +65,35 @@ function OutcomeBadge({ row }: { row: SeraVoiceCallRow }) {
 const SeraVoicePage: React.FC = () => {
   const isMobile = useIsMobile();
   const { setPreset } = useDateRange();
-  const { data, isLoading, isError } = useSeraVoiceInsights();
+  const { data, isLoading, isError, isFetching, isRefetchError, dataUpdatedAt } = useSeraVoiceInsights();
   const [selected, setSelected] = useState<SeraVoiceCallRow | null>(null);
 
   const k = data?.kpis;
   const rows = data?.rows ?? [];
   const chartHeight = isMobile ? 180 : 240;
   const axisFontSize = isMobile ? 9 : 11;
-  const isEmpty = !isLoading && !isError && rows.length === 0;
+  // A failed background refresh keeps the last good data on screen (react-query keeps `data`);
+  // only a failed FIRST load is an error state for the cards (kpi-error-states contract).
+  const showError = isError && data === undefined;
+  const isEmpty = !isLoading && !showError && rows.length === 0;
+  const updatedLabel = dataUpdatedAt ? formatDubai(new Date(dataUpdatedAt).toISOString(), 'HH:mm') : '—';
 
   return (
     <div className="flex flex-col gap-4 short:gap-3">
       <SectionHeader title="Sera Voice" subtitle="Calls answered by Sera, the AI phone agent" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <KpiCard label="Calls answered" value={k?.answered ?? 0} icon={PhoneCall} tone="primary" loading={isLoading} error={isError} />
-        <KpiCard label="Unanswered attempts" value={k?.unanswered ?? 0} icon={PhoneMissed} tone="warning" loading={isLoading} error={isError} />
-        <KpiCard label="Total minutes" value={(k?.totalMinutes ?? 0).toFixed(1)} icon={Clock} tone="accent" loading={isLoading} error={isError} />
-        <KpiCard label="Avg duration" value={formatMmSs(k?.avgDurationSecs)} hint="answered calls" icon={Timer} tone="accent" loading={isLoading} error={isError} />
-        <KpiCard label="Credits" value={Math.round(k?.credits ?? 0)} icon={Coins} tone="magenta" loading={isLoading} error={isError} />
-        <KpiCard label="Cost USD" value={formatUsd(k?.costUsd, 2)} icon={DollarSign} tone="magenta" loading={isLoading} error={isError} />
-        <KpiCard label="Cost / minute" value={formatUsd(k?.costPerMinuteUsd, 3)} icon={Gauge} tone="magenta" loading={isLoading} error={isError} />
-        <KpiCard label="Success rate" value={`${k?.successRatePct ?? 0}%`} hint="of answered calls" icon={CheckCircle2} tone="success" loading={isLoading} error={isError} />
-        <KpiCard label="Transfers" value={k?.transfers ?? 0} icon={ArrowRightLeft} tone="primary" loading={isLoading} error={isError} />
-        <KpiCard label="Rate quotes" value={k?.rateQuotes ?? 0} icon={Tag} tone="success" loading={isLoading} error={isError} />
-        <KpiCard label="QMS requests" value={k?.qmsRequests ?? 0} icon={ClipboardList} tone="warning" loading={isLoading} error={isError} />
+        <KpiCard label="Calls answered" value={k?.answered ?? 0} icon={PhoneCall} tone="primary" loading={isLoading} error={showError} />
+        <KpiCard label="Unanswered attempts" value={k?.unanswered ?? 0} icon={PhoneMissed} tone="warning" loading={isLoading} error={showError} />
+        <KpiCard label="Total minutes" value={(k?.totalMinutes ?? 0).toFixed(1)} icon={Clock} tone="accent" loading={isLoading} error={showError} />
+        <KpiCard label="Avg duration" value={formatMmSs(k?.avgDurationSecs)} hint="answered calls" icon={Timer} tone="accent" loading={isLoading} error={showError} />
+        <KpiCard label="Credits" value={Math.round(k?.credits ?? 0)} icon={Coins} tone="magenta" loading={isLoading} error={showError} />
+        <KpiCard label="Cost USD" value={formatUsd(k?.costUsd, 2)} icon={DollarSign} tone="magenta" loading={isLoading} error={showError} />
+        <KpiCard label="Cost / minute" value={formatUsd(k?.costPerMinuteUsd, 3)} icon={Gauge} tone="magenta" loading={isLoading} error={showError} />
+        <KpiCard label="Success rate" value={`${k?.successRatePct ?? 0}%`} hint="of answered calls" icon={CheckCircle2} tone="success" loading={isLoading} error={showError} />
+        <KpiCard label="Transfers" value={k?.transfers ?? 0} icon={ArrowRightLeft} tone="primary" loading={isLoading} error={showError} />
+        <KpiCard label="Rate quotes" value={k?.rateQuotes ?? 0} icon={Tag} tone="success" loading={isLoading} error={showError} />
+        <KpiCard label="QMS requests" value={k?.qmsRequests ?? 0} icon={ClipboardList} tone="warning" loading={isLoading} error={showError} />
       </div>
 
       {isEmpty && (
@@ -103,7 +107,7 @@ const SeraVoicePage: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Calls per day" className="lg:col-span-2" fill error={isError}>
+        <ChartCard title="Calls per day" className="lg:col-span-2" fill error={showError}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={data?.callsPerDay || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -115,7 +119,7 @@ const SeraVoicePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Outcome" description="Answered calls" fill error={isError}>
+        <ChartCard title="Outcome" description="Answered calls" fill error={showError}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <PieChart>
               <Pie data={data?.outcomeSplit || []} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={3}>
@@ -127,7 +131,7 @@ const SeraVoicePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Minutes per day" className="lg:col-span-2" fill error={isError}>
+        <ChartCard title="Minutes per day" className="lg:col-span-2" fill error={showError}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data?.minutesPerDay || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -139,7 +143,7 @@ const SeraVoicePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Transfers by extension" fill error={isError}>
+        <ChartCard title="Transfers by extension" fill error={showError}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data?.transfersByExtension || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -151,7 +155,7 @@ const SeraVoicePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Calls by hour" description="Dubai time, answered calls" className="lg:col-span-2" fill error={isError}>
+        <ChartCard title="Calls by hour" description="Dubai time, answered calls" className="lg:col-span-2" fill error={showError}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data?.byHour || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -163,7 +167,7 @@ const SeraVoicePage: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Tools used" description="Calls per tool" fill error={isError}>
+        <ChartCard title="Tools used" description="Calls per tool" fill error={showError}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data?.toolUsage || []} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} horizontal={false} />
@@ -176,7 +180,11 @@ const SeraVoicePage: React.FC = () => {
         </ChartCard>
       </div>
 
-      <ChartCard title="Calls" description="Newest first — click a row for the transcript" error={isError}>
+      <ChartCard
+        title="Calls"
+        description={`Newest first — click a row for the transcript · updated ${updatedLabel} · auto-refresh 1 min${isFetching ? ' · refreshing…' : ''}${isRefetchError ? ' · last refresh failed' : ''}`}
+        error={showError}
+      >
         {isLoading ? (
           <p className="text-sm text-muted-foreground px-1 py-4">Loading calls…</p>
         ) : rows.length === 0 ? (
