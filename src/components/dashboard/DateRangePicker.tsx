@@ -11,6 +11,7 @@ import { parseISO } from 'date-fns';
 import { dubaiDateKey } from '@/utils/timezone';
 
 const presets: { value: DateRangePreset; label: string }[] = [
+  { value: 'today', label: 'Today' },
   { value: 'yesterday', label: 'Yesterday' },
   { value: 'last7', label: 'Last 7 days' },
   { value: 'last30', label: 'Last 30 days' },
@@ -38,11 +39,8 @@ export const DateRangePicker: React.FC = () => {
     {
       key: 'today',
       label: 'Today',
-      onSelect: () => setCustom(today, today),
-      isActive:
-        preset === 'custom' &&
-        from.toDateString() === today.toDateString() &&
-        to.toDateString() === today.toDateString(),
+      onSelect: () => setPreset('today'),
+      isActive: preset === 'today',
     },
     {
       key: 'last7',

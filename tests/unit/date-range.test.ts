@@ -8,6 +8,7 @@ import { dubaiDateKey } from '../../src/utils/timezone.ts';
 // on this +4 server. Keys in, keys out; no Date arithmetic.
 test('presets are derived from a Dubai date key', () => {
   assert.deepEqual(presetDateKeys('yesterday', '2026-09-02'), { fromKey: '2026-09-01', toKey: '2026-09-01' });
+  assert.deepEqual(presetDateKeys('today', '2026-09-02'), { fromKey: '2026-09-02', toKey: '2026-09-02' });
   assert.deepEqual(presetDateKeys('last7', '2026-09-02'), { fromKey: '2026-08-27', toKey: '2026-09-02' }); // 7 days, not 8
   assert.deepEqual(presetDateKeys('last30', '2026-03-01'), { fromKey: '2026-01-31', toKey: '2026-03-01' });
   assert.deepEqual(presetDateKeys('custom', '2026-09-02', { fromKey: '2026-08-01', toKey: '2026-08-03' }), { fromKey: '2026-08-01', toKey: '2026-08-03' });

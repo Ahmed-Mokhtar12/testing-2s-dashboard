@@ -48,13 +48,15 @@ export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     fromDateKey: fromKey,
     toDateKey: toKey,
     label:
-      preset === 'yesterday'
-        ? 'Yesterday'
-        : preset === 'last7'
-          ? 'Last 7 days'
-          : preset === 'last30'
-            ? 'Last 30 days'
-            : `${format(from, 'MMM d')} - ${format(to, 'MMM d, yyyy')}`,
+      preset === 'today'
+        ? 'Today'
+        : preset === 'yesterday'
+          ? 'Yesterday'
+          : preset === 'last7'
+            ? 'Last 7 days'
+            : preset === 'last30'
+              ? 'Last 30 days'
+              : `${format(from, 'MMM d')} - ${format(to, 'MMM d, yyyy')}`,
     setPreset: (nextPreset) => setPresetState(nextPreset),
     // The picker's Dates ARE the picked calendar days in local time, so the local key is
     // the right one — not dubaiDateKey, which would shift them east of Dubai.

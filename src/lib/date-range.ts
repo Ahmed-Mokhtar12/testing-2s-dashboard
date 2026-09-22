@@ -15,6 +15,7 @@ export function presetDateKeys(
   if (preset === 'custom' && custom) return custom;
   // Inclusive of today: "Last 7 days" is seven calendar days ending today (it used to span
   // eight — audit A11).
+  if (preset === 'today') return { fromKey: todayKey, toKey: todayKey };
   if (preset === 'last7') return { fromKey: shiftDateKey(todayKey, -6), toKey: todayKey };
   if (preset === 'last30') return { fromKey: shiftDateKey(todayKey, -29), toKey: todayKey };
   const yesterday = shiftDateKey(todayKey, -1);

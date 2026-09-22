@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 
-export type DateRangePreset = 'yesterday' | 'last7' | 'last30' | 'custom';
+export type DateRangePreset = 'today' | 'yesterday' | 'last7' | 'last30' | 'custom';
 
 export interface DateRangeContextType {
   preset: DateRangePreset;
