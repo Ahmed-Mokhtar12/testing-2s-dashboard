@@ -240,3 +240,14 @@ test('CONTROL: an empty range shows the empty-state card and a real 0 in the rea
   expect(widened).toMatch(/^gte\./);
   expect(widened < firstBound, `expected an earlier lower bound than ${firstBound}, got ${widened}`).toBe(true);
 });
+
+test('opens on Today (Dubai) when the user has not picked a range', async ({ page }) => {
+  // Frozen clock: 08:00Z = 12:00 Dubai on 2026-09-20, safely away from Dubai midnight (Codex C5).
+  await page.clock.install({ time: new Date('2026-09-20T08:00:00Z') });
+  const viewRequests: string[] = [];
+  await openSeraVoice(page, { rows: ROWS, viewRequests });
+  await expect(kpiValue(page, 'Calls answered')).toHaveText('2', { timeout: 15_000 });
+  const params = new URL(viewRequests[0]).searchParams.getAll('call_date');
+  expect(params).toEqual(['gte.2026-09-20', 'lte.2026-09-20']);
+  await expect(page.getByRole('button', { name: 'Today' }).first()).toBeVisible();
+});

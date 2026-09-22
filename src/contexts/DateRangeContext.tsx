@@ -14,8 +14,14 @@ import {
 // browser not at UTC+4 got the wrong day for every preset (audit A4).
 const DAY_TICK_MS = 60_000;
 
-export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [preset, setPresetState] = useState<DateRangePreset>('yesterday');
+export const DateRangeProvider: React.FC<{ children: React.ReactNode; defaultPreset?: DateRangePreset }> = ({
+  children,
+  defaultPreset = 'yesterday',
+}) => {
+  // null = the user has not picked a range yet; the route-derived default applies until they do
+  // (Codex C2: an implicit default, not a mount effect, so visiting a page never leaks a range).
+  const [explicitPreset, setExplicitPreset] = useState<DateRangePreset | null>(null);
+  const preset = explicitPreset ?? defaultPreset;
   const [customKeys, setCustomKeys] = useState<{ fromKey: string; toKey: string } | undefined>(undefined);
   // Re-evaluate "today" once a minute so a tab left open rolls over at Dubai midnight.
   const [tick, setTick] = useState(0);
@@ -57,12 +63,12 @@ export const DateRangeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             : preset === 'last30'
               ? 'Last 30 days'
               : `${format(from, 'MMM d')} - ${format(to, 'MMM d, yyyy')}`,
-    setPreset: (nextPreset) => setPresetState(nextPreset),
+    setPreset: (nextPreset) => setExplicitPreset(nextPreset),
     // The picker's Dates ARE the picked calendar days in local time, so the local key is
     // the right one — not dubaiDateKey, which would shift them east of Dubai.
     setCustom: (nextFrom, nextTo) => {
       setCustomKeys({ fromKey: format(nextFrom, 'yyyy-MM-dd'), toKey: format(nextTo, 'yyyy-MM-dd') });
-      setPresetState('custom');
+      setExplicitPreset('custom');
     },
   };
 
