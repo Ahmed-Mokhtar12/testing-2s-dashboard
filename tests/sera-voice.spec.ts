@@ -165,6 +165,7 @@ test('renders KPIs, the calls table and the sidebar link from mocked view rows',
   await expect(rows.filter({ hasText: 'Unanswered' })).toHaveCount(1);
   await expect(page.locator('main table').getByText('GetRoomRate', { exact: true })).toBeVisible();
   await expect(page.locator('main table').getByText('8008', { exact: true })).toBeVisible();
+  await expect(page.locator('main table tbody').getByRole('cell', { name: '1203', exact: true })).toHaveCount(3);
 
   // The sidebar is an off-canvas sheet below md; open it there before asserting.
   const link = page.getByRole('link', { name: 'Sera Voice' });

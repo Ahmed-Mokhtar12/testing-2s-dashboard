@@ -150,6 +150,7 @@ export const CallTranscriptSheet: React.FC<CallTranscriptSheetProps> = ({ call, 
           </SheetDescription>
           {call && (
             <div className="flex flex-wrap gap-1 pt-1">
+              {call.caller_extension && <Badge variant="outline" className="font-normal">ext {call.caller_extension}</Badge>}
               {call.is_answered !== true && <Badge variant="outline" className="text-muted-foreground">Unanswered</Badge>}
               {call.call_successful && <Badge variant="secondary" className="font-normal">{call.call_successful}</Badge>}
               {call.transferred_to && <Badge variant="secondary" className="font-normal">→ {call.transferred_to}</Badge>}

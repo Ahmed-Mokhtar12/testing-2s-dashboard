@@ -186,6 +186,7 @@ const SeraVoicePage: React.FC = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Time</TableHead>
+                <TableHead>Caller</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead className="text-right">Credits</TableHead>
                 <TableHead className="text-right">USD</TableHead>
@@ -206,6 +207,7 @@ const SeraVoicePage: React.FC = () => {
                     onClick={() => setSelected(row)}
                   >
                     <TableCell className="whitespace-nowrap tabular-nums">{formatDubai(row.started_at)}</TableCell>
+                    <TableCell className="tabular-nums">{row.caller_extension || '—'}</TableCell>
                     <TableCell className="tabular-nums">{answered ? formatMmSs(row.duration_secs) : '—'}</TableCell>
                     <TableCell className="text-right tabular-nums">{Math.round(row.cost_credits ?? 0)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatUsd(row.cost_usd, 2)}</TableCell>
