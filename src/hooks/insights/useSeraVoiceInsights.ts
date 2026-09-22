@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDateRange } from '@/contexts/useDateRange';
 import { fetchAllRows } from './utils';
+import { dubaiDateKey } from '@/utils/timezone';
 import {
   aggregateSeraVoice,
   SERA_VOICE_LIST_COLUMNS,
@@ -18,6 +19,9 @@ const QUERY_GC_TIME = 10 * 60 * 1000;
  */
 export function useSeraVoiceInsights() {
   const { fromDateKey, toDateKey } = useDateRange();
+  // Poll only while the selected range can still receive calls (its end is today in Dubai);
+  // historical ranges never change, so they keep the plain 5-min cache.
+  const includesToday = toDateKey >= dubaiDateKey(new Date());
 
   return useQuery<SeraVoiceInsights>({
     queryKey: ['insights', 'sera-voice', fromDateKey, toDateKey],
@@ -25,7 +29,7 @@ export function useSeraVoiceInsights() {
     gcTime: QUERY_GC_TIME,
     // Live page: the archive workflow lands a call ≤ 2 min after it ends; poll while the tab is
     // visible and on focus so a new call shows within ~3 min with no reload (Codex C3).
-    refetchInterval: 60_000,
+    refetchInterval: includesToday ? 60_000 : false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: 'always',
     queryFn: async () => {

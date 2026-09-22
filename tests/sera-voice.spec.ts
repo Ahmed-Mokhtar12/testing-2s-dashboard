@@ -218,7 +218,9 @@ test('CONTROL: an empty range shows the empty-state card and a real 0 in the rea
   await openSeraVoice(page, { rows: [], viewRequests });
 
   await expect(page.getByTestId('sera-voice-empty')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('No Sera calls in this range')).toBeVisible();
+  // /dashboard/sera-voice's route default is 'today' (F2), so the empty state here is the
+  // Today copy (F4), not the generic range copy.
+  await expect(page.getByText('No Sera calls yet today')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Show last 30 days' })).toBeVisible();
 
   await expect(kpiValue(page, 'Calls answered')).toHaveText('0');
@@ -257,11 +259,56 @@ test('re-queries the view every minute without dropping the KPIs', async ({ page
   const viewRequests: string[] = [];
   await openSeraVoice(page, { rows: ROWS, viewRequests });
   await expect(kpiValue(page, 'Calls answered')).toHaveText('2', { timeout: 15_000 });
+  await expect(page.getByText(/updated 12:00/)).toBeVisible();
   const before = viewRequests.length;
   await page.clock.runFor(61_000);
   await expect.poll(() => viewRequests.length, { timeout: 10_000 }).toBeGreaterThan(before);
   await expect(kpiValue(page, 'Calls answered')).toHaveText('2');
   await expect(kpis(page, 'loading')).toHaveCount(0);
-  await expect(page.getByText(/auto-refresh/i)).toBeVisible();
+  await expect(page.getByText(/updated 12:01/)).toBeVisible();
+});
+
+test('a failed background refresh keeps the last good figures and says so', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-20T08:00:00Z') });
+  const mode: Mode = { rows: ROWS, viewRequests: [] };
+  await openSeraVoice(page, mode);
+  await expect(kpiValue(page, 'Calls answered')).toHaveText('2', { timeout: 15_000 });
+  mode.rows = 'fail';
+  const before = mode.viewRequests!.length;
+  await page.clock.runFor(61_000);
+  // The refetch request lands as soon as the interval fires; the retry delay is only
+  // armed once the 500 response resolves, so poll here before advancing further,
+  // rather than trusting a single runFor to have covered both round trips.
+  await expect.poll(() => mode.viewRequests!.length, { timeout: 10_000 }).toBeGreaterThan(before);
+  // retry: 1 in App.tsx → two attempts; react-query's retry delay is timer-based and runs under the installed clock
+  await page.clock.runFor(5_000);
+  await expect.poll(() => mode.viewRequests!.length, { timeout: 10_000 }).toBeGreaterThan(before + 1);
+  await expect(page.getByText(/last refresh failed/)).toBeVisible({ timeout: 15_000 });
+  await expect(kpiValue(page, 'Calls answered')).toHaveText('2');
+  await expect(kpis(page, 'error')).toHaveCount(0);
+});
+
+test('other pages keep Yesterday and an explicit pick survives navigation', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-20T08:00:00Z') });
+  const urls: string[] = [];
+  await setMockAuthSession(page);
+  await page.route(REST_GLOB, (r) => {
+    urls.push(r.request().url());
+    return r.fulfill({ json: [] });
+  });
+  await page.goto('/dashboard/welcome');
+  await page.locator('main').waitFor({ state: 'attached' });
+  await expect.poll(() => urls.some((u) => u.includes('sent_date=gte.2026-09-19')), { timeout: 15_000 }).toBe(true);
+  // Explicit pick on Welcome, then in-app navigation to Sera Voice: the pick must survive.
+  await page.getByRole('button', { name: /^(Last 7 days|7D)$/ }).first().click();
+  await expect.poll(() => urls.some((u) => u.includes('sent_date=gte.2026-09-14')), { timeout: 15_000 }).toBe(true);
+  const link = page.getByRole('link', { name: 'Sera Voice' });
+  // Same off-canvas-sidebar step as the first test in this spec.
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
+    await page.getByRole('button', { name: 'Toggle Sidebar' }).first().click();
+  }
+  await link.click();
+  await expect.poll(() => urls.some((u) => u.includes('sera_voice_calls_v') && u.includes('call_date=gte.2026-09-14')), { timeout: 15_000 }).toBe(true);
+  expect(urls.some((u) => u.includes('sera_voice_calls_v') && u.includes('call_date=gte.2026-09-20'))).toBe(false);
 });
 

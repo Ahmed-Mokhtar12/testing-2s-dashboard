@@ -63,7 +63,12 @@ export const DateRangeProvider: React.FC<{ children: React.ReactNode; defaultPre
             : preset === 'last30'
               ? 'Last 30 days'
               : `${format(from, 'MMM d')} - ${format(to, 'MMM d, yyyy')}`,
-    setPreset: (nextPreset) => setExplicitPreset(nextPreset),
+    // Selecting the chip that is already active by default is not a choice: keep the
+    // route-derived default implicit so it does not follow the user to other pages.
+    setPreset: (nextPreset) => {
+      if (explicitPreset === null && nextPreset === defaultPreset) return;
+      setExplicitPreset(nextPreset);
+    },
     // The picker's Dates ARE the picked calendar days in local time, so the local key is
     // the right one — not dubaiDateKey, which would shift them east of Dubai.
     setCustom: (nextFrom, nextTo) => {

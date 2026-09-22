@@ -64,7 +64,7 @@ function OutcomeBadge({ row }: { row: SeraVoiceCallRow }) {
 
 const SeraVoicePage: React.FC = () => {
   const isMobile = useIsMobile();
-  const { setPreset } = useDateRange();
+  const { preset, setPreset } = useDateRange();
   const { data, isLoading, isError, isFetching, isRefetchError, dataUpdatedAt } = useSeraVoiceInsights();
   const [selected, setSelected] = useState<SeraVoiceCallRow | null>(null);
 
@@ -99,8 +99,8 @@ const SeraVoicePage: React.FC = () => {
       {isEmpty && (
         <Card className="bg-card-gradient border border-border/60 shadow-card-soft p-6 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in" data-testid="sera-voice-empty">
           <div>
-            <h2 className="font-display font-semibold text-base">No Sera calls in this range</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Widen the range to see recent activity.</p>
+            <h2 className="font-display font-semibold text-base">{preset === 'today' ? 'No Sera calls yet today' : 'No Sera calls in this range'}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{preset === 'today' ? 'New calls appear here within about 3 minutes of ending.' : 'Widen the range to see recent activity.'}</p>
           </div>
           <Button variant="outline" onClick={() => setPreset('last30')}>Show last 30 days</Button>
         </Card>

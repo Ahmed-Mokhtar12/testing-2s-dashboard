@@ -31,7 +31,7 @@ export const DashboardShell: React.FC = () => {
   const legacy = LEGACY_SCROLL_ROUTES.includes(normalizeRoute(pathname));
 
   return (
-    <DateRangeProvider defaultPreset={pathname === '/dashboard/sera-voice' ? 'today' : 'yesterday'}>
+    <DateRangeProvider defaultPreset={normalizeRoute(pathname) === '/dashboard/sera-voice' ? 'today' : 'yesterday'}>
       <RealtimeBridge />
       <SidebarProvider defaultOpen={true} className={legacy ? undefined : 'h-svh overflow-hidden'}>
         <div className={legacy ? 'min-h-screen flex w-full bg-background' : 'h-full flex w-full bg-background'}>
